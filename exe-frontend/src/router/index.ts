@@ -1,20 +1,43 @@
-// src/router/index.ts
-// ... 其他路由
-import component from "element-plus/es/components/tree-select/src/tree-select-option";
+import { createRouter, createWebHistory } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
 
-{
-    path: '/system',
-        component: Layout, // 假设已有主布局组件
-    children: [
+const routes = [
     {
-        path: 'users',
-        name: 'UserManagement',
-        component: () => import('@/views/system/User.vue'),
-        meta: {
-            title: '用户管理',
-            requiresAuth: true,
-            permission: 'sys:user:list' // 页面级权限控制 [cite: 501]
-        }
+        path: '/login',
+        name: 'Login',
+        component: () => import('@/views/Login.vue'),
+    },
+    {
+        path: '/',
+        // 使用主布局组件
+        component: () => import('@/layouts/MainLayout.vue'),
+        children: [
+            {
+                path: 'users',
+                name: 'UserManagement',
+                component: () => import('@/components/user/UserManage.vue'),
+                meta: { requiresAuth: true, permission: 'sys:user:list' }
+            }
+        ]
     }
-]
-}
+];
+
+const router = createRouter({
+    history: createWebHistory(),
+    routes,
+});
+
+// 全局前置守卫
+router.beforeEach((to, from, next) => {
+    const authStore = useAuthStore();
+    const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+
+    if (requiresAuth && !authStore.isAuthenticated) {
+        // 如果目标路由需要认证,但用户未登录,则重定向到登录页
+        next({ name: 'Login', query: { redirect: to.fullPath } });
+    } else {
+        next(); // 正常放行
+    }
+});
+
+export default router;
