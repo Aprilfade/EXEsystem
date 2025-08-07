@@ -4,55 +4,131 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ice.exebackend.dto.UserInfoDTO;
+import com.ice.exebackend.entity.SysRole;
 import com.ice.exebackend.entity.SysUser;
+import com.ice.exebackend.entity.SysUserRole;
+import com.ice.exebackend.mapper.SysRoleMapper;
 import com.ice.exebackend.mapper.SysUserMapper;
+import com.ice.exebackend.mapper.SysUserRoleMapper;
 import com.ice.exebackend.service.SysUserService;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy; // 1. 导入 @Lazy 注解
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+
+import java.util.List;
 
 @Service
 public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> implements SysUserService {
 
     private final PasswordEncoder passwordEncoder;
 
-    // 2. 使用构造函数进行注入，并在 passwordEncoder 参数前添加 @Lazy
+    @Autowired
+    private SysUserRoleMapper sysUserRoleMapper;
+
+    @Autowired
+    private SysRoleMapper sysRoleMapper; // 确保 SysRoleMapper 也被注入
+
     @Autowired
     public SysUserServiceImpl(@Lazy PasswordEncoder passwordEncoder) {
         this.passwordEncoder = passwordEncoder;
     }
 
     @Override
+    @Transactional
     public boolean createUser(SysUser user) {
-        // 检查用户名是否已存在
         SysUser existingUser = this.getOne(new QueryWrapper<SysUser>().eq("username", user.getUsername()));
         if (existingUser != null) {
-            // 可以抛出自定义异常，由全局异常处理器捕获
             throw new RuntimeException("用户名已存在");
         }
 
-        // 对密码进行BCrypt加密
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        user.setIsEnabled(1); // 默认启用
-        user.setIsDeleted(0); // 默认未删除
-        return this.save(user);
+        if (user.getPassword() != null && !user.getPassword().isEmpty()) {
+            user.setPassword(passwordEncoder.encode(user.getPassword()));
+        }
+
+        user.setIsEnabled(1);
+        user.setIsDeleted(0);
+
+        boolean result = this.save(user);
+
+        if (result && !CollectionUtils.isEmpty(user.getRoleIds())) {
+            updateUserRoles(user.getId(), user.getRoleIds());
+        }
+        return result;
     }
 
     @Override
+    @Transactional
+    public boolean updateUserAndRoles(SysUser user) {
+        if(user.getPassword() != null && !user.getPassword().isEmpty()){
+            user.setPassword(passwordEncoder.encode(user.getPassword()));
+        } else {
+            user.setPassword(null);
+        }
+
+        boolean result = this.updateById(user);
+
+        if (result) {
+            updateUserRoles(user.getId(), user.getRoleIds());
+        }
+        return result;
+    }
+
+    private void updateUserRoles(Long userId, List<Long> roleIds) {
+        sysUserRoleMapper.delete(new QueryWrapper<SysUserRole>().eq("user_id", userId));
+
+        if (!CollectionUtils.isEmpty(roleIds)) {
+            for (Long roleId : roleIds) {
+                SysUserRole userRole = new SysUserRole();
+                userRole.setUserId(userId);
+                userRole.setRoleId(roleId);
+                sysUserRoleMapper.insert(userRole);
+            }
+        }
+    }
+
+
+    @Override
     public boolean deleteUserById(Long userId) {
-        // 采用逻辑删除，而非物理删除
         SysUser user = this.getById(userId);
         if (user == null) {
             return false;
         }
-        user.setIsDeleted(1); // 设置逻辑删除标志
+        user.setIsDeleted(1);
         return this.updateById(user);
     }
 
     @Override
-    public IPage<SysUser> getUserPage(Page<SysUser> page) {
-        // 查询未被逻辑删除的用户
-        return this.baseMapper.selectPage(page, new QueryWrapper<SysUser>().eq("is_deleted", 0));
+    public IPage<UserInfoDTO> getUserPage(Page<SysUser> page) {
+        IPage<SysUser> userPage = this.baseMapper.selectPage(page, new QueryWrapper<SysUser>().eq("is_deleted", 0));
+
+        IPage<UserInfoDTO> dtoPage = userPage.convert(sysUser -> {
+            UserInfoDTO userInfoDTO = new UserInfoDTO();
+            BeanUtils.copyProperties(sysUser, userInfoDTO);
+
+            List<SysRole> roles = sysRoleMapper.selectRolesByUserId(sysUser.getId());
+            userInfoDTO.setRoles(roles);
+
+            return userInfoDTO;
+        });
+
+        return dtoPage;
+    }
+    public boolean updateUserProfile(SysUser user) {
+        // 创建一个新对象，只设置允许用户自己修改的字段
+        SysUser userToUpdate = new SysUser();
+        userToUpdate.setId(user.getId()); // ID是必须的，用于定位记录
+        userToUpdate.setNickName(user.getNickName());
+
+        // 仅当用户输入了新密码时，才进行加密和更新
+        if (user.getPassword() != null && !user.getPassword().isEmpty()) {
+            userToUpdate.setPassword(passwordEncoder.encode(user.getPassword()));
+        }
+
+        return this.updateById(userToUpdate);
     }
 }

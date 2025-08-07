@@ -31,5 +31,6 @@ mybatis-plus:
 
 # TODO: 实际部署时应使用更安全的JWT密钥
 jwt:
-  secret: ${JWT_SECRET:your-very-long-and-secure-secret-key-for-this-project}
+  # 使用一个新的、符合Base64规范的、更安全的密钥
+  secret: OThiY2RkYjU5ZDIxZDA4YmRhMGE3YjQxZWRiNTViMTE5YzgzMjgxYjM3MjM5ZDE4OTI5M2ExZDAxYjY1ZGMxZA==
   expiration: 86400000

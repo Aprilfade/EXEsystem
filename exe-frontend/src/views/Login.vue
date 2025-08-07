@@ -17,7 +17,7 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '../stores/auth';
 import type { FormInstance, FormRules } from 'element-plus';
 
 const authStore = useAuthStore();
