@@ -1,0 +1,35 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/exam_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    # TODO: 实际部署时建议通过环境变量配置数据库用户名
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:llf5201314}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  redis:
+    # 配置Redis连接池
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+  data:
+    redis:
+      port: 6379
+      host: localhost
+
+mybatis-plus:
+  mapper-locations: classpath:/mapper/**/*.xml
+  global-config:
+    db-config:
+      id-type: auto
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# TODO: 实际部署时应使用更安全的JWT密钥
+jwt:
+  secret: ${JWT_SECRET:your-very-long-and-secure-secret-key-for-this-project}
+  expiration: 86400000

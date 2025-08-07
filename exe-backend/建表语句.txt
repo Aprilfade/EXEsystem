@@ -1,0 +1,141 @@
+
+-- ----------------------------
+-- 数据库: exam_system
+-- ----------------------------
+CREATE DATABASE IF NOT EXISTS exam_system DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE exam_system;
+
+-- ----------------------------
+-- 1. 用户表
+-- ----------------------------
+CREATE TABLE `sys_user` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `username` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户名, 唯一',
+  `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '密码, BCrypt加密存储',
+  `nick_name` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '昵称',
+  `status` tinyint(1) DEFAULT '0' COMMENT '状态, 0-正常, 1-禁用',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
+
+-- ----------------------------
+-- 2. 角色表
+-- ----------------------------
+CREATE TABLE `sys_role` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `name` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '角色名',
+  `code` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '角色编码, 如 "ADMIN", "TEACHER"',
+  `description` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '描述',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色表';
+
+-- ----------------------------
+-- 3. 用户角色关联表
+-- ----------------------------
+CREATE TABLE `sys_user_role` (
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `role_id` bigint NOT NULL COMMENT '角色ID',
+  PRIMARY KEY (`user_id`,`role_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户角色关联表';
+
+
+-- ----------------------------
+-- 4. 科目表
+-- ----------------------------
+CREATE TABLE `biz_subject` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '科目名称',
+  `description` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '简介',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='科目表';
+
+-- ----------------------------
+-- 5. 知识点表
+-- ----------------------------
+CREATE TABLE `biz_knowledge_point` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `subject_id` bigint NOT NULL COMMENT '外键关联biz_subject',
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '知识点名称',
+  `description` text COLLATE utf8mb4_unicode_ci COMMENT '描述',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识点表';
+
+-- ----------------------------
+-- 6. 学生表
+-- ----------------------------
+CREATE TABLE `biz_student` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `student_no` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '学号, 唯一',
+  `name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '姓名',
+  `contact` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '联系方式',
+  `grade` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '年级',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_student_no` (`student_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学生表';
+
+-- ----------------------------
+-- 7. 试题表
+-- ----------------------------
+CREATE TABLE `biz_question` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `subject_id` bigint NOT NULL COMMENT '关联科目ID',
+  `question_type` int NOT NULL COMMENT '题型: 1-单选, 2-多选, 3-填空, 4-判断, 5-主观题',
+  `content` text COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '题干',
+  `image_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '题目图片地址,多个逗号隔开',
+  `options` json DEFAULT NULL COMMENT '选项, 仅对选择题有效, 格式: [{"key":"A","value":"选项一"},{"key":"B","value":"选项二"}]',
+  `answer` text COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '参考答案, 多选题答案用逗号隔开, 填空题答案用###隔开',
+  `description` text COLLATE utf8mb4_unicode_ci COMMENT '题目解析',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试题表';
+
+-- ----------------------------
+-- 8. 试题知识点关联表
+-- ----------------------------
+CREATE TABLE `biz_question_knowledge_point` (
+  `question_id` bigint NOT NULL COMMENT '试题ID',
+  `knowledge_point_id` bigint NOT NULL COMMENT '知识点ID',
+  PRIMARY KEY (`question_id`,`knowledge_point_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试题知识点关联表';
+
+-- ----------------------------
+-- 9. 试卷表
+-- ----------------------------
+CREATE TABLE `biz_paper` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '试卷名称',
+  `subject_id` bigint NOT NULL COMMENT '所属科目ID',
+  `description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `total_score` int DEFAULT '100' COMMENT '总分',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试卷表';
+
+-- ----------------------------
+-- 10. 试卷题目关联表
+-- ----------------------------
+CREATE TABLE `biz_paper_question` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `paper_id` bigint NOT NULL,
+  `question_id` bigint NOT NULL,
+  `score` int NOT NULL COMMENT '分值',
+  `sort_order` int DEFAULT '0' COMMENT '排序',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试卷题目关联表';
+
+-- ----------------------------
+-- 11. 错题记录表
+-- ----------------------------
+CREATE TABLE `biz_wrong_record` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `student_id` bigint NOT NULL,
+  `question_id` bigint NOT NULL,
+  `paper_id` bigint DEFAULT NULL COMMENT '可选, 关联试卷ID',
+  `wrong_answer` text COLLATE utf8mb4_unicode_ci COMMENT '学生的错误答案',
+  `wrong_reason` text COLLATE utf8mb4_unicode_ci COMMENT '错误原因分析',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='错题记录表';
