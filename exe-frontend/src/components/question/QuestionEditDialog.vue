@@ -38,6 +38,23 @@
         <el-input v-model="form.content" type="textarea" :rows="4" placeholder="请输入题干内容" />
       </el-form-item>
 
+      <el-form-item label="题目图片" prop="imageUrl">
+        <el-upload
+            class="question-uploader"
+            action="/api/v1/files/upload"
+            :show-file-list="false"
+            :on-success="handleImageSuccess"
+            :before-upload="beforeImageUpload"
+            :headers="{ 'Authorization': 'Bearer ' + authStore.token }"
+        >
+          <img v-if="form.imageUrl" :src="form.imageUrl" class="question-image" />
+          <el-icon v-else class="uploader-icon"><Plus /></el-icon>
+        </el-upload>
+        <el-button v-if="form.imageUrl" type="danger" link @click="removeImage" style="margin-left: 10px;">删除图片</el-button>
+      </el-form-item>
+
+
+
       <template v-if="form.questionType === 1 || form.questionType === 2">
         <el-form-item label="选项设置" prop="options">
           <div v-for="(option, index) in localOptions" :key="index" style="display: flex; align-items: center; margin-bottom: 8px;">
@@ -72,10 +89,26 @@
           <el-input v-model="form.answer" type="textarea" :rows="3" placeholder="请输入参考答案，填空题多个答案请用 ### 分隔" />
         </el-form-item>
       </template>
-
       <el-form-item label="题目解析" prop="description">
         <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入题目解析" />
       </el-form-item>
+
+      <el-form-item label="解析图片" prop="answerImageUrl">
+        <el-upload
+            class="question-uploader"
+            action="/api/v1/files/upload"
+            :show-file-list="false"
+            :on-success="handleAnswerImageSuccess"
+            :before-upload="beforeImageUpload"
+            :headers="{ 'Authorization': 'Bearer ' + authStore.token }"
+        >
+          <img v-if="form.answerImageUrl" :src="form.answerImageUrl" class="question-image" />
+          <el-icon v-else class="uploader-icon"><Plus /></el-icon>
+        </el-upload>
+        <el-button v-if="form.answerImageUrl" type="danger" link @click="removeAnswerImage" style="margin-left: 10px;">删除图片</el-button>
+      </el-form-item>
+
+
 
     </el-form>
     <template #footer>
@@ -87,13 +120,16 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick } from 'vue';
-import type { FormInstance, FormRules } from 'element-plus';
+import type { FormInstance, FormRules, UploadProps } from 'element-plus'; // 引入 UploadProps
 import { ElMessage } from 'element-plus';
-import { Delete } from '@element-plus/icons-vue';
+import { Delete, Plus } from '@element-plus/icons-vue'; // 【修复】同时导入 Delete 和 Plus 图标
 import { createQuestion, updateQuestion, fetchQuestionById } from '@/api/question';
 import type { Question, QuestionOption } from '@/api/question';
 import { fetchAllSubjects, type Subject } from '@/api/subject';
 import { fetchKnowledgePointList, type KnowledgePoint } from '@/api/knowledgePoint';
+import { useAuthStore } from '@/stores/auth'; // 【修复】导入 authStore
+
+const authStore = useAuthStore(); // 【修复】获取 authStore 实例，使其在模板中可用
 
 const props = defineProps<{
   visible: boolean;
@@ -108,14 +144,65 @@ const allSubjects = ref<Subject[]>([]);
 const availableKnowledgePoints = ref<KnowledgePoint[]>([]);
 
 const localOptions = ref<QuestionOption[]>([]);
-const localAnswerArray = ref<string[]>([]); // 专门用于多选题的答案绑定
+const localAnswerArray = ref<string[]>([]);
 
 const dialogTitle = computed(() => (props.questionId ? '编辑试题' : '新增试题'));
 
 
-// --- 开始修改 ---
-// 1. 将所有需要被调用的函数，定义在 watch 侦听器的上方
+// 【新增】处理答案图片上传成功
+const handleAnswerImageSuccess: UploadProps['onSuccess'] = (response) => {
+  if (response.code === 200) {
+    if (form.value) {
+      form.value.answerImageUrl = response.data;
+    }
+  } else {
+    ElMessage.error(response.msg || '图片上传失败');
+  }
+}
 
+// 【新增】移除答案图片
+const removeAnswerImage = () => {
+  if (form.value) {
+    form.value.answerImageUrl = '';
+  }
+}
+
+
+
+
+
+// --- 【新增】处理图片上传成功 ---
+const handleImageSuccess: UploadProps['onSuccess'] = (response) => {
+  if (response.code === 200) {
+    if (form.value) {
+      form.value.imageUrl = response.data;
+    }
+  } else {
+    ElMessage.error(response.msg || '图片上传失败');
+  }
+}
+
+// --- 【新增】图片上传前的校验 ---
+const beforeImageUpload: UploadProps['beforeUpload'] = (rawFile) => {
+  if (rawFile.type !== 'image/jpeg' && rawFile.type !== 'image/png') {
+    ElMessage.error('图片只能是 JPG 或 PNG 格式!');
+    return false;
+  } else if (rawFile.size / 1024 / 1024 > 2) {
+    ElMessage.error('图片大小不能超过 2MB!');
+    return false;
+  }
+  return true;
+}
+
+// --- 【新增】移除图片 ---
+const removeImage = () => {
+  if (form.value) {
+    form.value.imageUrl = '';
+  }
+}
+
+
+// --- 下面的代码保持不变 ---
 const loadInitialData = async () => {
   if (allSubjects.value.length === 0) {
     const res = await fetchAllSubjects();
@@ -133,7 +220,6 @@ const handleSubjectChange = async (subjectId: number | undefined) => {
   if(res.code === 200) {
     availableKnowledgePoints.value = res.data;
   }
-  // 切换科目后，清空已选的知识点
   if(form.value && form.value.knowledgePointIds) form.value.knowledgePointIds = [];
 }
 
@@ -153,6 +239,8 @@ const resetForm = () => {
       questionType: 1,
       knowledgePointIds: [],
       content: '',
+      imageUrl: '', // 确保 imageUrl 被初始化
+      answerImageUrl: '', // 【新增】
       options: [],
       answer: '',
       description: ''
@@ -170,20 +258,15 @@ const loadQuestionData = async (id: number) => {
   const res = await fetchQuestionById(id);
   if (res.code === 200) {
     form.value = res.data;
-    // 如果有关联的科目，需要加载该科目下的知识点
     if(form.value.subjectId) {
-      // 等待知识点列表加载完成
       await handleSubjectChange(form.value.subjectId);
     }
-    // 解析options和answer
     parseOptionsAndAnswer(res.data);
   }
 };
 
-// 2. 将主监控 watch 放在函数定义的下方
 watch(() => props.visible, async (isVisible) => {
   if (isVisible) {
-    // 现在调用是安全的
     await loadInitialData();
     if (props.questionId) {
       await loadQuestionData(props.questionId);
@@ -191,26 +274,18 @@ watch(() => props.visible, async (isVisible) => {
       resetForm();
     }
   } else {
-    // 关闭时清空
     form.value = null;
     formRef.value?.resetFields();
   }
 }, { immediate: true });
 
-// --- 结束修改 ---
-
-
-// 监控题型变化
 watch(() => form.value?.questionType, (newType, oldType) => {
   if (form.value && newType !== oldType) {
-    // 清空答案和选项，避免旧答案污染
     form.value.answer = '';
     localAnswerArray.value = [];
     if (form.value.questionType !== 1 && form.value.questionType !== 2){
       localOptions.value = [];
     }
-
-    // 如果是单选/多选，初始化默认选项
     if ((newType === 1 || newType === 2) && localOptions.value.length === 0) {
       localOptions.value = [
         { key: 'A', value: '' }, { key: 'B', value: '' },
@@ -220,13 +295,11 @@ watch(() => form.value?.questionType, (newType, oldType) => {
   }
 });
 
-// 监控多选题的答案数组，同步到form.answer字符串
 watch(localAnswerArray, (newVal) => {
   if (form.value && form.value.questionType === 2) {
     form.value.answer = newVal.sort().join(',');
   }
 });
-
 
 const rules = reactive<FormRules>({
   subjectId: [{ required: true, message: '请选择所属科目', trigger: 'change' }],
@@ -248,7 +321,6 @@ const addOption = () => {
 
 const removeOption = (index: number) => {
   localOptions.value.splice(index, 1);
-  // 重新生成选项key
   localOptions.value.forEach((option, i) => {
     option.key = String.fromCharCode(65 + i);
   });
@@ -260,15 +332,11 @@ const submitForm = () => {
     if (valid) {
       try {
         const formData = { ...form.value };
-        // --- 核心修改开始 ---
         if(formData.questionType === 1 || formData.questionType === 2) {
-          // 对于选择题，将选项数组转换为JSON字符串
           formData.options = JSON.stringify(localOptions.value);
         } else {
-          // 对于所有非选择题，将options字段设置为空或null
           formData.options = null;
         }
-        // --- 核心修改结束 ---
 
         if (formData.id) {
           await updateQuestion(formData.id, formData);
@@ -286,3 +354,33 @@ const submitForm = () => {
   });
 };
 </script>
+
+
+<style>
+.question-uploader .el-upload {
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: .2s;
+}
+
+.question-uploader .el-upload:hover {
+  border-color: #409EFF;
+}
+
+.uploader-icon {
+  font-size: 28px;
+  color: #8c939d;
+  width: 178px;
+  height: 178px;
+  text-align: center;
+}
+
+.question-image {
+  width: 178px;
+  height: 178px;
+  display: block;
+}
+</style>

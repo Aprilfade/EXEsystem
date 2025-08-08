@@ -21,6 +21,7 @@ export interface Question {
     // 选项，存储时是JSON字符串，使用时我们解析为对象数组
     options: string | QuestionOption[];
     answer: string; // 答案
+    answerImageUrl?: string; // 【新增】
     description: string; // 解析
     knowledgePointIds?: number[]; // 关联的知识点ID
 }

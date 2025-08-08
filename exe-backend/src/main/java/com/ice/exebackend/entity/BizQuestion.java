@@ -24,7 +24,18 @@ public class BizQuestion {
 
     private String answer; // 参考答案
 
+    private String answerImageUrl; // 【新增】答案图片地址
+
     private String description; // 题目解析
+
+
+    public String getAnswerImageUrl() {
+        return answerImageUrl;
+    }
+
+    public void setAnswerImageUrl(String answerImageUrl) {
+        this.answerImageUrl = answerImageUrl;
+    }
 
     public Long getId() {
         return id;

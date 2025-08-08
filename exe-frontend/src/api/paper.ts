@@ -19,15 +19,24 @@ export interface Paper {
     subjectId: number;
     description: string;
     totalScore: number;
+    paperType?: number; // 【新增】
     createTime?: string;
     updateTime?: string;
     questions?: PaperQuestion[];
+    paperImages?: PaperImage[]; // 【新增】
 }
 
 export interface PaperPageParams {
     current: number;
     size: number;
     subjectId?: number;
+}
+
+export interface PaperImage { // 【新增】
+    id?: number;
+    paperId: number;
+    imageUrl: string;
+    sortOrder: number;
 }
 
 export function fetchPaperList(params: PaperPageParams): Promise<ApiResult<Paper[]>> {

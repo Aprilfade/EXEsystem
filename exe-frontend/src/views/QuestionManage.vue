@@ -35,6 +35,11 @@
             <el-tag>{{ questionTypeMap[scope.row.questionType] }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="图片" width="80" align="center">
+          <template #default="scope">
+            <el-icon v-if="scope.row.imageUrl"><PictureFilled /></el-icon>
+          </template>
+        </el-table-column>
         <el-table-column label="所属科目" width="150">
           <template #default="scope">
             {{ getSubjectName(scope.row.subjectId) }}
@@ -76,7 +81,7 @@ import { fetchQuestionList, deleteQuestion } from '@/api/question';
 import type { Question, QuestionPageParams } from '@/api/question';
 import { fetchAllSubjects } from '@/api/subject';
 import type { Subject } from '@/api/subject';
-import { Plus, Edit, Delete, Search, Refresh } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, Refresh, PictureFilled  } from '@element-plus/icons-vue';
 import QuestionEditDialog from '@/components/question/QuestionEditDialog.vue';
 
 const questionList = ref<Question[]>([]);

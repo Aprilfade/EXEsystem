@@ -17,9 +17,16 @@ public class BizPaper {
     private Long subjectId;
     private String description;
     private Integer totalScore;
+    private Integer paperType; // 【新增】 1-手动选题, 2-图片拼接
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 
+    public Integer getPaperType() {
+        return paperType;
+    }
+    public void setPaperType(Integer paperType) {
+        this.paperType = paperType;
+    }
     public Long getId() {
         return id;
     }
