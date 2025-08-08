@@ -15,12 +15,12 @@
     <el-container>
       <el-aside width="200px" class="aside">
 
-        <div class="debug-panel">
-          <p><strong>-- 调试信息 --</strong></p>
+<!--        <div class="debug-panel">
+          <p><strong>&#45;&#45; 调试信息 &#45;&#45;</strong></p>
           <p><strong>isAdmin:</strong> {{ authStore.isAdmin }}</p>
           <p><strong>User Object:</strong></p>
           <pre>{{ JSON.stringify(authStore.user, null, 2) }}</pre>
-        </div>
+        </div>-->
         <el-menu :default-active="$route.path" router>
           <el-menu-item index="/home">
             <el-icon><House /></el-icon>
@@ -46,6 +46,10 @@
           </el-menu-item>
 
 
+          <el-menu-item v-if="authStore.isAdmin" index="/papers">
+            <el-icon><DocumentCopy /></el-icon> <span>试卷管理</span>
+          </el-menu-item>
+
 
 
 
@@ -61,7 +65,7 @@
 
 <script setup lang="ts">
 import { useAuthStore } from '../stores/auth';
-import { House, User, Collection, Reading, Tickets} from '@element-plus/icons-vue';
+import { House, User, Collection, Reading, Tickets, DocumentCopy} from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 

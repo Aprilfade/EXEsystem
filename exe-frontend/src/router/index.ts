@@ -60,6 +60,14 @@ const routes = [
                 meta: {
                     requiresAdmin: true // 需要管理员权限
                 }
+            },
+            {
+                path: 'papers',
+                name: 'PaperManagement',
+                component: () => import('@/views/PaperManage.vue'),
+                meta: {
+                    requiresAdmin: true
+                }
             }
 
         ]

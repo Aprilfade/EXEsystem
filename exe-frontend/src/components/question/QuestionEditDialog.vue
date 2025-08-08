@@ -260,10 +260,15 @@ const submitForm = () => {
     if (valid) {
       try {
         const formData = { ...form.value };
-        // 在提交前，将选项数组转为JSON字符串
+        // --- 核心修改开始 ---
         if(formData.questionType === 1 || formData.questionType === 2) {
+          // 对于选择题，将选项数组转换为JSON字符串
           formData.options = JSON.stringify(localOptions.value);
+        } else {
+          // 对于所有非选择题，将options字段设置为空或null
+          formData.options = null;
         }
+        // --- 核心修改结束 ---
 
         if (formData.id) {
           await updateQuestion(formData.id, formData);

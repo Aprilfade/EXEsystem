@@ -32,6 +32,14 @@ service.interceptors.request.use(
 // 响应拦截器: 在每次接收到响应后执行
 service.interceptors.response.use(
     (response: AxiosResponse) => {
+
+        // 【新增】判断响应是否为文件流 (Blob)
+        if (response.data instanceof Blob) {
+            // 如果是文件流，直接返回完整的 response 对象
+            // 这样调用方才能获取到文件名等 headers 信息
+            return response;
+        }
+
         // 后端返回的统一响应格式
         const res = response.data;
 
