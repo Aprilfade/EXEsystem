@@ -51,6 +51,15 @@ const routes = [
                 meta: {
                     requiresAdmin: true // 需要管理员权限
                 }
+            },
+            // --- 新增试题管理路由 ---
+            {
+                path: 'questions',
+                name: 'QuestionManagement',
+                component: () => import('@/views/QuestionManage.vue'),
+                meta: {
+                    requiresAdmin: true // 需要管理员权限
+                }
             }
 
         ]

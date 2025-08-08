@@ -7,7 +7,7 @@ import { ElMessage } from 'element-plus';
 // 创建 axios 实例
 const service: AxiosInstance = axios.create({
     // 我们在 vite.config.js 中配置了代理，所以这里使用相对路径
-    baseURL: '/api',
+    baseURL: '',
     timeout: 10000,
 });
 

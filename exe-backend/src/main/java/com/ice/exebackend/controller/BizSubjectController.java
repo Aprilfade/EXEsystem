@@ -4,8 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.entity.BizKnowledgePoint;
+import com.ice.exebackend.entity.BizQuestion; // 1. 导入 BizQuestion 实体
 import com.ice.exebackend.entity.BizSubject;
 import com.ice.exebackend.service.BizKnowledgePointService;
+import com.ice.exebackend.service.BizQuestionService; // 2. 导入 BizQuestionService
 import com.ice.exebackend.service.BizSubjectService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,11 +22,13 @@ public class BizSubjectController {
     @Autowired
     private BizSubjectService subjectService;
 
-    // 依赖 biz_question 和 biz_knowledge_point 的 Service (假设已存在)
-    // @Autowired
-    // private BizQuestionService questionService;
-     @Autowired
+    @Autowired
     private BizKnowledgePointService knowledgePointService;
+
+    // 3. 注入 BizQuestionService
+    @Autowired
+    private BizQuestionService questionService;
+
 
     /**
      * 新增科目
@@ -70,24 +74,24 @@ public class BizSubjectController {
     }
 
     /**
-     * 删除科目
+     * 删除科目 (已加入完整的安全删除检查)
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result deleteSubject(@PathVariable Long id) {
-        // **安全删除检查**: 检查该科目下是否有试题或知识点
-        // (此处暂时注释，需要您后续完成 Question 和 KnowledgePoint 的 Service)
-        // long questionCount = questionService.count(new QueryWrapper<BizQuestion>().eq("subject_id", id));
-        // if (questionCount > 0) {
-        //     return Result.fail("无法删除：该科目下还存在关联的试题。");
-        // }
         // 4. 安全删除检查: 检查该科目下是否有知识点
         long knowledgePointCount = knowledgePointService.count(new QueryWrapper<BizKnowledgePoint>().eq("subject_id", id));
         if (knowledgePointCount > 0) {
-            // 如果存在关联的知识点，则返回失败信息，不允许删除
             return Result.fail("无法删除：该科目下还存在 " + knowledgePointCount + " 个关联的知识点。");
         }
 
+        // 5. 安全删除检查: 检查该科目下是否有试题
+        long questionCount = questionService.count(new QueryWrapper<BizQuestion>().eq("subject_id", id));
+        if (questionCount > 0) {
+            return Result.fail("无法删除：该科目下还存在 " + questionCount + " 个关联的试题。");
+        }
+
+        // 只有当所有检查都通过时，才执行删除
         boolean success = subjectService.removeById(id);
         return success ? Result.suc() : Result.fail();
     }

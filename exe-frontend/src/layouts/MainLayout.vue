@@ -41,6 +41,11 @@
           </el-menu-item>
 
 
+          <el-menu-item v-if="authStore.isAdmin" index="/questions">
+            <el-icon><Tickets /></el-icon> <span>试题管理</span>
+          </el-menu-item>
+
+
 
 
 
@@ -56,7 +61,7 @@
 
 <script setup lang="ts">
 import { useAuthStore } from '../stores/auth';
-import { House, User, Collection, Reading } from '@element-plus/icons-vue';
+import { House, User, Collection, Reading, Tickets} from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 
