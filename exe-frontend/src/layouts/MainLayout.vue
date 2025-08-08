@@ -50,6 +50,9 @@
             <el-icon><DocumentCopy /></el-icon> <span>试卷管理</span>
           </el-menu-item>
 
+          <el-menu-item v-if="authStore.isAdmin" index="/students">
+            <el-icon><Avatar /></el-icon> <span>学生管理</span>
+          </el-menu-item>
 
 
 
@@ -65,7 +68,8 @@
 
 <script setup lang="ts">
 import { useAuthStore } from '../stores/auth';
-import { House, User, Collection, Reading, Tickets, DocumentCopy} from '@element-plus/icons-vue';
+// 【新增 Avatar 图标】
+import { House, User, Collection, Reading, Tickets, DocumentCopy, Avatar } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 

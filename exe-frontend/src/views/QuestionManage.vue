@@ -2,12 +2,18 @@
   <div class="question-manage-container">
     <el-card shadow="never">
       <el-form :inline="true" :model="queryParams">
-        <el-form-item label="科目">
-          <el-select v-model="queryParams.subjectId" placeholder="请选择科目" clearable @change="handleQuery">
+        <el-form-item label="科目" size="large">
+          <el-select
+              v-model="queryParams.subjectId"
+              placeholder="请选择科目 (可清空查所有)"
+              clearable
+              @change="handleQuery"
+              style="width: 240px;"
+          >
             <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="题型">
+        <el-form-item label="题型" size="large">
           <el-select v-model="queryParams.questionType" placeholder="请选择题型" clearable @change="handleQuery">
             <el-option label="单选题" :value="1" />
             <el-option label="多选题" :value="2" />
@@ -16,11 +22,11 @@
             <el-option label="主观题" :value="5" />
           </el-select>
         </el-form-item>
-        <el-form-item>
+        <el-form-item size="large">
           <el-button type="primary" :icon="Search" @click="handleQuery">搜索</el-button>
           <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
         </el-form-item>
-        <el-form-item style="float: right;">
+        <el-form-item style="float: right;" size="large">
           <el-button type="primary" :icon="Plus" @click="handleCreate">新增试题</el-button>
         </el-form-item>
       </el-form>
@@ -75,13 +81,14 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+// ... <script>部分的代码保持不变 ...
+import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchQuestionList, deleteQuestion } from '@/api/question';
 import type { Question, QuestionPageParams } from '@/api/question';
 import { fetchAllSubjects } from '@/api/subject';
 import type { Subject } from '@/api/subject';
-import { Plus, Edit, Delete, Search, Refresh, PictureFilled  } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, Refresh, PictureFilled } from '@element-plus/icons-vue';
 import QuestionEditDialog from '@/components/question/QuestionEditDialog.vue';
 
 const questionList = ref<Question[]>([]);
@@ -170,6 +177,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* ... <style>部分的代码保持不变 ... */
 .question-manage-container {
   display: flex;
   flex-direction: column;

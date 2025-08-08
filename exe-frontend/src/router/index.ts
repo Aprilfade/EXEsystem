@@ -68,6 +68,15 @@ const routes = [
                 meta: {
                     requiresAdmin: true
                 }
+            },
+            // 【新增学生管理路由】
+            {
+                path: 'students',
+                name: 'StudentManagement',
+                component: () => import('@/views/StudentManage.vue'),
+                meta: {
+                    requiresAdmin: true
+                }
             }
 
         ]

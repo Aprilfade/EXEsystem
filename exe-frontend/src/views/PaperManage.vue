@@ -2,16 +2,22 @@
   <div class="paper-manage-container">
     <el-card shadow="never">
       <el-form :inline="true" :model="queryParams">
-        <el-form-item label="科目">
-          <el-select v-model="queryParams.subjectId" placeholder="请选择科目" clearable @change="handleQuery">
+        <el-form-item label="科目" size="large">
+          <el-select
+              v-model="queryParams.subjectId"
+              placeholder="请选择科目 (可清空查所有)"
+              clearable
+              @change="handleQuery"
+              style="width: 240px;"
+          >
             <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
           </el-select>
         </el-form-item>
-        <el-form-item>
+        <el-form-item size="large">
           <el-button type="primary" :icon="Search" @click="handleQuery">搜索</el-button>
           <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
         </el-form-item>
-        <el-form-item style="float: right;">
+        <el-form-item style="float: right;" size="large">
           <el-button type="primary" :icon="Plus" @click="handleCreate">手动组卷</el-button>
         </el-form-item>
       </el-form>
@@ -61,13 +67,14 @@
 </template>
 
 <script lang="ts" setup>
+// ... <script>部分的代码保持不变 ...
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchPaperList, deletePaper, downloadPaper } from '@/api/paper';
 import type { Paper, PaperPageParams } from '@/api/paper';
 import { fetchAllSubjects, type Subject } from '@/api/subject';
 import { Plus, Edit, Delete, Search, Refresh, Download } from '@element-plus/icons-vue';
-import PaperEditDialog from '@/components/paper/PaperEditDialog.vue'; // 待会儿创建
+import PaperEditDialog from '@/components/paper/PaperEditDialog.vue';
 
 const paperList = ref<Paper[]>([]);
 const allSubjects = ref<Subject[]>([]);
@@ -134,15 +141,11 @@ const handleDelete = (id: number) => {
       .catch(() => {});
 };
 
-
-// 【修改点2】: 用下面的新函数替换旧的 handleExport 函数
 const handleExport = async (id: number, includeAnswers: boolean) => {
   try {
     const response = await downloadPaper(id, includeAnswers);
-
-    // 从响应头中解析文件名
     const contentDisposition = response.headers['content-disposition'];
-    let fileName = '试卷.docx'; // 默认文件名
+    let fileName = '试卷.docx';
     if (contentDisposition) {
       const match = contentDisposition.match(/filename="(.+)"/);
       if (match && match.length > 1) {
@@ -150,19 +153,13 @@ const handleExport = async (id: number, includeAnswers: boolean) => {
       }
     }
 
-    // 创建一个Blob对象
     const blob = new Blob([response.data], { type: response.headers['content-type'] });
-    // 创建一个指向该Blob的URL
     const url = window.URL.createObjectURL(blob);
-
-    // 创建一个隐藏的<a>标签并模拟点击来触发下载
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', fileName);
     document.body.appendChild(link);
     link.click();
-
-    // 清理：移除标签并释放URL
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
 
@@ -172,14 +169,13 @@ const handleExport = async (id: number, includeAnswers: boolean) => {
   }
 };
 
-
-
 onMounted(() => {
   getAllSubjects().then(getList);
 });
 </script>
 
 <style scoped>
+/* ... <style>部分的代码保持不变 ... */
 .paper-manage-container {
   display: flex;
   flex-direction: column;
