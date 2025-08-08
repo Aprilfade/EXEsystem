@@ -1,44 +1,67 @@
 <template>
-  <div class="student-manage-container">
-    <el-card shadow="never">
-      <el-form :inline="true" :model="queryParams">
-        <el-form-item label="科目" size="large">
+  <div class="page-container">
+    <div class="page-header">
+      <div>
+        <h2>学生管理</h2>
+        <p>高效维护学生学籍信息，助力精细化教学服务</p>
+      </div>
+      <el-button type="primary" :icon="Plus" size="large" @click="handleCreate">新增学生</el-button>
+    </div>
+
+    <el-row :gutter="20" class="stats-cards">
+      <el-col :span="8">
+        <el-card shadow="never">
+          <div class="stat-item">
+            <p class="label">学生总数</p>
+            <p class="value">{{ total }}</p>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="8">
+        <el-card shadow="never">
+          <div class="stat-item">
+            <p class="label">学生信息完整度</p>
+            <p class="value">60%</p> </div>
+        </el-card>
+      </el-col>
+      <el-col :span="8">
+        <el-card shadow="never">
+          <div class="stat-item">
+            <p class="label">学生账号激活率</p>
+            <p class="value">80%</p> </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-card shadow="never" class="content-card">
+      <div class="content-header">
+        <el-input v-model="queryParams.name" placeholder="输入姓名或学号搜索" size="large" style="width: 300px;" @keyup.enter="handleQuery" />
+        <div>
           <el-select
               v-model="queryParams.subjectId"
-              placeholder="请选择科目 (可清空查所有)"
+              placeholder="按科目筛选"
               clearable
               @change="handleQuery"
-              style="width: 240px;"
+              size="large"
+              style="width: 150px; margin-right: 20px;"
           >
             <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
           </el-select>
-        </el-form-item>
-        <el-form-item label="学生姓名" size="large">
-          <el-input v-model="queryParams.name" placeholder="请输入姓名" clearable @keyup.enter="handleQuery" />
-        </el-form-item>
-        <el-form-item size="large">
-          <el-button type="primary" :icon="Search" @click="handleQuery">搜索</el-button>
-          <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
-        </el-form-item>
-        <el-form-item style="float: right;" size="large">
-          <el-button type="primary" :icon="Plus" @click="handleCreate">新增学生</el-button>
           <el-upload
               :action="''"
               :show-file-list="false"
               :before-upload="handleBeforeUpload"
               :http-request="handleImport"
-              style="margin-left: 12px; display: inline-block;"
+              style="margin-right: 12px; display: inline-block;"
           >
-            <el-button type="success" :icon="Upload">导入Excel</el-button>
+            <el-button size="large" :icon="Upload">导入</el-button>
           </el-upload>
-          <el-button type="warning" :icon="Download" @click="handleExport" style="margin-left: 12px;">导出Excel</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+          <el-button size="large" :icon="Download" @click="handleExport">导出</el-button>
+        </div>
+      </div>
 
-    <el-card shadow="never" class="table-container">
-      <el-table v-loading="loading" :data="studentList" style="width: 100%">
-        <el-table-column type="index" label="序号" width="80" align="center" />
+      <el-table v-loading="loading" :data="studentList" style="width: 100%; margin-top: 20px;">
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="name" label="姓名" />
         <el-table-column prop="studentNo" label="学号" />
         <el-table-column label="所属科目">
@@ -48,11 +71,10 @@
         </el-table-column>
         <el-table-column prop="grade" label="年级" />
         <el-table-column prop="contact" label="联系方式" />
-        <el-table-column prop="createTime" label="创建时间" />
         <el-table-column label="操作" width="180" align="center">
           <template #default="scope">
-            <el-button type="primary" link :icon="Edit" @click="handleUpdate(scope.row)">编辑</el-button>
-            <el-button type="danger" link :icon="Delete" @click="handleDelete(scope.row.id)">删除</el-button>
+            <el-button type="primary" link @click="handleUpdate(scope.row)">编辑</el-button>
+            <el-button type="danger" link @click="handleDelete(scope.row.id)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -100,7 +122,7 @@ const editingStudent = ref<Student | undefined>(undefined);
 const queryParams = reactive<StudentPageParams>({
   current: 1,
   size: 10,
-  subjectId: undefined, // 默认是 undefined，符合“查询所有”的逻辑
+  subjectId: undefined,
   name: ''
 });
 
@@ -155,8 +177,7 @@ const handleDelete = (id: number) => {
         await deleteStudent(id);
         ElMessage.success('删除成功');
         getList();
-      })
-      .catch(() => {});
+      });
 };
 
 const handleBeforeUpload = (file: File) => {
@@ -217,16 +238,16 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.student-manage-container {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.table-container {
-  margin-top: 16px;
-}
-.pagination {
-  margin-top: 16px;
-  justify-content: flex-end;
-}
+/* 复用之前的样式 */
+.page-container { padding: 24px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.page-header h2 { font-size: 24px; font-weight: 600; }
+.page-header p { color: var(--text-color-regular); margin-top: 4px; font-size: 14px; }
+.stats-cards { margin-bottom: 20px; }
+.stat-item { padding: 8px; }
+.stat-item .label { color: var(--text-color-regular); font-size: 14px; margin-bottom: 8px;}
+.stat-item .value { font-size: 28px; font-weight: bold; }
+.content-card { background-color: var(--bg-color-container); }
+.content-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.pagination { margin-top: 20px; display: flex; justify-content: flex-end; }
 </style>

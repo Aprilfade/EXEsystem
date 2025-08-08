@@ -1,19 +1,32 @@
-/* 全局重置，确保所有元素从一个统一的基准开始 */
-* {
+/* 全局重置 */
+*, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-/* 确保 html, body, 和 Vue 的根挂载点 #app 
-  都占据100%的可用高度和宽度，这是让布局铺满全屏的关键。
-*/
-html,
-body,
-#app {
+/* 定义亮色主题变量 */
+:root {
+  --bg-color: #f7f8fa;
+  --bg-color-container: #ffffff;
+  --text-color-primary: #303133;
+  --text-color-regular: #606266;
+  --border-color: #e4e7ed;
+  --sidebar-bg: #ffffff;
+  --header-bg: #ffffff;
+  --brand-color: #409eff;
+  --card-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+}
+
+/* 定义暗色主题变量 (暂未启用，但已预留) */
+/* .dark { ... } */
+
+html, body, #app {
   height: 100%;
   width: 100%;
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-color);
+  color: var(--text-color-primary);
 }

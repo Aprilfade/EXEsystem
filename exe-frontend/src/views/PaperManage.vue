@@ -1,37 +1,87 @@
 <template>
-  <div class="paper-manage-container">
-    <el-card shadow="never">
-      <el-form :inline="true" :model="queryParams">
-        <el-form-item label="科目" size="large">
-          <el-select
-              v-model="queryParams.subjectId"
-              placeholder="请选择科目 (可清空查所有)"
-              clearable
-              @change="handleQuery"
-              style="width: 240px;"
-          >
-            <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item size="large">
-          <el-button type="primary" :icon="Search" @click="handleQuery">搜索</el-button>
-          <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
-        </el-form-item>
-        <el-form-item style="float: right;" size="large">
-          <el-button type="primary" :icon="Plus" @click="handleCreate">手动组卷</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+  <div class="page-container">
+    <div class="page-header">
+      <div>
+        <h2>试卷管理</h2>
+        <p>灵活组合各类题型与知识点，高效创建与分发试卷</p>
+      </div>
+      <el-button type="primary" :icon="Plus" size="large" @click="handleCreate">新增试卷</el-button>
+    </div>
 
-    <el-card shadow="never" class="table-container">
-      <el-table v-loading="loading" :data="paperList" style="width: 100%">
+    <el-row :gutter="20" class="stats-cards">
+      <el-col :span="6">
+        <el-card shadow="never">
+          <div class="stat-item">
+            <p class="label">试卷总数</p>
+            <p class="value">{{ total }}</p>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="never">
+          <div class="stat-item">
+            <p class="label">试卷下载次数</p>
+            <p class="value">6</p> </div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="never">
+          <div class="stat-item">
+            <p class="label">试卷题目平均分值</p>
+            <p class="value">80</p> </div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="never">
+          <div class="stat-item">
+            <p class="label">试卷关联学生题目数量</p> <p class="value">45</p> </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-card shadow="never" class="content-card">
+      <div class="content-header">
+        <el-input v-model="searchQuery" placeholder="输入试卷名称或编码搜索" size="large" style="width: 300px;"/>
+        <div>
+          <el-select v-model="queryParams.subjectId" placeholder="按科目筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 20px;"></el-select>
+          <el-button-group>
+            <el-button :icon="Grid" :type="viewMode === 'grid' ? 'primary' : 'default'" @click="viewMode = 'grid'"/>
+            <el-button :icon="Menu" :type="viewMode === 'list' ? 'primary' : 'default'" @click="viewMode = 'list'"/>
+          </el-button-group>
+        </div>
+      </div>
+
+      <div v-if="viewMode === 'grid'" class="card-grid">
+        <div v-for="paper in filteredList" :key="paper.id" class="paper-card">
+          <div class="card-header">
+            <el-tag size="small">{{ getSubjectName(paper.subjectId) }}</el-tag>
+            <el-dropdown>
+              <el-icon class="el-dropdown-link"><MoreFilled /></el-icon>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="handleUpdate(paper.id)">编辑</el-dropdown-item>
+                  <el-dropdown-item @click="handleExport(paper.id, false)">导出</el-dropdown-item>
+                  <el-dropdown-item @click="handleExport(paper.id, true)">导出(含答案)</el-dropdown-item>
+                  <el-dropdown-item @click="handleDelete(paper.id)" divided style="color: #f56c6c;">删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+          <h3 class="card-title">{{ paper.name }}</h3>
+          <p class="card-desc">{{ paper.description }}</p>
+          <div class="card-footer">
+            <span class="card-code">PAPER-{{ paper.code || 'N/A' }}</span>
+            <span class="card-info">分数 {{ paper.totalScore }}</span>
+          </div>
+        </div>
+      </div>
+
+      <el-table v-if="viewMode === 'list'" :data="filteredList" v-loading="loading" style="width: 100%; margin-top: 20px;">
         <el-table-column type="index" label="序号" width="80" align="center" />
         <el-table-column prop="name" label="试卷名称" show-overflow-tooltip />
         <el-table-column prop="code" label="编码" width="150" />
         <el-table-column label="所属科目" width="150">
-          <template #default="scope">
-            {{ getSubjectName(scope.row.subjectId) }}
-          </template>
+          <template #default="scope">{{ getSubjectName(scope.row.subjectId) }}</template>
         </el-table-column>
         <el-table-column prop="totalScore" label="总分" width="100" />
         <el-table-column label="操作" width="280" align="center">
@@ -45,6 +95,7 @@
       </el-table>
 
       <el-pagination
+          v-if="viewMode === 'list'"
           class="pagination"
           background
           layout="total, sizes, prev, pager, next, jumper"
@@ -67,22 +118,24 @@
 </template>
 
 <script lang="ts" setup>
-// ... <script>部分的代码保持不变 ...
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchPaperList, deletePaper, downloadPaper } from '@/api/paper';
 import type { Paper, PaperPageParams } from '@/api/paper';
 import { fetchAllSubjects, type Subject } from '@/api/subject';
-import { Plus, Edit, Delete, Search, Refresh, Download } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Grid, Menu, MoreFilled, Download } from '@element-plus/icons-vue';
 import PaperEditDialog from '@/components/paper/PaperEditDialog.vue';
 
-const paperList = ref<Paper[]>([]);
+const allPaperList = ref<Paper[]>([]); // 用于前端搜索
+const paperListForTable = ref<Paper[]>([]); // 用于表格分页
 const allSubjects = ref<Subject[]>([]);
 const total = ref(0);
 const loading = ref(true);
 
 const isDialogVisible = ref(false);
 const editingId = ref<number | undefined>(undefined);
+const viewMode = ref<'grid' | 'list'>('grid');
+const searchQuery = ref('');
 
 const queryParams = reactive<PaperPageParams>({
   current: 1,
@@ -90,12 +143,30 @@ const queryParams = reactive<PaperPageParams>({
   subjectId: undefined
 });
 
+const filteredList = computed(() => {
+  return allPaperList.value.filter(item => {
+    const searchMatch = searchQuery.value
+        ? item.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || (item.code && item.code.toLowerCase().includes(searchQuery.value.toLowerCase()))
+        : true;
+    const subjectMatch = queryParams.subjectId ? item.subjectId === queryParams.subjectId : true;
+    return searchMatch && subjectMatch;
+  });
+});
+
 const getList = async () => {
   loading.value = true;
   try {
-    const response = await fetchPaperList(queryParams);
-    paperList.value = response.data;
-    total.value = response.total;
+    const [allRes, pageRes] = await Promise.all([
+      fetchPaperList({ current: 1, size: 9999 }),
+      fetchPaperList(queryParams)
+    ]);
+    if (allRes.code === 200) {
+      allPaperList.value = allRes.data;
+    }
+    if (pageRes.code === 200) {
+      paperListForTable.value = pageRes.data;
+      total.value = pageRes.total;
+    }
   } finally {
     loading.value = false;
   }
@@ -108,18 +179,21 @@ const getAllSubjects = async () => {
 
 const getSubjectName = (subjectId: number) => {
   const subject = allSubjects.value.find((s: Subject) => s.id === subjectId);
-  return subject ? subject.name : '未知科目';
-};
-const handleQuery = () => {
-  queryParams.current = 1;
-  getList();
+  return subject ? subject.name : '未知';
 };
 
-const resetQuery = () => {
-  queryParams.current = 1;
-  queryParams.subjectId = undefined;
-  getList();
+const handleQuery = () => {
+  if (viewMode.value === 'list') {
+    queryParams.current = 1;
+    getList();
+  }
 };
+
+watch(() => queryParams.subjectId, () => {
+  if (viewMode.value === 'list') {
+    handleQuery();
+  }
+});
 
 const handleCreate = () => {
   editingId.value = undefined;
@@ -137,12 +211,12 @@ const handleDelete = (id: number) => {
         await deletePaper(id);
         ElMessage.success('删除成功');
         getList();
-      })
-      .catch(() => {});
+      });
 };
 
 const handleExport = async (id: number, includeAnswers: boolean) => {
   try {
+    ElMessage.info('正在生成Word文件，请稍候...');
     const response = await downloadPaper(id, includeAnswers);
     const contentDisposition = response.headers['content-disposition'];
     let fileName = '试卷.docx';
@@ -162,7 +236,6 @@ const handleExport = async (id: number, includeAnswers: boolean) => {
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
-
   } catch (error) {
     console.error('文件导出失败:', error);
     ElMessage.error('文件导出失败，请稍后重试。');
@@ -175,17 +248,62 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* ... <style>部分的代码保持不变 ... */
-.paper-manage-container {
+.page-container { padding: 24px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.page-header h2 { font-size: 24px; font-weight: 600; }
+.page-header p { color: var(--text-color-regular); margin-top: 4px; font-size: 14px; }
+.stats-cards { margin-bottom: 20px; }
+.stat-item { padding: 8px; }
+.stat-item .label { color: var(--text-color-regular); font-size: 14px; margin-bottom: 8px;}
+.stat-item .value { font-size: 28px; font-weight: bold; }
+.content-card { background-color: var(--bg-color-container); }
+.content-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.pagination { margin-top: 20px; display: flex; justify-content: flex-end; }
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+.paper-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #f7f9fc;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
-.table-container {
-  margin-top: 16px;
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
 }
-.pagination {
-  margin-top: 16px;
-  justify-content: flex-end;
+.el-dropdown-link {
+  cursor: pointer;
+  color: var(--text-color-regular);
+}
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.card-desc {
+  font-size: 14px;
+  color: var(--text-color-regular);
+  flex-grow: 1;
+  min-height: 40px;
+  margin-bottom: 16px;
+}
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+  font-size: 12px;
+  color: var(--text-color-regular);
+}
+.card-code, .card-info {
+  font-family: monospace;
 }
 </style>

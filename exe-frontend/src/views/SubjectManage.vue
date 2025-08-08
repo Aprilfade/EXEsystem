@@ -1,12 +1,44 @@
 <template>
   <div class="subject-manage-container">
-    <el-card shadow="never">
-      <el-button type="primary" :icon="Plus" @click="handleCreate">新增科目</el-button>
-    </el-card>
+    <div class="page-header">
+      <div>
+        <h2>科目管理</h2>
+        <p>有序归类不同学科与年级的教学科目</p>
+      </div>
+      <el-button type="primary" :icon="Plus" size="large" @click="handleCreate">新增科目</el-button>
+    </div>
 
-    <el-card shadow="never" class="table-container">
-      <el-table v-loading="loading" :data="subjectList" style="width: 100%">
-        <el-table-column type="index" label="序号" width="80" align="center" />
+    <el-row :gutter="20" class="stats-cards">
+      <el-col :span="8">
+        <el-card shadow="never">
+          <div class="stat-item">
+            <p class="label">科目总创建数</p>
+            <p class="value">{{ total }}</p>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-card shadow="never" class="content-card">
+      <div class="content-header">
+        <el-input v-model="searchQuery" placeholder="输入关键词搜索" size="large" style="width: 300px;"/>
+        <div>
+          <el-button-group>
+            <el-button :icon="Grid" :type="viewMode === 'grid' ? 'primary' : 'default'" @click="viewMode = 'grid'"/>
+            <el-button :icon="Menu" :type="viewMode === 'list' ? 'primary' : 'default'" @click="viewMode = 'list'"/>
+          </el-button-group>
+        </div>
+      </div>
+
+      <div v-if="viewMode === 'grid'" class="card-grid">
+        <div v-for="subject in filteredList" :key="subject.id" class="subject-card">
+          <h3>{{ subject.name }}</h3>
+          <p>{{ subject.description || '暂无简介' }}</p>
+          <span>关联知识点: 120个</span>
+        </div>
+      </div>
+
+      <el-table v-if="viewMode === 'list'" :data="filteredList" v-loading="loading" style="width: 100%; margin-top: 20px;">
         <el-table-column prop="name" label="科目名称" />
         <el-table-column prop="description" label="简介" />
         <el-table-column prop="createTime" label="创建时间" />
@@ -18,16 +50,6 @@
         </el-table-column>
       </el-table>
 
-      <el-pagination
-          class="pagination"
-          background
-          layout="total, sizes, prev, pager, next, jumper"
-          :total="total"
-          v-model:current-page="queryParams.current"
-          v-model:page-size="queryParams.size"
-          @size-change="getList"
-          @current-change="getList"
-      />
     </el-card>
 
     <subject-edit-dialog
@@ -38,71 +60,94 @@
   </div>
 </template>
 
-<script lang="ts" setup>
-import { ref, reactive, onMounted } from 'vue';
+<script setup lang="ts">
+import { ref, reactive, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchSubjectList, deleteSubject } from '@/api/subject';
 import type { Subject, SubjectPageParams } from '@/api/subject';
-import { Plus, Edit, Delete } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Grid, Menu } from '@element-plus/icons-vue';
 import SubjectEditDialog from '@/components/subject/SubjectEditDialog.vue';
 
 const subjectList = ref<Subject[]>([]);
 const total = ref(0);
 const loading = ref(true);
-
 const isDialogVisible = ref(false);
 const editingSubject = ref<Subject | undefined>(undefined);
+const viewMode = ref<'grid' | 'list'>('grid');
+const searchQuery = ref('');
 
-const queryParams = reactive<SubjectPageParams>({
-  current: 1,
-  size: 10,
+const filteredList = computed(() => {
+  if (!searchQuery.value) {
+    return subjectList.value;
+  }
+  return subjectList.value.filter(item =>
+      item.name.includes(searchQuery.value) ||
+      (item.description && item.description.includes(searchQuery.value))
+  );
 });
 
 const getList = async () => {
   loading.value = true;
   try {
-    const response = await fetchSubjectList(queryParams);
+    const response = await fetchSubjectList({current: 1, size: 999}); // 获取所有数据用于前端筛选
     subjectList.value = response.data;
     total.value = response.total;
   } finally {
     loading.value = false;
   }
 };
-
 const handleCreate = () => {
   editingSubject.value = undefined;
   isDialogVisible.value = true;
 };
-
 const handleUpdate = (subject: Subject) => {
   editingSubject.value = subject;
   isDialogVisible.value = true;
 };
-
 const handleDelete = (id: number) => {
-  ElMessageBox.confirm('确定要删除该科目吗? (请确保其下无任何试题或知识点)', '提示', { type: 'warning' })
+  ElMessageBox.confirm('确定要删除该科目吗?', '提示', { type: 'warning' })
       .then(async () => {
         await deleteSubject(id);
         ElMessage.success('删除成功');
         getList();
-      })
-      .catch(() => {});
+      });
 };
-
 onMounted(getList);
 </script>
 
 <style scoped>
-.subject-manage-container {
+.page-header {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
-.table-container {
-  margin-top: 16px;
+.page-header h2 { font-size: 24px; }
+.page-header p { color: var(--text-color-regular); margin-top: 4px; }
+.stats-cards { margin-bottom: 20px; }
+.stat-item .label { color: var(--text-color-regular); font-size: 14px; margin-bottom: 8px;}
+.stat-item .value { font-size: 28px; font-weight: bold;}
+.content-card {
+  background-color: var(--bg-color-container);
 }
-.pagination {
-  margin-top: 16px;
-  justify-content: flex-end;
+.content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+.subject-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #f7f9fc;
+}
+.subject-card h3 { margin-bottom: 8px; }
+.subject-card p { font-size: 14px; color: var(--text-color-regular); margin-bottom: 16px;}
+.subject-card span { font-size: 12px; color: #999; }
 </style>
