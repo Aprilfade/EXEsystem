@@ -10,6 +10,7 @@ export interface Subject {
     description: string;
     createTime?: string;
     updateTime?: string;
+    knowledgePointCount?: number; // 【新增此行】
 }
 
 /**

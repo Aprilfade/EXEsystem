@@ -14,6 +14,7 @@ export interface KnowledgePoint {
     remark?: string;
     createTime?: string;
     updateTime?: string;
+    questionCount?: number; // 【新增此行】
 }
 
 /**

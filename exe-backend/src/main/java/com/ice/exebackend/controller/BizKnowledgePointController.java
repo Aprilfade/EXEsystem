@@ -3,6 +3,7 @@ package com.ice.exebackend.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.common.Result;
+import com.ice.exebackend.dto.KnowledgePointStatsDTO;
 import com.ice.exebackend.entity.BizKnowledgePoint;
 import com.ice.exebackend.service.BizKnowledgePointService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,9 @@ public class BizKnowledgePointController {
     /**
      * 分页获取知识点列表
      */
+    /**
+     * 分页获取知识点列表 (已更新为包含统计数据)
+     */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result getKnowledgePointList(@RequestParam(defaultValue = "1") int current,
@@ -46,8 +50,9 @@ public class BizKnowledgePointController {
         }
         queryWrapper.orderByDesc("create_time");
 
-        knowledgePointService.page(page, queryWrapper);
-        return Result.suc(page.getRecords(), page.getTotal());
+        // 2. 调用新的 service 方法
+        Page<KnowledgePointStatsDTO> statsPage = knowledgePointService.getKnowledgePointStatsPage(page, queryWrapper);
+        return Result.suc(statsPage.getRecords(), statsPage.getTotal());
     }
 
     /**

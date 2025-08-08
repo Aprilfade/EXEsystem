@@ -20,8 +20,8 @@
       <el-col :span="8">
         <el-card shadow="never">
           <div class="stat-item">
-            <p class="label">关联关联试题数量</p>
-            <p class="value">122 <span class="change up">+12%</span></p>
+            <p class="label">关联试题总数量</p>
+            <p class="value">{{ totalAssociatedQuestions }}</p>
           </div>
         </el-card>
       </el-col>
@@ -29,7 +29,7 @@
         <el-card shadow="never">
           <div class="stat-item">
             <p class="label">未关联试题的知识点占比</p>
-            <p class="value">20%</p>
+            <p class="value">{{ unassociatedPercentage }}%</p>
           </div>
         </el-card>
       </el-col>
@@ -66,6 +66,7 @@
             <span class="card-code">CODE: {{ kp.code }}</span>
             <div class="card-tags">
               <el-tag v-if="kp.tags" v-for="tag in kp.tags.split(',')" :key="tag" type="info" size="small">{{ tag }}</el-tag>
+              <el-tag type="success" size="small">题目: {{ kp.questionCount || 0 }}</el-tag>
             </div>
           </div>
         </div>
@@ -75,6 +76,7 @@
         <el-table-column type="index" label="序号" width="80" align="center" />
         <el-table-column prop="name" label="知识点名称" />
         <el-table-column prop="code" label="编码" />
+        <el-table-column prop="questionCount" label="关联题目数" width="120" align="center"/>
         <el-table-column prop="description" label="描述" show-overflow-tooltip />
         <el-table-column prop="tags" label="标签" />
         <el-table-column prop="createTime" label="创建时间" />
@@ -114,6 +116,20 @@ const isDialogVisible = ref(false);
 const editingId = ref<number | undefined>(undefined);
 const viewMode = ref<'grid' | 'list'>('grid');
 const searchQuery = ref('');
+
+// 计算关联试题总数
+const totalAssociatedQuestions = computed(() => {
+  return knowledgePointList.value.reduce((sum, kp) => sum + (kp.questionCount || 0), 0);
+});
+
+// 计算未关联试题的知识点占比
+const unassociatedPercentage = computed(() => {
+  if (total.value === 0) {
+    return 0;
+  }
+  const unassociatedCount = knowledgePointList.value.filter(kp => !kp.questionCount || kp.questionCount === 0).length;
+  return ((unassociatedCount / total.value) * 100).toFixed(0);
+});
 
 const filteredList = computed(() => {
   if (!searchQuery.value) {
@@ -253,7 +269,9 @@ onMounted(() => {
   font-size: 12px;
   color: var(--text-color-regular);
 }
-.card-tags .el-tag {
-  margin-left: 6px;
+.card-tags {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 </style>

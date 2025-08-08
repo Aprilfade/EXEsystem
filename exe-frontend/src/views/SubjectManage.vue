@@ -34,13 +34,13 @@
         <div v-for="subject in filteredList" :key="subject.id" class="subject-card">
           <h3>{{ subject.name }}</h3>
           <p>{{ subject.description || '暂无简介' }}</p>
-          <span>关联知识点: 120个</span>
+          <span>关联知识点: {{ subject.knowledgePointCount }}个</span>
         </div>
       </div>
-
       <el-table v-if="viewMode === 'list'" :data="filteredList" v-loading="loading" style="width: 100%; margin-top: 20px;">
         <el-table-column prop="name" label="科目名称" />
         <el-table-column prop="description" label="简介" />
+        <el-table-column prop="knowledgePointCount" label="关联知识点数" width="150" align="center" />
         <el-table-column prop="createTime" label="创建时间" />
         <el-table-column label="操作" width="180" align="center">
           <template #default="scope">
@@ -76,16 +76,35 @@ const editingSubject = ref<Subject | undefined>(undefined);
 const viewMode = ref<'grid' | 'list'>('grid');
 const searchQuery = ref('');
 
+
+
+
 const filteredList = computed(() => {
+  // 如果搜索框为空，直接返回原始列表
   if (!searchQuery.value) {
     return subjectList.value;
   }
-  return subjectList.value.filter(item =>
-      item.name.includes(searchQuery.value) ||
-      (item.description && item.description.includes(searchQuery.value))
-  );
-});
 
+  // 将搜索词统一转为小写，以便进行不区分大小写的搜索
+  const query = searchQuery.value.toLowerCase();
+
+  // 使用 .filter 方法过滤列表
+  return subjectList.value.filter(item => {
+    // 关键修复点：在访问任何属性之前，先确保 item 是一个有效的对象
+    if (!item) {
+      return false;
+    }
+
+    // 安全地检查 name 属性是否存在，并且是否匹配搜索词
+    const nameMatch = item.name && item.name.toLowerCase().includes(query);
+
+    // 安全地检查 description 属性是否存在，并且是否匹配搜索词
+    const descriptionMatch = item.description && item.description.toLowerCase().includes(query);
+
+    // 只要名称或描述中有一个匹配，就返回 true
+    return nameMatch || descriptionMatch;
+  });
+});
 const getList = async () => {
   loading.value = true;
   try {

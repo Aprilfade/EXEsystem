@@ -3,6 +3,7 @@ package com.ice.exebackend.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.common.Result;
+import com.ice.exebackend.dto.SubjectStatsDTO;
 import com.ice.exebackend.entity.BizKnowledgePoint;
 import com.ice.exebackend.entity.BizQuestion; // 1. 导入 BizQuestion 实体
 import com.ice.exebackend.entity.BizSubject;
@@ -39,17 +40,17 @@ public class BizSubjectController {
         boolean success = subjectService.save(subject);
         return success ? Result.suc() : Result.fail();
     }
-
     /**
-     * 分页获取科目列表
+     * 分页获取科目列表 (已更新为包含统计数据)
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result getSubjectList(@RequestParam(defaultValue = "1") int current,
                                  @RequestParam(defaultValue = "10") int size) {
-        Page<BizSubject> page = new Page<>(current, size);
-        subjectService.page(page, new QueryWrapper<BizSubject>().orderByDesc("create_time"));
-        return Result.suc(page.getRecords(), page.getTotal());
+        // 2. 使用新的 service 方法
+        Page<BizSubject> pageRequest = new Page<>(current, size);
+        Page<SubjectStatsDTO> statsPage = subjectService.getSubjectStatsPage(pageRequest);
+        return Result.suc(statsPage.getRecords(), statsPage.getTotal());
     }
 
     /**
