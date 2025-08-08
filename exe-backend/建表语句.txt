@@ -137,15 +137,17 @@ CREATE TABLE `biz_paper_question` (
 -- ----------------------------
 CREATE TABLE `biz_wrong_record` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `student_id` bigint NOT NULL,
-  `question_id` bigint NOT NULL,
+  `student_id` bigint NOT NULL COMMENT '学生ID',
+  `question_id` bigint NOT NULL COMMENT '题目ID',
   `paper_id` bigint DEFAULT NULL COMMENT '可选, 关联试卷ID',
   `wrong_answer` text COLLATE utf8mb4_unicode_ci COMMENT '学生的错误答案',
   `wrong_reason` text COLLATE utf8mb4_unicode_ci COMMENT '错误原因分析',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  INDEX `idx_student_id` (`student_id`),
+  INDEX `idx_question_id` (`question_id`),
+  INDEX `idx_paper_id` (`paper_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='错题记录表';
-
 
 -- ----------------------------
 -- 12. 试卷图片关联表

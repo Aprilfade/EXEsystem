@@ -77,6 +77,19 @@ const routes = [
                 meta: {
                     requiresAdmin: true
                 }
+            },
+            // 【新增下面的路由】
+            {
+                path: 'wrong-records',
+                name: 'WrongRecordManagement',
+                component: () => import('@/views/WrongRecordManage.vue'),
+                meta: { requiresAdmin: true }
+            },
+            {
+                path: 'wrong-record-stats',
+                name: 'WrongRecordStats',
+                component: () => import('@/views/WrongRecordStats.vue'),
+                meta: { requiresAdmin: true }
             }
 
         ]

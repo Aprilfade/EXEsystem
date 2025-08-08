@@ -54,6 +54,12 @@
             <el-icon><Avatar /></el-icon> <span>学生管理</span>
           </el-menu-item>
 
+          <el-menu-item v-if="authStore.isAdmin" index="/wrong-records">
+            <el-icon><CircleClose /></el-icon> <span>错题管理</span>
+          </el-menu-item>
+          <el-menu-item v-if="authStore.isAdmin" index="/wrong-record-stats">
+            <el-icon><DataLine /></el-icon> <span>错题统计</span>
+          </el-menu-item>
 
 
         </el-menu>
@@ -69,7 +75,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '../stores/auth';
 // 【新增 Avatar 图标】
-import { House, User, Collection, Reading, Tickets, DocumentCopy, Avatar } from '@element-plus/icons-vue';
+import { House, User, Collection, Reading, Tickets, DocumentCopy, Avatar, CircleClose, DataLine  } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 
