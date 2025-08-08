@@ -62,3 +62,12 @@ export function deleteSubject(id: number): Promise<ApiResult<null>> {
         method: 'delete'
     });
 }
+/**
+ * 获取所有科目列表（不分页）
+ */
+export function fetchAllSubjects(): Promise<ApiResult<Subject[]>> {
+    return request({
+        url: '/api/v1/subjects/all', // 对应后端的 /all 接口
+        method: 'get'
+    });
+}

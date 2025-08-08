@@ -46,7 +46,16 @@ public class Result {
     public static Result fail(){
         return result(400,"失败",0L,null);
     }
-
+    // --- 新增这个方法 ---
+    /**
+     * 返回一个带有自定义失败消息的Result对象
+     * @param msg 自定义的失败消息
+     * @return Result
+     */
+    public static Result fail(String msg) {
+        return result(400, msg, 0L, null);
+    }
+    // --- 新增结束 ---
     public static Result suc(){
         return result(200,"成功",0L,null);
     }

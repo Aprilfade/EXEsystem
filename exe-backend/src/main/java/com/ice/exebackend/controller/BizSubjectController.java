@@ -3,7 +3,9 @@ package com.ice.exebackend.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.common.Result;
+import com.ice.exebackend.entity.BizKnowledgePoint;
 import com.ice.exebackend.entity.BizSubject;
+import com.ice.exebackend.service.BizKnowledgePointService;
 import com.ice.exebackend.service.BizSubjectService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,8 +23,8 @@ public class BizSubjectController {
     // 依赖 biz_question 和 biz_knowledge_point 的 Service (假设已存在)
     // @Autowired
     // private BizQuestionService questionService;
-    // @Autowired
-    // private BizKnowledgePointService knowledgePointService;
+     @Autowired
+    private BizKnowledgePointService knowledgePointService;
 
     /**
      * 新增科目
@@ -79,10 +81,12 @@ public class BizSubjectController {
         // if (questionCount > 0) {
         //     return Result.fail("无法删除：该科目下还存在关联的试题。");
         // }
-        // long knowledgePointCount = knowledgePointService.count(new QueryWrapper<BizKnowledgePoint>().eq("subject_id", id));
-        // if (knowledgePointCount > 0) {
-        //     return Result.fail("无法删除：该科目下还存在关联的知识点。");
-        // }
+        // 4. 安全删除检查: 检查该科目下是否有知识点
+        long knowledgePointCount = knowledgePointService.count(new QueryWrapper<BizKnowledgePoint>().eq("subject_id", id));
+        if (knowledgePointCount > 0) {
+            // 如果存在关联的知识点，则返回失败信息，不允许删除
+            return Result.fail("无法删除：该科目下还存在 " + knowledgePointCount + " 个关联的知识点。");
+        }
 
         boolean success = subjectService.removeById(id);
         return success ? Result.suc() : Result.fail();

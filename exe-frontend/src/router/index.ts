@@ -42,6 +42,15 @@ const routes = [
                 meta: {
                     requiresAdmin: true // 同样需要管理员权限
                 }
+            },
+            // --- 新增知识点管理路由 ---
+            {
+                path: 'knowledge-points',
+                name: 'KnowledgePointManagement',
+                component: () => import('@/views/KnowledgePointManage.vue'),
+                meta: {
+                    requiresAdmin: true // 需要管理员权限
+                }
             }
 
         ]
