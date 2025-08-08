@@ -5,6 +5,9 @@ import { useAuthStore } from '../stores/auth';
 import MainLayout from '@/layouts/MainLayout.vue';
 import {ElMessage} from "element-plus";
 
+
+
+
 const routes = [
     {
         path: '/login',
@@ -14,7 +17,7 @@ const routes = [
     {
         path: '/',
         component: MainLayout,
-        redirect: '/login',
+        redirect: '/home',
         meta: { requiresAuth: true },
         children: [
             {
@@ -30,7 +33,17 @@ const routes = [
                     permission: 'sys:user:list', // 这里可以保留，也可以用下面的isAdmin
                     requiresAdmin: true // 新增一个标记，表示此路由需要管理员权限
                 }
+
+            },
+            {
+                path: 'subjects',
+                name: 'SubjectManagement',
+                component: () => import('@/views/SubjectManage.vue'),
+                meta: {
+                    requiresAdmin: true // 同样需要管理员权限
+                }
             }
+
         ]
     }
 ];
