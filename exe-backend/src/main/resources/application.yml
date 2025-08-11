@@ -8,6 +8,10 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:llf5201314}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
   redis:
     # 配置Redis连接池
     lettuce:

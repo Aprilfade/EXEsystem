@@ -24,6 +24,7 @@ export interface Paper {
     updateTime?: string;
     questions?: PaperQuestion[];
     paperImages?: PaperImage[]; // 【新增】
+    groups?: PaperGroup[]; // 【修改】
 }
 
 export interface PaperPageParams {
@@ -37,6 +38,12 @@ export interface PaperImage { // 【新增】
     paperId: number;
     imageUrl: string;
     sortOrder: number;
+}
+export interface PaperGroup { // 【新增】
+    id?: number;
+    name: string;
+    sortOrder: number;
+    questions: PaperQuestion[];
 }
 
 export function fetchPaperList(params: PaperPageParams): Promise<ApiResult<Paper[]>> {

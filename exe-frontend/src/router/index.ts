@@ -90,8 +90,14 @@ const routes = [
                 name: 'WrongRecordStats',
                 component: () => import('@/views/WrongRecordStats.vue'),
                 meta: { requiresAdmin: true }
+            },
+            // 【新增下面的路由】
+            {
+                path: 'statistics',
+                name: 'StatisticsDashboard',
+                component: () => import('@/views/StatisticsDashboard.vue'),
+                meta: { requiresAdmin: true }
             }
-
         ]
     }
 ];

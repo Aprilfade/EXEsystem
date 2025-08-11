@@ -1,5 +1,8 @@
 package com.ice.exebackend.controller;
 
+
+import com.ice.exebackend.entity.BizQuestionKnowledgePoint; // 【新增】 导入关联表实体
+import com.ice.exebackend.mapper.BizQuestionKnowledgePointMapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.common.Result;
@@ -17,6 +20,11 @@ public class BizKnowledgePointController {
 
     @Autowired
     private BizKnowledgePointService knowledgePointService;
+
+
+    // 【新增】 注入关联表的Mapper
+    @Autowired
+    private BizQuestionKnowledgePointMapper questionKnowledgePointMapper;
 
     /**
      * 新增知识点
@@ -77,13 +85,25 @@ public class BizKnowledgePointController {
         return success ? Result.suc() : Result.fail();
     }
 
+
     /**
-     * 删除知识点
+     * 删除知识点 - 【已优化】
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result deleteKnowledgePoint(@PathVariable Long id) {
-        // TODO: 在删除前可以增加检查，例如该知识点是否已关联试题
+        // 【新增】 安全删除检查
+        // 1. 查询该知识点是否已关联任何试题
+        QueryWrapper<BizQuestionKnowledgePoint> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("knowledge_point_id", id);
+        Long associatedQuestionCount = questionKnowledgePointMapper.selectCount(queryWrapper);
+
+        // 2. 如果有关联的试题，则阻止删除并返回错误信息
+        if (associatedQuestionCount > 0) {
+            return Result.fail("无法删除：该知识点已关联 " + associatedQuestionCount + " 个试题。");
+        }
+
+        // 3. 如果没有关联，则执行删除
         boolean success = knowledgePointService.removeById(id);
         return success ? Result.suc() : Result.fail();
     }

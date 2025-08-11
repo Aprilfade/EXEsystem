@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, watch } from 'vue';
 import { fetchQuestionList } from '@/api/question';
 import type { Question, QuestionPageParams } from '@/api/question';
 
@@ -72,6 +72,15 @@ const handleSelectionChange = (val: Question[]) => {
 const confirmAdd = () => {
   emit('add', selectedQuestions.value);
 };
+// 2. 【新增】添加这个 watch 侦听器
+watch(() => props.subjectId, (newSubjectId) => {
+  // 当外部传入的 subjectId 变化时，执行以下操作：
+  queryParams.subjectId = newSubjectId; // 更新查询参数
+  queryParams.current = 1; // 重置到第一页
+  questionList.value = []; // 立即清空旧数据，提升体验
+  total.value = 0;
+  loadQuestions(); // 重新加载题目列表
+});
 
 onMounted(loadQuestions);
 

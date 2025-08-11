@@ -15,6 +15,7 @@ public class BizPaperQuestion {
     private Long questionId;
     private Integer score;
     private Integer sortOrder;
+    private Long groupId; // 【新增此行】
 
     public Long getId() {
         return id;
@@ -46,5 +47,12 @@ public class BizPaperQuestion {
     }
     public void setSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public Long getGroupId() {
+        return groupId;
+    }
+    public void setGroupId(Long groupId) {
+        this.groupId = groupId;
     }
 }

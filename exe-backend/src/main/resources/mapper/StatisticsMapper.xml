@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ice.exebackend.mapper.StatisticsMapper">
+
+    <select id="getKnowledgePointErrorStats" resultType="com.ice.exebackend.dto.KnowledgePointErrorStatsDTO">
+        SELECT
+            kp.id AS knowledgePointId,
+            kp.name AS knowledgePointName,
+            s.name AS subjectName,
+            COUNT(DISTINCT qkp.question_id) AS totalQuestions,
+            COUNT(wr.id) AS totalErrors
+        FROM
+            biz_knowledge_point kp
+                LEFT JOIN biz_subject s ON kp.subject_id = s.id
+                LEFT JOIN biz_question_knowledge_point qkp ON kp.id = qkp.knowledge_point_id
+                LEFT JOIN biz_wrong_record wr ON qkp.question_id = wr.question_id
+        GROUP BY
+            kp.id, kp.name, s.name
+        ORDER BY totalErrors DESC
+    </select>
+
+    <select id="getStudentErrorRateByQuestionType" resultType="java.util.Map">
+        SELECT
+            q.question_type as questionType,
+            COUNT(wr.id) as errorCount
+        FROM
+            biz_wrong_record wr
+                JOIN biz_question q ON wr.question_id = q.id
+        WHERE wr.student_id = #{studentId}
+        GROUP BY q.question_type
+    </select>
+
+    <select id="getStudentErrorRateByKnowledgePoint" resultType="com.ice.exebackend.dto.KnowledgePointErrorStatsDTO">
+        SELECT
+            kp.id as knowledgePointId,
+            kp.name as knowledgePointName,
+            COUNT(wr.id) as totalErrors
+        FROM
+            biz_wrong_record wr
+                JOIN biz_question_knowledge_point qkp ON wr.question_id = qkp.question_id
+                JOIN biz_knowledge_point kp ON qkp.knowledge_point_id = kp.id
+        WHERE wr.student_id = #{studentId}
+        GROUP BY kp.id, kp.name
+        ORDER BY totalErrors DESC
+            LIMIT 5 -- 只看最薄弱的5个知识点
+    </select>
+
+    <select id="getPaperDifficultyStats" resultType="com.ice.exebackend.dto.PaperDifficultyDTO">
+        WITH PaperErrors AS (
+            SELECT
+                pq.question_id,
+                q.content,
+                COUNT(wr.id) AS error_count
+            FROM biz_paper_question pq
+                     JOIN biz_question q ON pq.question_id = q.id
+                     LEFT JOIN biz_wrong_record wr ON pq.paper_id = wr.paper_id AND pq.question_id = wr.question_id
+            WHERE pq.paper_id = #{paperId}
+            GROUP BY pq.question_id, q.content
+        )
+        SELECT
+            #{paperId} AS paperId,
+            p.name AS paperName,
+            (SELECT COUNT(DISTINCT student_id) FROM biz_wrong_record WHERE paper_id = #{paperId}) AS totalStudents,
+            (SELECT AVG(error_count) FROM PaperErrors) AS averageErrorRate,
+            (SELECT question_id FROM PaperErrors ORDER BY error_count ASC, question_id ASC LIMIT 1) AS easiestQuestionId,
+            (SELECT content FROM PaperErrors ORDER BY error_count ASC, question_id ASC LIMIT 1) AS easiestQuestionContent,
+            (SELECT question_id FROM PaperErrors ORDER BY error_count DESC, question_id ASC LIMIT 1) AS hardestQuestionId,
+            (SELECT content FROM PaperErrors ORDER BY error_count DESC, question_id ASC LIMIT 1) AS hardestQuestionContent
+        FROM biz_paper p
+        WHERE p.id = #{paperId}
+    </select>
+
+</mapper>

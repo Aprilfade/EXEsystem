@@ -17,14 +17,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
-        <el-card shadow="never">
-          <div class="stat-item">
-            <p class="label">题目创建</p>
-            <p class="value">6</p>
-          </div>
-        </el-card>
-      </el-col>
+
       <el-col :span="6">
         <el-card shadow="never">
           <div class="stat-item">
@@ -47,8 +40,16 @@
       <div class="content-header">
         <el-input v-model="searchQuery" placeholder="输入题干内容搜索" size="large" style="width: 300px;"/>
         <div>
-          <el-select v-model="queryParams.subjectId" placeholder="按科目筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 10px;"></el-select>
-          <el-select v-model="queryParams.questionType" placeholder="按题型筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 20px;"></el-select>
+          <el-select v-model="queryParams.subjectId" placeholder="按科目筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 10px;">
+            <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
+          </el-select>
+          <el-select v-model="queryParams.questionType" placeholder="按题型筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 20px;">
+            <el-option label="单选题" :value="1" />
+            <el-option label="多选题" :value="2" />
+            <el-option label="填空题" :value="3" />
+            <el-option label="判断题" :value="4" />
+            <el-option label="主观题" :value="5" />
+          </el-select>
           <el-button-group>
             <el-button :icon="Grid" :type="viewMode === 'grid' ? 'primary' : 'default'" @click="viewMode = 'grid'"/>
             <el-button :icon="Menu" :type="viewMode === 'list' ? 'primary' : 'default'" @click="viewMode = 'list'"/>
@@ -72,7 +73,7 @@
           </div>
           <p class="card-content">{{ q.content }}</p>
           <div class="card-footer">
-            <span class="card-code">QUEST-{{q.id}}</span>
+
             <el-tag type="info" size="small">{{ questionTypeMap[q.questionType] }}</el-tag>
           </div>
         </div>

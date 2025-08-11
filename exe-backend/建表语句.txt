@@ -162,3 +162,19 @@ CREATE TABLE `biz_paper_image` (
 
 -- 同时，为试卷表增加一个字段，用于区分试卷类型
 ALTER TABLE `biz_paper` ADD COLUMN `paper_type` INT DEFAULT 1 COMMENT '试卷类型: 1-手动选题, 2-图片拼接';
+-- ----------------------------
+-- 13. 【新增】试卷题目分组表
+-- ----------------------------
+CREATE TABLE `biz_paper_group` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `paper_id` bigint NOT NULL COMMENT '所属试卷ID',
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分组标题 (例如: 一、选择题)',
+  `sort_order` int DEFAULT '0' COMMENT '分组排序',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试卷题目分组表';
+
+-- ----------------------------
+-- 【修改】试卷题目关联表
+-- ----------------------------
+-- 为 biz_paper_question 表添加 group_id 字段
+ALTER TABLE `biz_paper_question` ADD COLUMN `group_id` bigint DEFAULT NULL COMMENT '所属分组ID';

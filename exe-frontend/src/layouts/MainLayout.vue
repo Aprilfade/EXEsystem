@@ -33,6 +33,10 @@
           <el-menu-item index="/wrong-record-stats">错题统计</el-menu-item>
         </el-sub-menu>
 
+        <el-menu-item index="/statistics">
+          <el-icon><DataLine /></el-icon><span>教学统计分析</span>
+        </el-menu-item>
+
         <el-menu-item index="/users" v-if="authStore.isAdmin">
           <el-icon><User /></el-icon><span>成员管理</span>
         </el-menu-item>

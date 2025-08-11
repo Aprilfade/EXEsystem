@@ -13,6 +13,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.ice.exebackend.entity.BizWrongRecord; // 【新增】 导入错题记录实体
+import com.ice.exebackend.service.BizWrongRecordService; // 【新增】 导入错题记录服务
 
 import java.io.IOException;
 import java.net.URLEncoder; // 导入 URLEncoder
@@ -24,6 +26,10 @@ public class BizStudentController {
 
     @Autowired
     private BizStudentService studentService;
+
+    // 【新增】 注入错题记录服务
+    @Autowired
+    private BizWrongRecordService wrongRecordService;
 
     @PostMapping
     public Result createStudent(@RequestBody BizStudent student) {
@@ -57,8 +63,21 @@ public class BizStudentController {
         return success ? Result.suc() : Result.fail();
     }
 
+    /**
+     * 删除学生 - 【已优化】
+     */
     @DeleteMapping("/{id}")
     public Result deleteStudent(@PathVariable Long id) {
+        // 【新增】 安全删除检查
+        // 1. 检查该学生是否已存在错题记录
+        long wrongRecordCount = wrongRecordService.count(new QueryWrapper<BizWrongRecord>().eq("student_id", id));
+
+        // 2. 如果存在错题记录，则阻止删除
+        if (wrongRecordCount > 0) {
+            return Result.fail("无法删除：该学生名下存在 " + wrongRecordCount + " 条错题记录。");
+        }
+
+        // 3. 如果没有，则执行删除
         boolean success = studentService.removeById(id);
         return success ? Result.suc() : Result.fail();
     }

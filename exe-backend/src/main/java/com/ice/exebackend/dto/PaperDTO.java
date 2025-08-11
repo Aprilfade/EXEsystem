@@ -12,9 +12,25 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 public class PaperDTO extends BizPaper {
 
-    // 包含的试题列表 (包含分数和排序信息)
-    private List<BizPaperQuestion> questions;
+    // 【修改】将 questions 替换为 groups
+    private List<PaperGroupDTO> groups;
     private List<BizPaperImage> paperImages; // 【新增】
+
+    @Data
+    public static class PaperGroupDTO {
+        private Long id;
+        private String name;
+        private Integer sortOrder;
+        private List<BizPaperQuestion> questions;
+
+
+        public List<BizPaperQuestion> getQuestions() {
+            return questions;
+        }
+        public void setQuestions(List<BizPaperQuestion> questions) {
+            this.questions = questions;
+        }
+    }
 
     public List<BizPaperImage> getPaperImages() {
         return paperImages;
@@ -24,10 +40,4 @@ public class PaperDTO extends BizPaper {
         this.paperImages = paperImages;
     }
 
-    public List<BizPaperQuestion> getQuestions() {
-        return questions;
-    }
-    public void setQuestions(List<BizPaperQuestion> questions) {
-        this.questions = questions;
-    }
 }
