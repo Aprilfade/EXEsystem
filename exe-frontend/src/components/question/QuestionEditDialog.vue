@@ -36,6 +36,22 @@
 
       <el-form-item label="题干内容" prop="content">
         <el-input v-model="form.content" type="textarea" :rows="4" placeholder="请输入题干内容" />
+        <div v-if="isChecking" class="duplicate-tip">正在检查相似题目...</div>
+        <el-alert
+            v-if="!isChecking && similarQuestions.length > 0"
+            title="发现可能重复的题目！"
+            type="warning"
+            :closable="false"
+            style="margin-top: 8px;"
+        >
+          <ul>
+            <li v-for="q in similarQuestions" :key="q.id">
+              <el-link type="primary" :underline="false" @click="$emit('preview', q.id)">
+                {{ q.content?.substring(0, 50) }}...
+              </el-link>
+            </li>
+          </ul>
+        </el-alert>
       </el-form-item>
 
       <el-form-item label="题目图片" prop="imageUrl">
@@ -128,6 +144,8 @@ import type { Question, QuestionOption } from '@/api/question';
 import { fetchAllSubjects, type Subject } from '@/api/subject';
 import { fetchKnowledgePointList, type KnowledgePoint } from '@/api/knowledgePoint';
 import { useAuthStore } from '@/stores/auth'; // 【修复】导入 authStore
+import request from '@/utils/request'; // 直接引入request实例
+import { useDebounceFn } from '@vueuse/core'; // 引入防抖函数
 
 const authStore = useAuthStore(); // 【修复】获取 authStore 实例，使其在模板中可用
 
@@ -145,6 +163,8 @@ const availableKnowledgePoints = ref<KnowledgePoint[]>([]);
 
 const localOptions = ref<QuestionOption[]>([]);
 const localAnswerArray = ref<string[]>([]);
+const similarQuestions = ref<Partial<Question>[]>([]);
+const isChecking = ref(false);
 
 const dialogTitle = computed(() => (props.questionId ? '编辑试题' : '新增试题'));
 
@@ -264,6 +284,43 @@ const loadQuestionData = async (id: number) => {
     parseOptionsAndAnswer(res.data);
   }
 };
+
+
+// 定义查重函数
+const checkDuplicate = async (content: string) => {
+  if (!content || !form.value?.subjectId) {
+    similarQuestions.value = [];
+    return;
+  }
+  isChecking.value = true;
+  try {
+    const res = await request({
+      url: '/api/v1/questions/check-duplicate',
+      method: 'post',
+      data: {
+        content: content,
+        subjectId: form.value.subjectId,
+        currentId: form.value.id || null
+      }
+    });
+    if (res.code === 200) {
+      similarQuestions.value = res.data;
+    }
+  } finally {
+    isChecking.value = false;
+  }
+};
+
+// 使用 @vueuse/core 的 useDebounceFn 创建一个防抖函数
+// 用户停止输入 500ms 后再执行查重，避免频繁请求
+const debouncedCheck = useDebounceFn(checkDuplicate, 500);
+
+// 监听题干内容的变化
+watch(() => form.value?.content, (newContent) => {
+  if (newContent) {
+    debouncedCheck(newContent);
+  }
+});
 
 watch(() => props.visible, async (isVisible) => {
   if (isVisible) {

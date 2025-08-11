@@ -31,6 +31,20 @@ public class DashboardStatsDTO implements Serializable {
         private static final long serialVersionUID = 1L;
         private List<String> categories;
         private List<SeriesData> series;
+
+        public List<String> getCategories() {
+            return categories;
+        }
+        public List<SeriesData> getSeries() {
+            return series;
+        }
+        public void setCategories(List<String> categories) {
+            this.categories = categories;
+        }
+        public void setSeries(List<SeriesData> series) {
+            this.series = series;
+        }
+
     }
 
     // 用于图表系列的数据结构
@@ -39,6 +53,19 @@ public class DashboardStatsDTO implements Serializable {
         private static final long serialVersionUID = 1L;
         private String name;
         private List<Long> data;
+
+        public String getName() {
+            return name;
+        }
+        public List<Long> getData() {
+            return data;
+        }
+        public void setName(String name) {
+            this.name = name;
+        }
+        public void setData(List<Long> data) {
+            this.data = data;
+        }
     }
 
     @Data
@@ -46,5 +73,71 @@ public class DashboardStatsDTO implements Serializable {
         private static final long serialVersionUID = 1L;
         private String content;
         private String date;
+
+        public String getContent() {
+            return content;
+        }
+        public void setContent(String content) {
+            this.content = content;
+        }
+        public String getDate() {
+            return date;
+        }
+        public void setDate(String date) {
+            this.date = date;
+        }
     }
+    public Long getStudentCount(){
+        return studentCount;
+    }
+
+    public void setStudentCount(Long studentCount){
+        this.studentCount = studentCount;
+    }
+
+    public Long getSubjectCount(){
+        return subjectCount;
+    }
+
+    public void setSubjectCount(Long subjectCount){
+        this.subjectCount = subjectCount;
+    }
+
+    public Long getKnowledgePointCount(){
+        return knowledgePointCount;
+    }
+
+    public void setKnowledgePointCount(Long knowledgePointCount){
+        this.knowledgePointCount = knowledgePointCount;
+    }
+
+    public Long getQuestionCount(){
+        return questionCount;
+    }
+
+    public void setQuestionCount(Long questionCount){
+        this.questionCount = questionCount;
+    }
+
+    public Long getPaperCount(){
+        return paperCount;
+    }
+
+    public void setPaperCount(Long paperCount){
+        this.paperCount = paperCount;
+    }
+
+    public ChartData getKpAndQuestionStats() {
+        return kpAndQuestionStats;
+    }
+    public void setKpAndQuestionStats(ChartData kpAndQuestionStats) {
+        this.kpAndQuestionStats = kpAndQuestionStats;
+    }
+    public List<Notification> getNotifications() {
+        return notifications;
+    }
+    public void setNotifications(List<Notification> notifications) {
+        this.notifications = notifications;
+    }
+
 }

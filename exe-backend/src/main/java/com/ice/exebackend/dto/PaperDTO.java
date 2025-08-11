@@ -30,6 +30,24 @@ public class PaperDTO extends BizPaper {
         public void setQuestions(List<BizPaperQuestion> questions) {
             this.questions = questions;
         }
+        public Long getId() {
+            return id;
+        }
+        public void setId(Long id) {
+            this.id = id;
+        }
+        public String getName() {
+            return name;
+        }
+        public void setName(String name) {
+            this.name = name;
+        }
+        public Integer getSortOrder() {
+            return sortOrder;
+        }
+        public void setSortOrder(Integer sortOrder) {
+            this.sortOrder = sortOrder;
+        }
     }
 
     public List<BizPaperImage> getPaperImages() {
@@ -38,6 +56,12 @@ public class PaperDTO extends BizPaper {
 
     public void setPaperImages(List<BizPaperImage> paperImages) {
         this.paperImages = paperImages;
+    }
+    public List<PaperGroupDTO> getGroups() {
+        return groups;
+    }
+    public void setGroups(List<PaperGroupDTO> groups) {
+        this.groups = groups;
     }
 
 }

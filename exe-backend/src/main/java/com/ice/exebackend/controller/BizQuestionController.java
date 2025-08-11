@@ -10,6 +10,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.apache.commons.text.similarity.LevenshteinDistance; // 需要添加依赖
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/questions")
@@ -84,4 +90,38 @@ public class BizQuestionController {
         boolean success = questionService.removeById(id);
         return success ? Result.suc() : Result.fail();
     }
+    /**
+     * 检查题目内容是否与现有题目重复
+     * @param request 包含 content, subjectId, currentId (编辑时排除自身)
+     * @return 相似的题目列表
+     */
+    @PostMapping("/check-duplicate")
+    public Result checkDuplicate(@RequestBody Map<String, Object> request) {
+        String content = (String) request.get("content");
+        Integer subjectId = (Integer) request.get("subjectId");
+        Long currentId = request.get("currentId") != null ? Long.valueOf(request.get("currentId").toString()) : null;
+
+        if (!StringUtils.hasText(content) || subjectId == null) {
+            return Result.suc(Collections.emptyList());
+        }
+
+        // 简单的基于编辑距离的查重逻辑
+        List<BizQuestion> candidates = questionService.lambdaQuery()
+                .eq(BizQuestion::getSubjectId, subjectId)
+                .ne(currentId != null, BizQuestion::getId, currentId) // 编辑时排除自己
+                .select(BizQuestion::getId, BizQuestion::getContent)
+                .list();
+
+        LevenshteinDistance distance = new LevenshteinDistance();
+        List<BizQuestion> similarQuestions = candidates.stream()
+                .filter(q -> {
+                    // 计算两个字符串的相似度（1 - 编辑距离 / 较长字符串长度）
+                    double similarity = 1.0 - (double) distance.apply(content, q.getContent()) / Math.max(content.length(), q.getContent().length());
+                    return similarity > 0.8; // 相似度阈值设为 80%
+                })
+                .collect(Collectors.toList());
+
+        return Result.suc(similarQuestions);
+    }
+
 }

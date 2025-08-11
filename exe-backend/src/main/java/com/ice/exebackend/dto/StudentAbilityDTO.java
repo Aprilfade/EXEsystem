@@ -13,4 +13,33 @@ public class StudentAbilityDTO {
     // 可选：用于更详细的表格展示
     private Map<String, Long> errorsByQuestionType;
     private List<KnowledgePointErrorStatsDTO> errorsByKnowledgePoint;
+
+    public List<String> getRadarLabels() {
+        return radarLabels;
+    }
+    public void setRadarLabels(List<String> radarLabels) {
+        this.radarLabels = radarLabels;
+    }
+
+    public List<Double> getErrorRates() {
+
+        return errorRates;
+    }
+    public void setErrorRates(List<Double> errorRates) {
+        this.errorRates = errorRates;
+    }
+
+    public List<KnowledgePointErrorStatsDTO> getErrorsByKnowledgePoint() {
+        return errorsByKnowledgePoint;
+    }
+    public void setErrorsByKnowledgePoint(List<KnowledgePointErrorStatsDTO> errorsByKnowledgePoint) {
+        this.errorsByKnowledgePoint = errorsByKnowledgePoint;
+    }
+
+    public Map<String, Long> getErrorsByQuestionType() {
+        return errorsByQuestionType;
+    }
+    public void setErrorsByQuestionType(Map<String, Long> errorsByQuestionType) {
+        this.errorsByQuestionType = errorsByQuestionType;
+    }
 }
