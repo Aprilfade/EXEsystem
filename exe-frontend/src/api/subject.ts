@@ -11,6 +11,7 @@ export interface Subject {
     createTime?: string;
     updateTime?: string;
     knowledgePointCount?: number; // 【新增此行】
+    questionCount?: number; // 【新增此行】
 }
 
 /**
@@ -19,6 +20,7 @@ export interface Subject {
 export interface SubjectPageParams {
     current: number;
     size: number;
+    name?: string; // 【新增此行】
 }
 
 /**

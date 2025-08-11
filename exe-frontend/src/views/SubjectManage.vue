@@ -21,7 +21,15 @@
 
     <el-card shadow="never" class="content-card">
       <div class="content-header">
-        <el-input v-model="searchQuery" placeholder="输入关键词搜索" size="large" style="width: 300px;"/>
+        <el-input
+            v-model="queryParams.name"
+            placeholder="输入关键词搜索"
+            size="large"
+            style="width: 300px;"
+            @keyup.enter="handleQuery"
+            clearable
+            @clear="handleQuery"
+        />
         <div>
           <el-button-group>
             <el-button :icon="Grid" :type="viewMode === 'grid' ? 'primary' : 'default'" @click="viewMode = 'grid'"/>
@@ -31,16 +39,21 @@
       </div>
 
       <div v-if="viewMode === 'grid'" class="card-grid">
-        <div v-for="subject in filteredList" :key="subject.id" class="subject-card">
+        <div v-for="subject in subjectList" :key="subject.id" class="subject-card">
           <h3>{{ subject.name }}</h3>
           <p>{{ subject.description || '暂无简介' }}</p>
-          <span>关联知识点: {{ subject.knowledgePointCount }}个</span>
+          <div class="card-footer">
+            <span>知识点: {{ subject.knowledgePointCount || 0 }}个</span>
+            <span>试题: {{ subject.questionCount || 0 }}道</span>
+          </div>
         </div>
       </div>
-      <el-table v-if="viewMode === 'list'" :data="filteredList" v-loading="loading" style="width: 100%; margin-top: 20px;">
+
+      <el-table v-if="viewMode === 'list'" :data="subjectList" v-loading="loading" style="width: 100%; margin-top: 20px;">
         <el-table-column prop="name" label="科目名称" />
         <el-table-column prop="description" label="简介" />
         <el-table-column prop="knowledgePointCount" label="关联知识点数" width="150" align="center" />
+        <el-table-column prop="questionCount" label="关联试题数" width="150" align="center" />
         <el-table-column prop="createTime" label="创建时间" />
         <el-table-column label="操作" width="180" align="center">
           <template #default="scope">
@@ -49,6 +62,16 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <el-pagination
+          class="pagination"
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="total"
+          v-model:current-page="queryParams.current"
+          v-model:page-size="queryParams.size"
+          @size-change="getList"
+          @current-change="getList" />
 
     </el-card>
 
@@ -61,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchSubjectList, deleteSubject } from '@/api/subject';
 import type { Subject, SubjectPageParams } from '@/api/subject';
@@ -74,63 +97,52 @@ const loading = ref(true);
 const isDialogVisible = ref(false);
 const editingSubject = ref<Subject | undefined>(undefined);
 const viewMode = ref<'grid' | 'list'>('grid');
-const searchQuery = ref('');
 
-
-
-
-const filteredList = computed(() => {
-  // 如果搜索框为空，直接返回原始列表
-  if (!searchQuery.value) {
-    return subjectList.value;
-  }
-
-  // 将搜索词统一转为小写，以便进行不区分大小写的搜索
-  const query = searchQuery.value.toLowerCase();
-
-  // 使用 .filter 方法过滤列表
-  return subjectList.value.filter(item => {
-    // 关键修复点：在访问任何属性之前，先确保 item 是一个有效的对象
-    if (!item) {
-      return false;
-    }
-
-    // 安全地检查 name 属性是否存在，并且是否匹配搜索词
-    const nameMatch = item.name && item.name.toLowerCase().includes(query);
-
-    // 安全地检查 description 属性是否存在，并且是否匹配搜索词
-    const descriptionMatch = item.description && item.description.toLowerCase().includes(query);
-
-    // 只要名称或描述中有一个匹配，就返回 true
-    return nameMatch || descriptionMatch;
-  });
+// 查询参数对象，包含分页和搜索条件
+const queryParams = reactive<SubjectPageParams>({
+  current: 1,
+  size: 10,
+  name: ''
 });
+
+// 获取列表数据的方法
 const getList = async () => {
   loading.value = true;
   try {
-    const response = await fetchSubjectList({current: 1, size: 999}); // 获取所有数据用于前端筛选
+    // 调用API时传入所有查询参数
+    const response = await fetchSubjectList(queryParams);
     subjectList.value = response.data;
     total.value = response.total;
   } finally {
     loading.value = false;
   }
 };
+
+// 处理搜索的方法
+const handleQuery = () => {
+  queryParams.current = 1; // 每次搜索时都重置到第一页
+  getList();
+}
+
 const handleCreate = () => {
   editingSubject.value = undefined;
   isDialogVisible.value = true;
 };
+
 const handleUpdate = (subject: Subject) => {
   editingSubject.value = subject;
   isDialogVisible.value = true;
 };
+
 const handleDelete = (id: number) => {
   ElMessageBox.confirm('确定要删除该科目吗?', '提示', { type: 'warning' })
       .then(async () => {
         await deleteSubject(id);
         ElMessage.success('删除成功');
-        getList();
+        getList(); // 重新加载数据
       });
 };
+
 onMounted(getList);
 </script>
 
@@ -169,4 +181,13 @@ onMounted(getList);
 .subject-card h3 { margin-bottom: 8px; }
 .subject-card p { font-size: 14px; color: var(--text-color-regular); margin-bottom: 16px;}
 .subject-card span { font-size: 12px; color: #999; }
+.subject-card .card-footer {
+  font-size: 12px;
+  color: #999;
+  border-top: 1px solid var(--border-color);
+  padding-top: 10px;
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+}
 </style>

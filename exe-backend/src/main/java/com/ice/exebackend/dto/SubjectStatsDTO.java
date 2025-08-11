@@ -12,11 +12,23 @@ public class SubjectStatsDTO extends BizSubject {
      */
     private Long knowledgePointCount;
 
+    /**
+     * 【新增】该科目下关联的试题数量
+     */
+    private Long questionCount;
+
     public Long getKnowledgePointCount() {
         return knowledgePointCount;
     }
 
     public void setKnowledgePointCount(Long knowledgePointCount) {
         this.knowledgePointCount = knowledgePointCount;
+    }
+    public Long getQuestionCount() {
+        return questionCount;
+    }
+
+    public void setQuestionCount(Long questionCount) {
+        this.questionCount = questionCount;
     }
 }

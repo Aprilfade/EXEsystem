@@ -7,12 +7,16 @@ import com.ice.exebackend.dto.SubjectStatsDTO;
 import com.ice.exebackend.entity.BizKnowledgePoint;
 import com.ice.exebackend.entity.BizQuestion; // 1. 导入 BizQuestion 实体
 import com.ice.exebackend.entity.BizSubject;
-import com.ice.exebackend.service.BizKnowledgePointService;
-import com.ice.exebackend.service.BizQuestionService; // 2. 导入 BizQuestionService
-import com.ice.exebackend.service.BizSubjectService;
+import com.ice.exebackend.service.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import com.ice.exebackend.entity.BizStudent; // 新增导入
+import com.ice.exebackend.entity.BizPaper;   // 新增导入
+import com.ice.exebackend.service.BizStudentService; // 新增导入
+import com.ice.exebackend.service.BizPaperService;   // 新增导入
+
 
 import java.util.List;
 
@@ -30,6 +34,14 @@ public class BizSubjectController {
     @Autowired
     private BizQuestionService questionService;
 
+    // 【新增注入】
+    @Autowired
+    private BizStudentService studentService;
+
+    @Autowired
+    private BizPaperService paperService;
+
+
 
     /**
      * 新增科目
@@ -40,16 +52,23 @@ public class BizSubjectController {
         boolean success = subjectService.save(subject);
         return success ? Result.suc() : Result.fail();
     }
-    /**
-     * 分页获取科目列表 (已更新为包含统计数据)
-     */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result getSubjectList(@RequestParam(defaultValue = "1") int current,
-                                 @RequestParam(defaultValue = "10") int size) {
-        // 2. 使用新的 service 方法
+                                 @RequestParam(defaultValue = "10") int size,
+                                 // 【新增】接收搜索参数
+                                 @RequestParam(required = false) String name) {
         Page<BizSubject> pageRequest = new Page<>(current, size);
-        Page<SubjectStatsDTO> statsPage = subjectService.getSubjectStatsPage(pageRequest);
+
+        // 【新增】构建带搜索条件的查询
+        QueryWrapper<BizSubject> queryWrapper = new QueryWrapper<>();
+        if (StringUtils.hasText(name)) {
+            queryWrapper.like("name", name).or().like("description", name);
+        }
+        pageRequest.setOptimizeCountSql(false); // 优化分页查询
+
+        Page<SubjectStatsDTO> statsPage = subjectService.getSubjectStatsPage(pageRequest, queryWrapper); // 将查询条件传入
+
         return Result.suc(statsPage.getRecords(), statsPage.getTotal());
     }
 
@@ -90,6 +109,18 @@ public class BizSubjectController {
         long questionCount = questionService.count(new QueryWrapper<BizQuestion>().eq("subject_id", id));
         if (questionCount > 0) {
             return Result.fail("无法删除：该科目下还存在 " + questionCount + " 个关联的试题。");
+        }
+
+        // 【新增】安全删除检查: 检查该科目下是否有学生
+        long studentCount = studentService.count(new QueryWrapper<BizStudent>().eq("subject_id", id));
+        if (studentCount > 0) {
+            return Result.fail("无法删除：该科目下还存在 " + studentCount + " 个关联的学生。");
+        }
+
+        // 【新增】安全删除检查: 检查该科目下是否有试卷
+        long paperCount = paperService.count(new QueryWrapper<BizPaper>().eq("subject_id", id));
+        if (paperCount > 0) {
+            return Result.fail("无法删除：该科目下还存在 " + paperCount + " 个关联的试卷。");
         }
 
         // 只有当所有检查都通过时，才执行删除
