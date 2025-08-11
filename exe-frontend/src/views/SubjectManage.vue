@@ -1,5 +1,5 @@
 <template>
-  <div class="subject-manage-container">
+  <div class="page-container">
     <div class="page-header">
       <div>
         <h2>科目管理</h2>
@@ -39,9 +39,21 @@
       </div>
 
       <div v-if="viewMode === 'grid'" class="card-grid">
-        <div v-for="subject in subjectList" :key="subject.id" class="subject-card">
-          <h3>{{ subject.name }}</h3>
-          <p>{{ subject.description || '暂无简介' }}</p>
+        <div v-for="subject in subjectList" :key="subject.id" class="subject-card" @click="handleCardClick(subject)">
+          <div class="card-header">
+            <h3 class="card-title">{{ subject.name }}</h3>
+            <el-dropdown @click.stop>
+
+              <el-icon class="el-dropdown-link"><MoreFilled /></el-icon>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="handleUpdate(subject)">编辑</el-dropdown-item>
+                  <el-dropdown-item @click="handleDelete(subject.id)" style="color: #f56c6c;">删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+          <p class="card-desc">{{ subject.description || '暂无简介' }}</p>
           <div class="card-footer">
             <span>知识点: {{ subject.knowledgePointCount || 0 }}个</span>
             <span>试题: {{ subject.questionCount || 0 }}道</span>
@@ -80,6 +92,14 @@
         :subject-data="editingSubject"
         @success="getList"
     />
+
+
+    <subject-detail-dialog
+        v-if="isDetailDialogVisible"
+        v-model:visible="isDetailDialogVisible"
+        :subject-id="selectedSubjectId"
+        :subject-name="selectedSubjectName"
+    />
   </div>
 </template>
 
@@ -88,8 +108,10 @@ import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchSubjectList, deleteSubject } from '@/api/subject';
 import type { Subject, SubjectPageParams } from '@/api/subject';
-import { Plus, Edit, Delete, Grid, Menu } from '@element-plus/icons-vue';
+// 【修改点 2】: 导入更多图标
+import { Plus, Edit, Delete, Grid, Menu, MoreFilled } from '@element-plus/icons-vue';
 import SubjectEditDialog from '@/components/subject/SubjectEditDialog.vue';
+import SubjectDetailDialog from "@/components/subject/SubjectDetailDialog.vue";
 
 const subjectList = ref<Subject[]>([]);
 const total = ref(0);
@@ -97,19 +119,21 @@ const loading = ref(true);
 const isDialogVisible = ref(false);
 const editingSubject = ref<Subject | undefined>(undefined);
 const viewMode = ref<'grid' | 'list'>('grid');
+// 【修改点 5】: 新增用于控制详情弹窗的状态
+const isDetailDialogVisible = ref(false);
+const selectedSubjectId = ref<number | null>(null);
+const selectedSubjectName = ref('');
 
-// 查询参数对象，包含分页和搜索条件
+
 const queryParams = reactive<SubjectPageParams>({
   current: 1,
   size: 10,
   name: ''
 });
 
-// 获取列表数据的方法
 const getList = async () => {
   loading.value = true;
   try {
-    // 调用API时传入所有查询参数
     const response = await fetchSubjectList(queryParams);
     subjectList.value = response.data;
     total.value = response.total;
@@ -118,9 +142,8 @@ const getList = async () => {
   }
 };
 
-// 处理搜索的方法
 const handleQuery = () => {
-  queryParams.current = 1; // 每次搜索时都重置到第一页
+  queryParams.current = 1;
   getList();
 }
 
@@ -135,58 +158,88 @@ const handleUpdate = (subject: Subject) => {
 };
 
 const handleDelete = (id: number) => {
-  ElMessageBox.confirm('确定要删除该科目吗?', '提示', { type: 'warning' })
+  ElMessageBox.confirm('确定要删除该科目吗? 这会一并删除所有关联数据。', '提示', { type: 'warning' })
       .then(async () => {
         await deleteSubject(id);
         ElMessage.success('删除成功');
-        getList(); // 重新加载数据
+        getList();
       });
+};
+// 【修改点 6】: 新增卡片点击处理函数
+const handleCardClick = (subject: Subject) => {
+  selectedSubjectId.value = subject.id;
+  selectedSubjectName.value = subject.name;
+  isDetailDialogVisible.value = true;
 };
 
 onMounted(getList);
 </script>
 
 <style scoped>
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-.page-header h2 { font-size: 24px; }
-.page-header p { color: var(--text-color-regular); margin-top: 4px; }
+/* ... (省略页面和表单的通用样式) ... */
+.page-container { padding: 24px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.page-header h2 { font-size: 24px; font-weight: 600; }
+.page-header p { color: var(--text-color-regular); margin-top: 4px; font-size: 14px; }
 .stats-cards { margin-bottom: 20px; }
+.stat-item { padding: 8px; }
 .stat-item .label { color: var(--text-color-regular); font-size: 14px; margin-bottom: 8px;}
-.stat-item .value { font-size: 28px; font-weight: bold;}
-.content-card {
-  background-color: var(--bg-color-container);
-}
-.content-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
+.stat-item .value { font-size: 28px; font-weight: bold; }
+.content-card { background-color: var(--bg-color-container); }
+.content-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.pagination { margin-top: 20px; display: flex; justify-content: flex-end; }
+
+/* 【修改点 3】: 新增和优化卡片相关样式 */
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 20px;
 }
+
+/* 【修改点 7】: 为 subject-card 添加 cursor: pointer 以提示用户可以点击 */
 .subject-card {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 20px;
-  background-color: #f7f9fc;
+  background-color: var(--bg-color);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer; /* 新增此行 */
 }
-.subject-card h3 { margin-bottom: 8px; }
-.subject-card p { font-size: 14px; color: var(--text-color-regular); margin-bottom: 16px;}
-.subject-card span { font-size: 12px; color: #999; }
-.subject-card .card-footer {
+.subject-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+.el-dropdown-link {
+  cursor: pointer;
+  color: var(--text-color-regular);
+  font-size: 20px;
+}
+.card-desc {
+  font-size: 14px;
+  color: var(--text-color-regular);
+  flex-grow: 1;
+  min-height: 40px;
+  margin-bottom: 16px;
+}
+.card-footer {
   font-size: 12px;
   color: #999;
   border-top: 1px solid var(--border-color);
-  padding-top: 10px;
-  margin-top: 10px;
+  padding-top: 12px;
+  margin-top: auto;
   display: flex;
   justify-content: space-between;
 }

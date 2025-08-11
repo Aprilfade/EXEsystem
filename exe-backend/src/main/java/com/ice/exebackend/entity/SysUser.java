@@ -21,6 +21,7 @@ public class SysUser {
     private String password; // 加密后的密码
 
     private String nickName; // 用户昵称
+    private String avatar;   // 【新增此行】
 
     private Integer isEnabled; // 账户是否启用
 
@@ -30,6 +31,14 @@ public class SysUser {
 
     private LocalDateTime updateTime;
 
+    // 【新增】为 avatar 添加 getter 和 setter
+    public String getAvatar() {
+        return avatar;
+    }
+
+    public void setAvatar(String avatar) {
+        this.avatar = avatar;
+    }
 
     // 手动添加setId方法，确保编译通过
     public void setId(Long id) {

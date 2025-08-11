@@ -18,7 +18,7 @@ export interface DashboardStats {
     knowledgePointCount: number;
     questionCount: number;
     paperCount: number;
-    notifications: { content: string, date: string }[];
+    notifications: { id: number; content: string, date: string }[];
     kpAndQuestionStats: ChartData;
 }
 

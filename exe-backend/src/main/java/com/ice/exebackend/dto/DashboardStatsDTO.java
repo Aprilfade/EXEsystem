@@ -71,9 +71,17 @@ public class DashboardStatsDTO implements Serializable {
     @Data
     public static class Notification implements Serializable {
         private static final long serialVersionUID = 1L;
+        private Long id;
         private String content;
         private String date;
 
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
         public String getContent() {
             return content;
         }

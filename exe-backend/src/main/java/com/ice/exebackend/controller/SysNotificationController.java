@@ -14,7 +14,6 @@ import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
 public class SysNotificationController {
 
     @Autowired

@@ -12,12 +12,20 @@ public class UserInfoDTO {
     private Long id;
     private String username;
     private String nickName;
+    private String avatar; // 【新增此行】
     private Integer isEnabled;
     private LocalDateTime createTime;
     private List<SysRole> roles;
     private Integer status;
 
     // --- 手动为所有字段添加 getter 和 setter 方法 ---
+    // 【新增】为 avatar 添加 getter 和 setter
+    public String getAvatar() {
+        return avatar;
+    }
+    public void setAvatar(String avatar) {
+        this.avatar = avatar;
+    }
 
     public Integer getStatus() {
         return status;

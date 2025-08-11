@@ -1,7 +1,9 @@
 <template>
   <div class="dashboard-container">
     <div class="welcome-header">
-      <el-avatar :size="60" class="welcome-avatar">{{ authStore.userNickname.charAt(0) }}</el-avatar>
+      <el-avatar v-if="authStore.user?.avatar" :size="60" :src="authStore.user.avatar" class="welcome-avatar" />
+      <el-avatar v-else :size="60" class="welcome-avatar">{{ authStore.userNickname.charAt(0) }}</el-avatar>
+
       <div class="welcome-text">
         <h3 class="greeting">{{ greeting }}, {{ authStore.userNickname }}! 欢迎回来。</h3>
         <div class="location-time">
@@ -11,8 +13,9 @@
           <span>{{ currentTime }}</span>
         </div>
       </div>
-    </div>
 
+
+    </div>
     <el-row :gutter="20" style="margin-top: 24px;">
       <el-col :span="4"><el-card><p class="stat-label">学生数量</p><p class="stat-value">{{ stats.studentCount }}</p></el-card></el-col>
       <el-col :span="4"><el-card><p class="stat-label">科目数量</p><p class="stat-value">{{ stats.subjectCount }}</p></el-card></el-col>
@@ -32,8 +35,10 @@
         <el-card>
           <h4>通知</h4>
           <ul class="notification-list">
-            <li v-if="stats.notifications.length === 0"><el-empty description="暂无通知" :image-size="60" /></li>
-            <li v-else v-for="(item, index) in stats.notifications" :key="index">
+            <li v-if="stats.notifications.length === 0">
+              <el-empty description="暂无通知" :image-size="60" />
+            </li>
+            <li v-else v-for="item in stats.notifications" :key="item.id" @click="handleNotificationClick(item.id)" class="notification-item">
               <span>{{ item.content }}</span>
               <span class="date">{{ item.date }}</span>
             </li>
@@ -42,6 +47,11 @@
       </el-col>
     </el-row>
   </div>
+
+  <notification-preview-dialog
+      v-model:visible="isPreviewVisible"
+      :notification="selectedNotification"
+  />
 </template>
 
 <script setup lang="ts">
@@ -51,6 +61,14 @@ import { Location } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
 import { ElMessage } from 'element-plus';
 import { getDashboardStats, type DashboardStats, type ChartData } from '@/api/dashboard';
+import NotificationPreviewDialog from "@/components/notification/NotificationPreviewDialog.vue";
+// 【新增】导入获取通知详情的API方法和类型
+import { fetchNotificationById, type Notification } from '@/api/notification';
+
+
+// 【新增】用于控制弹窗的状态
+const isPreviewVisible = ref(false);
+const selectedNotification = ref<Notification | undefined>(undefined);
 
 const authStore = useAuthStore();
 const mainChart = ref<HTMLElement | null>(null);
@@ -136,6 +154,21 @@ const initMainChart = (chartData: ChartData) => {
     });
   }
 };
+// 【新增】处理通知点击事件的方法
+const handleNotificationClick = async (id: number) => {
+  try {
+    const res = await fetchNotificationById(id);
+    if (res.code === 200) {
+      selectedNotification.value = res.data;
+      isPreviewVisible.value = true;
+    } else {
+      ElMessage.error(res.msg || '获取通知详情失败');
+    }
+  } catch (error) {
+    ElMessage.error('网络错误，请稍后再试');
+  }
+};
+
 
 onMounted(() => {
   formatTime();
@@ -197,4 +230,13 @@ onUnmounted(() => {
 .notification-list li { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-color); font-size: 14px; }
 .notification-list li:last-child { border-bottom: none; }
 .notification-list .date { color: var(--text-color-regular); }
+
+/* 【新增】为可点击的通知项添加样式 */
+.notification-item {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.notification-item:hover {
+  background-color: #f5f7fa;
+}
 </style>

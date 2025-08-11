@@ -75,6 +75,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         List<DashboardStatsDTO.Notification> notificationDTOs = notifications.stream().map(n -> {
             DashboardStatsDTO.Notification notificationDto = new DashboardStatsDTO.Notification();
+            notificationDto.setId(n.getId()); // 【修改】在这里设置通知的ID
             notificationDto.setContent(n.getTitle());
             notificationDto.setDate(n.getPublishTime().format(DateTimeFormatter.ofPattern("MM-dd")));
             return notificationDto;

@@ -19,6 +19,7 @@ export interface UserInfo {
     username: string;
     password?: string;
     nickName: string;
+    avatar?: string; // 【新增此行】
     isEnabled: number;
     isDeleted: number;
     createTime: string;

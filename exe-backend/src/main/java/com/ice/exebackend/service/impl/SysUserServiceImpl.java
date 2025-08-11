@@ -118,11 +118,13 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
         return dtoPage;
     }
+
     public boolean updateUserProfile(SysUser user) {
         // 创建一个新对象，只设置允许用户自己修改的字段
         SysUser userToUpdate = new SysUser();
         userToUpdate.setId(user.getId()); // ID是必须的，用于定位记录
         userToUpdate.setNickName(user.getNickName());
+        userToUpdate.setAvatar(user.getAvatar()); // 【新增此行】
 
         // 仅当用户输入了新密码时，才进行加密和更新
         if (user.getPassword() != null && !user.getPassword().isEmpty()) {
