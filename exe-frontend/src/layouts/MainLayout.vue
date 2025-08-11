@@ -37,6 +37,10 @@
           <el-icon><DataLine /></el-icon><span>教学统计分析</span>
         </el-menu-item>
 
+        <el-menu-item index="/notifications">
+          <el-icon><Bell /></el-icon><span>通知管理</span>
+        </el-menu-item>
+
         <el-menu-item index="/users" v-if="authStore.isAdmin">
           <el-icon><User /></el-icon><span>成员管理</span>
         </el-menu-item>

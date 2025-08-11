@@ -2,6 +2,9 @@ server:
   port: 8080
 
 spring:
+  # 【修复点】: 在这里添加下面这行配置
+  cache:
+    type: redis
   datasource:
     url: jdbc:mysql://localhost:3306/exam_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     # 实际部署时建议通过环境变量配置数据库用户名

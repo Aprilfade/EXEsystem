@@ -26,6 +26,14 @@ const routes = [
                 component: () => import('@/views/Home.vue'),
             },
             {
+                path: 'notifications',
+                name: 'NotificationManagement',
+                component: () => import('@/views/NotificationManage.vue'),
+                meta: {
+                    requiresAdmin: true
+                }
+            },
+            {
                 path: 'users',
                 name: 'UserManagement',
                 component: () => import('@/components/user/UserManage.vue'),

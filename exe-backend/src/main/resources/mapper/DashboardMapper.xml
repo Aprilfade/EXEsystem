@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ice.exebackend.mapper.DashboardMapper">
+
+    <select id="getTopCardStats" resultType="java.util.Map">
+        SELECT
+                (SELECT COUNT(*) FROM biz_student) AS studentCount,
+                (SELECT COUNT(*) FROM biz_subject) AS subjectCount,
+                (SELECT COUNT(*) FROM biz_knowledge_point) AS knowledgePointCount,
+                (SELECT COUNT(*) FROM biz_question) AS questionCount,
+                (SELECT COUNT(*) FROM biz_paper) AS paperCount
+    </select>
+
+    <select id="getKpAndQuestionStatsBySubject" resultType="java.util.Map">
+        SELECT
+            s.name AS subjectName,
+            COUNT(DISTINCT kp.id) AS knowledgePointCount,
+            COUNT(DISTINCT q.id) AS questionCount
+        FROM
+            biz_subject s
+                LEFT JOIN
+            biz_knowledge_point kp ON s.id = kp.subject_id
+                LEFT JOIN
+            biz_question q ON s.id = q.subject_id
+        GROUP BY
+            s.id, s.name
+        ORDER BY
+            s.id
+    </select>
+</mapper>

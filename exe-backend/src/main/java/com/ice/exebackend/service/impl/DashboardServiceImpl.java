@@ -2,71 +2,85 @@ package com.ice.exebackend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.ice.exebackend.dto.DashboardStatsDTO;
-import com.ice.exebackend.entity.*;
-import com.ice.exebackend.service.*;
+import com.ice.exebackend.entity.SysNotification;
+import com.ice.exebackend.mapper.DashboardMapper;
+import com.ice.exebackend.service.DashboardService;
+import com.ice.exebackend.service.SysNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-// 【修复点】: 添加了 @Service 注解，并确保实现了 DashboardService 接口
 @Service
 public class DashboardServiceImpl implements DashboardService {
 
-    @Autowired private BizStudentService studentService;
-    @Autowired private BizSubjectService subjectService;
-    @Autowired private BizKnowledgePointService knowledgePointService;
-    @Autowired private BizQuestionService questionService;
-    @Autowired private BizPaperService paperService;
+    @Autowired
+    private DashboardMapper dashboardMapper;
+
+    @Autowired
+    private SysNotificationService notificationService;
 
     @Override
+    @Cacheable(value = "dashboardStats", key = "'stats'")
     public DashboardStatsDTO getDashboardStats() {
         DashboardStatsDTO dto = new DashboardStatsDTO();
 
         // 1. 获取顶部卡片统计
-        dto.setStudentCount(studentService.count());
-        dto.setSubjectCount(subjectService.count());
-        dto.setKnowledgePointCount(knowledgePointService.count());
-        dto.setQuestionCount(questionService.count());
-        dto.setPaperCount(paperService.count());
+        Map<String, Long> topStats = dashboardMapper.getTopCardStats();
+        dto.setStudentCount(topStats.getOrDefault("studentCount", 0L));
+        dto.setSubjectCount(topStats.getOrDefault("subjectCount", 0L));
+        dto.setKnowledgePointCount(topStats.getOrDefault("knowledgePointCount", 0L));
+        dto.setQuestionCount(topStats.getOrDefault("questionCount", 0L));
+        dto.setPaperCount(topStats.getOrDefault("paperCount", 0L));
 
-        // 2. 获取 "知识点&题目总览" 图表数据
-        List<BizSubject> subjects = subjectService.list();
-        List<String> subjectNames = subjects.stream().map(BizSubject::getName).collect(Collectors.toList());
-
-        Map<Long, Long> kpCountsBySubject = knowledgePointService.list().stream()
-                .collect(Collectors.groupingBy(BizKnowledgePoint::getSubjectId, Collectors.counting()));
-
-        Map<Long, Long> questionCountsBySubject = questionService.list().stream()
-                .collect(Collectors.groupingBy(BizQuestion::getSubjectId, Collectors.counting()));
+        // 2. 一次性获取并处理图表数据
+        List<Map<String, Object>> statsResult = dashboardMapper.getKpAndQuestionStatsBySubject();
 
         DashboardStatsDTO.ChartData chartData = new DashboardStatsDTO.ChartData();
-        chartData.setCategories(subjectNames);
 
-        List<DashboardStatsDTO.SeriesData> seriesList = new ArrayList<>();
+        // 从查询结果中提取科目名称作为X轴分类
+        chartData.setCategories(statsResult.stream()
+                .map(r -> (String)r.get("subjectName"))
+                .collect(Collectors.toList()));
 
+        // 创建知识点数据系列 (Series)
         DashboardStatsDTO.SeriesData kpSeries = new DashboardStatsDTO.SeriesData();
         kpSeries.setName("知识点总数");
-        kpSeries.setData(subjects.stream().map(s -> kpCountsBySubject.getOrDefault(s.getId(), 0L)).collect(Collectors.toList()));
-        seriesList.add(kpSeries);
+        kpSeries.setData(statsResult.stream()
+                .map(r -> (Long)r.get("knowledgePointCount"))
+                .collect(Collectors.toList()));
 
+        // 创建题目数据系列 (Series)
         DashboardStatsDTO.SeriesData questionSeries = new DashboardStatsDTO.SeriesData();
         questionSeries.setName("题目总数");
-        questionSeries.setData(subjects.stream().map(s -> questionCountsBySubject.getOrDefault(s.getId(), 0L)).collect(Collectors.toList()));
-        seriesList.add(questionSeries);
+        questionSeries.setData(statsResult.stream()
+                .map(r -> (Long)r.get("questionCount"))
+                .collect(Collectors.toList()));
 
-        chartData.setSeries(seriesList);
+        chartData.setSeries(Arrays.asList(kpSeries, questionSeries));
         dto.setKpAndQuestionStats(chartData);
 
-        // 3. 模拟通知数据
-        DashboardStatsDTO.Notification n1 = new DashboardStatsDTO.Notification();
-        n1.setContent("这是一条系统通知消息");
-        n1.setDate("04-23");
-        dto.setNotifications(Arrays.asList(n1, n1, n1));
+        // 3. 获取通知
+        List<SysNotification> notifications = notificationService.list(
+                new QueryWrapper<SysNotification>()
+                        .eq("is_published", true)
+                        .orderByDesc("publish_time")
+                        .last("LIMIT 3")
+        );
+
+        List<DashboardStatsDTO.Notification> notificationDTOs = notifications.stream().map(n -> {
+            DashboardStatsDTO.Notification notificationDto = new DashboardStatsDTO.Notification();
+            notificationDto.setContent(n.getTitle());
+            notificationDto.setDate(n.getPublishTime().format(DateTimeFormatter.ofPattern("MM-dd")));
+            return notificationDto;
+        }).collect(Collectors.toList());
+
+        dto.setNotifications(notificationDTOs);
 
         return dto;
     }
