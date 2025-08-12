@@ -17,7 +17,8 @@
               <span>{{ menu.name }}</span>
             </template>
             <el-menu-item v-for="child in menu.children" :key="child.path" :index="child.path">
-              {{ child.name }}
+              <el-icon v-if="child.icon"><component :is="child.icon" /></el-icon>
+              <span>{{ child.name }}</span>
             </el-menu-item>
           </el-sub-menu>
         </template>
@@ -70,23 +71,21 @@
   </el-container>
 </template>
 
-
-
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import ProfileEditDialog from '@/components/user/ProfileEditDialog.vue';
+// 【核心修复】在这里导入 Lock 时使用别名 LockIcon
 import {
   Management, House, Collection, Reading, Tickets, DocumentCopy, Avatar, CircleClose, DataLine,
-  User, Search, Bell, ArrowRight,  ArrowDown //
+  User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting
 } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 const router = useRouter();
 const isProfileDialogVisible = ref(false);
 
-// 定义所有可能的菜单项及其所需的权限标识
 const allMenus = [
   { path: '/home', name: '工作台', permission: 'sys:home', icon: House },
   { path: '/subjects', name: '科目管理', permission: 'sys:subject:list', icon: Collection },
@@ -103,12 +102,25 @@ const allMenus = [
   },
   { path: '/statistics', name: '教学统计分析', permission: 'sys:stats:list', icon: DataLine },
   { path: '/notifications', name: '通知管理', permission: 'sys:notify:list', icon: Bell },
-  { path: '/users', name: '成员管理', permission: 'sys:user:list', icon: User },
+  {
+    path: '/system', name: '系统管理', permission: 'sys:user:list', icon: Setting,
+    children: [
+      { path: '/users', name: '成员管理', icon: User },
+      // 【核心修复】在这里使用别名 LockIcon
+      { path: '/roles', name: '角色管理', permission: 'sys:role:perm', icon: LockIcon },
+    ]
+  },
 ];
 
-// 计算属性：根据用户权限过滤出可见的菜单
 const visibleMenus = computed(() => {
-  return allMenus.filter(menu => authStore.hasPermission(menu.permission));
+  return allMenus.filter(menu => {
+    // 如果菜单有子菜单，只要有一个子菜单有权限，父菜单就应该显示
+    if (menu.children && menu.children.length > 0) {
+      return menu.children.some(child => authStore.hasPermission(child.permission || ''));
+    }
+    // 否则，按自身权限判断
+    return authStore.hasPermission(menu.permission);
+  });
 });
 
 
@@ -121,11 +133,8 @@ const handleCommand = (command: string) => {
 };
 </script>
 
-
-
-
 <style scoped>
-/* 样式部分无需改动 */
+/* ... style 部分不变 ... */
 .main-layout { height: 100vh; background-color: var(--bg-color); }
 .aside { background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
 .logo-area { display: flex; align-items: center; padding: 20px; gap: 12px; }
@@ -141,8 +150,8 @@ const handleCommand = (command: string) => {
 .header { background-color: var(--header-bg); display: flex; justify-content: space-between; align-items: center; padding: 0 24px; border-bottom: 1px solid var(--border-color); }
 .header-right { display: flex; align-items: center; gap: 16px; }
 .main-content { padding: 24px; background-color: var(--bg-color); }
-.main-layout { height: 100vh; background-color: var(--bg-color); }
-.aside { background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
-.logo-area { display: flex; align-items: center; padding: 20px; gap: 12px; }
 
+.el-menu-item .el-icon {
+  margin-right: 5px;
+}
 </style>

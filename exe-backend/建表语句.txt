@@ -271,3 +271,13 @@ INSERT INTO `sys_role_permission` (role_id, permission_id) VALUES
 (2, 25),
 (2, 26),
 (2, 27);
+
+-- ----------------------------
+-- 为角色管理新增权限标识
+-- ----------------------------
+INSERT INTO `sys_permission` (id, name, code, type, parent_id) VALUES (14, '角色权限', 'sys:role:perm', 2, 2);
+
+-- ----------------------------
+-- 为 ADMIN 角色分配新的权限
+-- ----------------------------
+INSERT INTO `sys_role_permission` (role_id, permission_id) VALUES (2, 14);

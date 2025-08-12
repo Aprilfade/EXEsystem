@@ -14,6 +14,15 @@ export const useAuthStore = defineStore('auth', {
     getters: {
         isAuthenticated: (state) => !!state.token,
         userNickname: (state) => state.user?.nickName || '用户',
+
+        // 【新增】判断是否为超级管理员的 getter
+        isSuperAdmin(state): boolean {
+            return state.user?.roles?.some(role => role.code === 'SUPER_ADMIN') || false;
+        },
+        // 【新增】判断是否为管理员的 getter (未来可能有用)
+        isAdmin(state): boolean {
+            return state.user?.roles?.some(role => role.code === 'ADMIN') || false;
+        },
     },
     actions: {
         async login(credentials: any) {
@@ -55,12 +64,20 @@ export const useAuthStore = defineStore('auth', {
             this.user = null;
             this.permissions = [];
             localStorage.removeItem('token');
+            // 跳转到登录页，使用 location.href 确保所有状态都被重置
             window.location.href = '/login';
         },
 
+        // 【核心修复】修正 hasPermission 方法的逻辑
         hasPermission(permissionCode: string): boolean {
-            if (!permissionCode) return true;
-            if (this.permissions.includes('SUPER_ADMIN')) return true;
+            if (!permissionCode) {
+                return true; // 如果路由或按钮不需要权限，则直接放行
+            }
+            // 如果是超级管理员，则直接拥有所有权限
+            if (this.isSuperAdmin) {
+                return true;
+            }
+            // 否则，在权限列表中检查是否存在对应的权限码
             return this.permissions.includes(permissionCode);
         }
     },

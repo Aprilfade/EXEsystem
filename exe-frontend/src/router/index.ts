@@ -18,6 +18,7 @@ const routes: Array<RouteRecordRaw> = [
         children: [
             { path: 'home', name: 'Home', component: () => import('@/views/Home.vue'), meta: { permission: 'sys:home', title: '工作台' } },
             { path: 'users', name: 'UserManagement', component: () => import('@/components/user/UserManage.vue'), meta: { permission: 'sys:user:list', title: '成员管理' } },
+            { path: 'roles', name: 'RoleManagement', component: () => import('@/views/RoleManage.vue'), meta: { permission: 'sys:role:perm', title: '角色管理' } },
             { path: 'subjects', name: 'SubjectManagement', component: () => import('@/views/SubjectManage.vue'), meta: { permission: 'sys:subject:list', title: '科目管理' } },
             { path: 'knowledge-points', name: 'KnowledgePointManagement', component: () => import('@/views/KnowledgePointManage.vue'), meta: { permission: 'sys:kp:list', title: '知识点管理' } },
             { path: 'questions', name: 'QuestionManagement', component: () => import('@/views/QuestionManage.vue'), meta: { permission: 'sys:question:list', title: '题库管理' } },
