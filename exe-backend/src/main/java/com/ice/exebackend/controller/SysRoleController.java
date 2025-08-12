@@ -29,7 +29,7 @@ public class SysRoleController {
 
     // 【新增】获取单个角色的权限详情
     @GetMapping("/{id}/permissions")
-    @PreAuthorize("hasAuthority('sys:role:perm')") // 定义一个新的权限标识
+    @PreAuthorize("hasAuthority('sys:user:list') or hasAuthority('sys:role:perm')") // 允许拥有sys:user:list或sys:role:perm权限的用户访问
     public Result getRolePermissions(@PathVariable Long id) {
         Map<String, Object> permissions = sysRoleService.getRolePermissions(id);
         return Result.suc(permissions);

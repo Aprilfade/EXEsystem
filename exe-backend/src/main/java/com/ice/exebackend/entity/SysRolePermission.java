@@ -1,9 +1,9 @@
 package com.ice.exebackend.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
-import lombok.Data;
+// import lombok.Data; // 移除导入
 
-@Data
+// @Data // 移除 @Data 注解
 @TableName("sys_role_permission")
 public class SysRolePermission {
     private Long roleId;

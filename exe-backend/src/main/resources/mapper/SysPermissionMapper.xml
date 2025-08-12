@@ -10,4 +10,18 @@
         WHERE ur.user_id = #{userId}
     </select>
 
+    <select id="selectPermissionsWithCheckedStatusByRoleId" resultType="java.util.Map">
+        SELECT
+            p.id,
+            p.name,
+            p.code,
+            p.type,
+            p.parent_id,
+            /* 关键逻辑: 如果在 sys_role_permission 表中能找到记录，则 is_checked 为 1, 否则为 0 */
+            CASE WHEN rp.role_id IS NOT NULL THEN 1 ELSE 0 END AS is_checked
+        FROM
+            sys_permission p
+                LEFT JOIN
+            sys_role_permission rp ON p.id = rp.permission_id AND rp.role_id = #{roleId}
+    </select>
 </mapper>

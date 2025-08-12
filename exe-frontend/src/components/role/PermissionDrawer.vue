@@ -22,18 +22,25 @@
     <template #footer>
       <div style="flex: auto">
         <el-button @click="handleClose">取消</el-button>
-        <el-button type="primary" @click="confirmUpdate">确认</el-button>
+        <el-button
+            type="primary"
+            @click="confirmUpdate"
+            v-if="hasUpdatePermission"
+        >
+          确认
+        </el-button>
       </div>
     </template>
   </el-drawer>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import {onMounted, ref, watch, computed} from 'vue';
 import { ElTree } from 'element-plus';
-import type { Role } from '@/api/role';
+import type { Role } from '@/api/role.ts';
 import { getRolePermissions, updateRolePermissions } from '@/api/role';
 import type { Permission } from '@/api/auth';
+import { useAuthStore } from '@/stores/auth';
 
 const props = defineProps<{
   visible: boolean;
@@ -42,10 +49,16 @@ const props = defineProps<{
 
 const emit = defineEmits(['update:visible', 'success']);
 
+const authStore = useAuthStore();
 const loading = ref(true);
 const permissionTree = ref<any[]>([]);
 const checkedIds = ref<number[]>([]);
 const treeRef = ref<InstanceType<typeof ElTree>>();
+
+// 计算属性：检查用户是否有更新权限
+const hasUpdatePermission = computed(() => {
+  return authStore.hasPermission('sys:role:perm');
+});
 
 const treeProps = ref({
   label: 'name',
@@ -61,6 +74,8 @@ const loadPermissions = async () => {
       permissionTree.value = buildTree(res.data.allPermissions);
       checkedIds.value = res.data.checkedIds;
     }
+  }catch (error) {
+    console.error('加载权限失败:', error);
   } finally {
     loading.value = false;
   }
@@ -87,14 +102,17 @@ const handleClose = () => {
   emit('update:visible', false);
 };
 
-// 【核心修复】在这里添加了对 treeRef.value 的判断
 const confirmUpdate = async () => {
-  // 在尝试访问 treeRef.value 之前，确保它和 role 都存在
+  // 检查用户是否有权限更新
+  if (!hasUpdatePermission.value) {
+    console.error("用户没有更新权限!");
+    return;
+  }
+
   if (!props.role || !treeRef.value) {
     console.error("角色或树形组件引用不存在!");
     return;
   }
-
   const selectedIds = treeRef.value.getCheckedKeys(false) as number[];
   const halfSelectedIds = treeRef.value.getHalfCheckedKeys() as number[];
   const allIds = [...selectedIds, ...halfSelectedIds];
@@ -102,6 +120,13 @@ const confirmUpdate = async () => {
   await updateRolePermissions(props.role.id, allIds);
   emit('success');
 };
+
+// 添加 onMounted 钩子确保组件初始化时加载数据
+onMounted(() => {
+  if (props.visible) {
+    loadPermissions();
+  }
+});
 
 watch(() => props.visible, (isVisible) => {
   if (isVisible) {

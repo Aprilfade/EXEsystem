@@ -3,9 +3,9 @@ package com.ice.exebackend.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import lombok.Data;
+// import lombok.Data; // 移除导入
 
-@Data
+// @Data // 移除 @Data 注解
 @TableName("sys_permission")
 public class SysPermission {
     @TableId(value = "id", type = IdType.AUTO)

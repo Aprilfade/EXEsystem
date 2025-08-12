@@ -4,7 +4,7 @@ import request from '@/utils/request';
 import type { ApiResult } from './user';
 import type { Role } from './user';
 import type { Permission } from './auth'; // 导入Permission类型
-
+export type { Role };
 /**
  * @description 获取所有角色列表
  */

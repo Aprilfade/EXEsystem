@@ -28,20 +28,32 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
     private SysRolePermissionMapper rolePermissionMapper;
 
     @Override
-    @Transactional(readOnly = true) // 【核心修复】添加只读事务注解
+    // 【核心修复】替换整个方法，使用新的高效查询
     public Map<String, Object> getRolePermissions(Long roleId) {
-        // 1. 查询所有可用的权限
-        List<SysPermission> allPermissions = permissionMapper.selectList(null);
+        // 1. 一次性从数据库查询出所有权限，并标记好哪些是当前角色已选中的
+        List<Map<String, Object>> permissionsWithStatus = permissionMapper.selectPermissionsWithCheckedStatusByRoleId(roleId);
 
-        // 2. 查询当前角色已拥有的权限ID列表
-        QueryWrapper<SysRolePermission> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("role_id", roleId);
-        List<Long> checkedIds = rolePermissionMapper.selectList(queryWrapper)
-                .stream()
-                .map(SysRolePermission::getPermissionId)
+        // 2. 从查询结果中筛选出所有权限对象
+        List<SysPermission> allPermissions = permissionsWithStatus.stream()
+                .map(p -> {
+                    SysPermission perm = new SysPermission();
+                    perm.setId(((Number) p.get("id")).longValue());
+                    perm.setName((String) p.get("name"));
+                    perm.setCode((String) p.get("code"));
+                    perm.setType(((Number) p.get("type")).intValue());
+                    Object parentIdObj = p.get("parent_id");
+                    perm.setParentId(parentIdObj != null ? ((Number) parentIdObj).longValue() : 0L);
+                    return perm;
+                })
                 .collect(Collectors.toList());
 
-        // 3. 组装返回结果
+        // 3. 从查询结果中筛选出所有已选中的权限ID
+        List<Long> checkedIds = permissionsWithStatus.stream()
+                .filter(p -> ((Number) p.get("is_checked")).intValue() == 1)
+                .map(p -> ((Number) p.get("id")).longValue())
+                .collect(Collectors.toList());
+
+        // 4. 组装返回结果
         Map<String, Object> result = new HashMap<>();
         result.put("allPermissions", allPermissions);
         result.put("checkedIds", checkedIds);

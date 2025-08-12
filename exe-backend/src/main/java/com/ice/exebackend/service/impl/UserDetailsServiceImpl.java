@@ -6,6 +6,7 @@ import com.ice.exebackend.mapper.SysPermissionMapper;
 import com.ice.exebackend.mapper.SysRoleMapper; // 1. 导入 SysRoleMapper
 import com.ice.exebackend.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority; // 2. 导入 SimpleGrantedAuthority
 import org.springframework.security.core.userdetails.User;
@@ -21,11 +22,16 @@ import java.util.stream.Collectors; // 3. 导入 stream Collectors
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
 
-    @Autowired
-    private SysUserService sysUserService;
+    // 【修改】将字段注入改为 final 字段
+    private final SysUserService sysUserService;
 
     @Autowired
     private SysPermissionMapper sysPermissionMapper; // 注入
+
+    @Autowired
+    public UserDetailsServiceImpl(@Lazy SysUserService sysUserService) {
+        this.sysUserService = sysUserService;
+    }
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
