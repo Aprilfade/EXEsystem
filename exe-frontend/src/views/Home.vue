@@ -94,8 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
-import { useAuthStore } from '@/stores/auth';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import * as echarts from 'echarts';
 import { ElMessage } from 'element-plus';
 import { getDashboardStats, type DashboardStats, type ChartData } from '@/api/dashboard';
@@ -103,78 +102,70 @@ import NotificationPreviewDialog from "@/components/notification/NotificationPre
 import { fetchNotificationById, type Notification } from '@/api/notification';
 import { gsap } from "gsap";
 
-// --- DOM元素引用 ---
 const kpAndQuestionChart = ref<HTMLElement | null>(null);
-
-// --- 图表实例 ---
 let chartInstance: echarts.ECharts | null = null;
 let resizeObserver: ResizeObserver | null = null;
 
-// --- 组件状态 ---
 const isPreviewVisible = ref(false);
 const selectedNotification = ref<Notification | undefined>(undefined);
-const authStore = useAuthStore();
 const stats = ref<DashboardStats>({
   studentCount: 0, subjectCount: 0, knowledgePointCount: 0,
   questionCount: 0, paperCount: 0, notifications: [],
   kpAndQuestionStats: { categories: [], series: [] }
 });
 
-// --- 图表初始化与更新 ---
-const initMainChart = (chartData: ChartData) => {
-  if (kpAndQuestionChart.value && chartData) {
-    chartInstance = echarts.getInstanceByDom(kpAndQuestionChart.value) || echarts.init(kpAndQuestionChart.value);
-
-    const seriesColors = ['#5470c6', '#91cc75'];
-
-    chartInstance.setOption({
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      legend: {
-        data: chartData.series.map(s => s.name),
-        right: '4%',
-        top: 0,
-        icon: 'circle',
-        itemWidth: 8,
-        itemHeight: 8,
-      },
-      grid: { top: '22%', left: '3%', right: '4%', bottom: '3%', containLabel: true },
-      xAxis: { type: 'category', data: chartData.categories, axisTick: { show: false }, axisLine: { lineStyle: { color: '#DCDFE6' } }, axisLabel: { color: '#606266', interval: 0 } },
-      yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } } },
-      series: chartData.series.map((s, index) => ({
-        name: s.name, type: 'bar', barWidth: '12px', data: s.data,
-        itemStyle: {
-          color: seriesColors[index % seriesColors.length],
-          borderRadius: [4, 4, 0, 0]
-        },
-      })),
-      animation: true,
-    });
+const initChart = () => {
+  if (kpAndQuestionChart.value) {
+    chartInstance = echarts.init(kpAndQuestionChart.value);
+    setChartOptions(stats.value.kpAndQuestionStats);
   }
 };
 
-// --- 数据获取 ---
+const setChartOptions = (chartData: ChartData) => {
+  if (!chartInstance || !chartData?.series) return;
+  const seriesColors = ['#5470c6', '#91cc75'];
+  chartInstance.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { data: chartData.series.map(s => s.name), right: '4%', top: 0, icon: 'circle', itemWidth: 8, itemHeight: 8 },
+    grid: { top: '22%', left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: chartData.categories, axisTick: { show: false }, axisLine: { lineStyle: { color: '#DCDFE6' } }, axisLabel: { color: '#606266', interval: 0 } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } } },
+    series: chartData.series.map((s: any, index: number) => ({ // 为 series 添加 any 和 index 类型
+      name: s.name, type: 'bar', barWidth: '12px', data: s.data,
+      itemStyle: { color: seriesColors[index % seriesColors.length], borderRadius: [4, 4, 0, 0] },
+    })),
+    animation: true,
+  });
+};
+
 const fetchData = async () => {
   try {
     const res = await getDashboardStats();
     if (res.code === 200) {
       stats.value = res.data;
-      await nextTick();
-      initMainChart(stats.value.kpAndQuestionStats);
     }
-  } catch (error) { ElMessage.error("获取统计数据失败"); }
+  } catch (error) {
+    ElMessage.error("获取统计数据失败");
+  }
 };
 
-// --- 生命周期钩子 ---
-onMounted(() => {
-  fetchData();
-  nextTick(() => {
-    gsap.from(".stat-card-item", {
-      duration: 0.5, y: 50, opacity: 0,
-      stagger: 0.1, ease: "back.out(1.7)",
-    });
+onMounted(async () => {
+  gsap.from(".stat-card-item", {
+    duration: 0.5, y: 50, opacity: 0,
+    stagger: 0.1, ease: "back.out(1.7)",
   });
+
+  await fetchData();
+
+  // **最终解决方案**：使用 setTimeout 将图表初始化推迟到下一个事件循环
+  setTimeout(() => {
+    initChart();
+  }, 0);
+
   if (kpAndQuestionChart.value) {
-    resizeObserver = new ResizeObserver(() => chartInstance?.resize());
+    resizeObserver = new ResizeObserver(() => {
+      chartInstance?.resize();
+    });
     resizeObserver.observe(kpAndQuestionChart.value);
   }
 });
@@ -186,7 +177,6 @@ onUnmounted(() => {
   }
 });
 
-// --- 其他函数 (通知弹窗) ---
 const handleNotificationClick = async (id: number) => {
   try {
     const res = await fetchNotificationById(id);
@@ -198,14 +188,12 @@ const handleNotificationClick = async (id: number) => {
 };
 </script>
 
-
 <style scoped>
+/* 样式部分保持不变 */
 .dashboard-container {
   padding: 24px;
   background-color: #f5f7fa;
 }
-
-/* 顶部指标卡样式 */
 .stat-row {
   display: flex;
   margin-bottom: 20px;
@@ -229,13 +217,9 @@ const handleNotificationClick = async (id: number) => {
   margin-top: 8px;
   line-height: 1.2;
 }
-
-/* 主内容区行样式 */
 .main-content-row {
   display: flex;
 }
-
-/* 通用卡片头部样式 */
 .card-header-v2 {
   display: flex;
   justify-content: space-between;
@@ -255,32 +239,24 @@ const handleNotificationClick = async (id: number) => {
   color: #606266;
   margin-left: 4px;
 }
-
 .chart-container {
   height: 100%;
   width: 100%;
 }
-
-/* 【修改点4】: 设置左侧两个卡片的body高度 */
 .wrong-stats-card :deep(.el-card__body) {
   height: 220px;
 }
 .notification-card :deep(.el-card__body) {
   height: 220px;
 }
-
-/* 【修改点5】: 设置右侧卡片为flex布局，并使其高度与左侧对齐 */
 .full-height-card {
-  height: calc(220px * 2 + 65px + 32px*2); /* (卡片body高度 * 2) + 间距 + (两个卡片header的padding) */
+  height: calc(220px * 2 + 20px + 32px*2);
   display: flex;
   flex-direction: column;
 }
 .full-height-card .chart-container {
-  flex-grow: 1; /* 图表区域自动伸展占满剩余空间 */
+  flex-grow: 1;
 }
-
-
-/* 通知列表样式 */
 .notification-list {
   list-style: none;
   padding: 0;
@@ -292,7 +268,6 @@ const handleNotificationClick = async (id: number) => {
 .notification-list .el-empty {
   flex-grow: 1;
 }
-
 .notification-item {
   display: flex;
   justify-content: space-between;
@@ -315,8 +290,6 @@ const handleNotificationClick = async (id: number) => {
   margin-left: 16px;
   font-size: 13px;
 }
-
-/* 覆盖Element Plus默认内边距 */
 :deep(.el-card__body) {
   padding: 16px;
 }
