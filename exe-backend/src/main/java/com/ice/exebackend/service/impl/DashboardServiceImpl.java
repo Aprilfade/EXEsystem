@@ -26,9 +26,16 @@ public class DashboardServiceImpl implements DashboardService {
     @Autowired
     private SysNotificationService notificationService;
 
+    /**
+     * 【修改点1】: 修改方法签名以接收 month 参数。
+     * 【修改点2】: 修改 @Cacheable 注解的 key。
+     * - 使用 #month 作为 key 的一部分，这样每个月的数据都会被单独缓存。
+     * - 使用 condition = "#month == null" 来指定只有在不按月份查询时（即首次加载）才使用缓存。
+     * 【修改点3】: 将 month 参数传递给 mapper 的查询方法。
+     */
     @Override
-    @Cacheable(value = "dashboardStats", key = "'stats'")
-    public DashboardStatsDTO getDashboardStats() {
+    @Cacheable(value = "dashboardStats", key = "'stats:' + #month", condition = "#month == null")
+    public DashboardStatsDTO getDashboardStats(String month) {
         DashboardStatsDTO dto = new DashboardStatsDTO();
 
         // 1. 获取顶部卡片统计
@@ -40,7 +47,7 @@ public class DashboardServiceImpl implements DashboardService {
         dto.setPaperCount(topStats.getOrDefault("paperCount", 0L));
 
         // 2. 处理知识点&题目总览图表
-        List<Map<String, Object>> kpAndQuestionResult = dashboardMapper.getKpAndQuestionStatsBySubject();
+        List<Map<String, Object>> kpAndQuestionResult = dashboardMapper.getKpAndQuestionStatsBySubject(month);
         DashboardStatsDTO.ChartData kpAndQuestionChart = new DashboardStatsDTO.ChartData();
         kpAndQuestionChart.setCategories(kpAndQuestionResult.stream().map(r -> (String)r.get("subjectName")).collect(Collectors.toList()));
         DashboardStatsDTO.SeriesData kpSeries = new DashboardStatsDTO.SeriesData();

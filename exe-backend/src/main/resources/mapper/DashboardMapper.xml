@@ -11,21 +11,26 @@
                 (SELECT COUNT(*) FROM biz_paper) AS paperCount
     </select>
 
-    <select id="getKpAndQuestionStatsBySubject" resultType="java.util.Map">
+    <select id="getKpAndQuestionStatsBySubject" resultType="java.util.Map" parameterType="String">
         SELECT
-            s.name AS subjectName,
-            COUNT(DISTINCT kp.id) AS knowledgePointCount,
-            COUNT(DISTINCT q.id) AS questionCount
+        s.name AS subjectName,
+        COUNT(DISTINCT kp.id) AS knowledgePointCount,
+        COUNT(DISTINCT q.id) AS questionCount
         FROM
-            biz_subject s
-                LEFT JOIN
-            biz_knowledge_point kp ON s.id = kp.subject_id
-                LEFT JOIN
-            biz_question q ON s.id = q.subject_id
+        biz_subject s
+        LEFT JOIN
+        biz_knowledge_point kp ON s.id = kp.subject_id
+        LEFT JOIN
+        biz_question q ON s.id = q.subject_id
+        <where>
+            <if test="month != null and month != ''">
+                AND DATE_FORMAT(q.create_time, '%Y-%m') = #{month}
+            </if>
+        </where>
         GROUP BY
-            s.id, s.name
+        s.id, s.name
         ORDER BY
-            s.id
+        s.id
     </select>
 
 

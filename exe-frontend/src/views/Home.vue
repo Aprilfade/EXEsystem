@@ -66,12 +66,40 @@
           <template #header>
             <div class="card-header-v2">
               <span>知识点&题目统计</span>
-              <div class="header-stats">
-                <span>知识点: <strong>{{ stats.knowledgePointCount }}</strong></span>
-                <span>题目: <strong>{{ stats.questionCount }}</strong></span>
+              <div class="header-controls">
+
+                <el-date-picker
+                    v-model="selectedMonth"
+                    type="month"
+                    placeholder="选择月份"
+                    format="YYYY.MM"
+                    :clearable="false"
+                    @change="handleMonthChange"
+                    style="width: 120px;"
+                />
               </div>
             </div>
           </template>
+
+          <div class="chart-summary-cards">
+            <div class="summary-card">
+              <span>知识点总数</span>
+              <strong>{{ stats.knowledgePointCount }}</strong>
+            </div>
+            <div class="summary-card">
+              <span>题目总数</span>
+              <strong>{{ stats.questionCount }}</strong>
+            </div>
+            <div class="summary-card">
+              <span>题目复用率</span>
+              <strong style="display: inline-flex; align-items: center; gap: 4px;">
+                20%
+                <el-tooltip content="此为静态数据，待后端接口支持" placement="top">
+                  <el-icon><Warning /></el-icon>
+                </el-tooltip>
+              </strong>
+            </div>
+          </div>
           <div ref="kpAndQuestionChart" class="chart-container"></div>
         </el-card>
       </el-col>
@@ -101,6 +129,8 @@ import { getDashboardStats, type DashboardStats, type ChartData } from '@/api/da
 import NotificationPreviewDialog from "@/components/notification/NotificationPreviewDialog.vue";
 import { fetchNotificationById, type Notification } from '@/api/notification';
 import { gsap } from "gsap";
+// 【新增】导入 Element Plus 的警告图标
+import { Warning } from '@element-plus/icons-vue';
 
 const kpAndQuestionChart = ref<HTMLElement | null>(null);
 let chartInstance: echarts.ECharts | null = null;
@@ -113,6 +143,20 @@ const stats = ref<DashboardStats>({
   questionCount: 0, paperCount: 0, notifications: [],
   kpAndQuestionStats: { categories: [], series: [] }
 });
+// 【新增】用于绑定日期选择器的值，默认为当前月份
+const selectedMonth = ref(new Date());
+
+// 【新增】当用户选择新月份时触发的函数
+const handleMonthChange = (newVal: Date | null) => {
+  if (!newVal) return;
+  const year = newVal.getFullYear();
+  const month = newVal.getMonth() + 1;
+  // 提示用户此功能需要后端支持
+  ElMessage.info(`您选择了 ${year}年${month}月，数据刷新功能待后端实现。`);
+
+  // 未来实现：
+  // fetchData(formatDate(newVal)); // 传入新的日期参数重新请求数据
+};
 
 const initChart = () => {
   if (kpAndQuestionChart.value) {
@@ -123,16 +167,24 @@ const initChart = () => {
 
 const setChartOptions = (chartData: ChartData) => {
   if (!chartInstance || !chartData?.series) return;
-  const seriesColors = ['#5470c6', '#91cc75'];
+  // 【修改点1】: 将颜色数组更新为您参考图中的蓝色主题
+  const seriesColors = ['#5B93FF', '#A5D5FF'];
   chartInstance.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: { data: chartData.series.map(s => s.name), right: '4%', top: 0, icon: 'circle', itemWidth: 8, itemHeight: 8 },
     grid: { top: '22%', left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: { type: 'category', data: chartData.categories, axisTick: { show: false }, axisLine: { lineStyle: { color: '#DCDFE6' } }, axisLabel: { color: '#606266', interval: 0 } },
     yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } } },
-    series: chartData.series.map((s: any, index: number) => ({ // 为 series 添加 any 和 index 类型
-      name: s.name, type: 'bar', barWidth: '12px', data: s.data,
-      itemStyle: { color: seriesColors[index % seriesColors.length], borderRadius: [4, 4, 0, 0] },
+    series: chartData.series.map((s: any, index: number) => ({
+      name: s.name,
+      type: 'bar',
+      // 【修改点2】: 增加柱子的宽度，使其更大气
+      barWidth: '30%',
+      data: s.data,
+      itemStyle: {
+        color: seriesColors[index % seriesColors.length],
+        borderRadius: [4, 4, 0, 0]
+      },
     })),
     animation: true,
   });
@@ -309,5 +361,52 @@ const handleNotificationClick = async (id: number) => {
 }
 .stat-row :deep(.el-card__body) {
   padding: 0;
+}
+/* --- 在这里追加下面的新样式 --- */
+
+.chart-summary-cards {
+  display: flex;
+  justify-content: space-around;
+  padding: 0 20px 20px; /* 顶部无间距，底部20px间距 */
+  border-bottom: 1px solid var(--border-color); /* 在卡片和图表之间添加一条分割线 */
+  margin-bottom: 20px; /* 与下方图表的间距 */
+}
+
+.summary-card {
+  text-align: center;
+}
+
+.summary-card span {
+  font-size: 14px;
+  color: var(--text-color-regular);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.summary-card strong {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-color-primary);
+}
+
+/* 调整图表容器的高度以适应新增的卡片 */
+.full-height-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column; /* 让内部元素垂直排列 */
+  flex-grow: 1;
+  padding: 16px;
+}
+
+.chart-container {
+  flex-grow: 1; /* 让图表容器填充剩余空间 */
+  height: 100%;
+  width: 100%;
+}
+/* --- 在这里追加下面的新样式 --- */
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 </style>
