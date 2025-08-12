@@ -27,4 +27,31 @@
         ORDER BY
             s.id
     </select>
+
+
+    <select id="getWrongQuestionStatsBySubject" resultType="java.util.Map">
+        SELECT
+            s.name AS subjectName,
+            COUNT(wr.id) AS wrongCount
+        FROM
+            biz_subject s
+                JOIN biz_question q ON s.id = q.subject_id
+                JOIN biz_wrong_record wr ON q.id = wr.question_id
+        GROUP BY
+            s.id, s.name
+    </select>
+
+    <select id="getMonthlyQuestionCreationStats" resultType="java.util.Map">
+        SELECT
+            DATE_FORMAT(create_time, '%Y-%m') AS month,
+            COUNT(id) AS count
+        FROM
+            biz_question
+        WHERE
+            create_time IS NOT NULL AND create_time >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+        GROUP BY
+            month
+        ORDER BY
+            month ASC
+    </select>
 </mapper>

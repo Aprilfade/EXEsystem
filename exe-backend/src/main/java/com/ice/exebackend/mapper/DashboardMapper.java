@@ -18,4 +18,8 @@ public interface DashboardMapper {
      * 这将与 XML 文件和 Service 实现保持一致。
      */
     List<Map<String, Object>> getKpAndQuestionStatsBySubject();
+    // 【新增下面两行】
+    List<Map<String, Object>> getWrongQuestionStatsBySubject();
+
+    List<Map<String, Object>> getMonthlyQuestionCreationStats();
 }

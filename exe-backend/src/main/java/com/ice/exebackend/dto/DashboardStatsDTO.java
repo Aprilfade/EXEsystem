@@ -21,6 +21,12 @@ public class DashboardStatsDTO implements Serializable {
     // "知识点&题目总览" 图表数据
     private ChartData kpAndQuestionStats;
 
+    // 【新增】"错题统计" 图表数据
+    private ChartData wrongQuestionStats;
+
+    // 【新增】"科目统计" 图表数据 (简化为每月新增题目)
+    private ChartData monthlyQuestionCreationStats;
+
     // 通知列表
     private List<Notification> notifications;
 
@@ -95,6 +101,23 @@ public class DashboardStatsDTO implements Serializable {
             this.date = date;
         }
     }
+    public ChartData getWrongQuestionStats() {
+        return wrongQuestionStats;
+    }
+
+    public ChartData getMonthlyQuestionCreationStats() {
+        return monthlyQuestionCreationStats;
+    }
+
+    public void setWrongQuestionStats(ChartData wrongQuestionStats) {
+        this.wrongQuestionStats = wrongQuestionStats;
+    }
+
+    public void setMonthlyQuestionCreationStats(ChartData monthlyQuestionCreationStats) {
+        this.monthlyQuestionCreationStats = monthlyQuestionCreationStats;
+    }
+
+
     public Long getStudentCount(){
         return studentCount;
     }

@@ -11,7 +11,8 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -38,49 +39,53 @@ public class DashboardServiceImpl implements DashboardService {
         dto.setQuestionCount(topStats.getOrDefault("questionCount", 0L));
         dto.setPaperCount(topStats.getOrDefault("paperCount", 0L));
 
-        // 2. 一次性获取并处理图表数据
-        List<Map<String, Object>> statsResult = dashboardMapper.getKpAndQuestionStatsBySubject();
-
-        DashboardStatsDTO.ChartData chartData = new DashboardStatsDTO.ChartData();
-
-        // 从查询结果中提取科目名称作为X轴分类
-        chartData.setCategories(statsResult.stream()
-                .map(r -> (String)r.get("subjectName"))
-                .collect(Collectors.toList()));
-
-        // 创建知识点数据系列 (Series)
+        // 2. 处理知识点&题目总览图表
+        List<Map<String, Object>> kpAndQuestionResult = dashboardMapper.getKpAndQuestionStatsBySubject();
+        DashboardStatsDTO.ChartData kpAndQuestionChart = new DashboardStatsDTO.ChartData();
+        kpAndQuestionChart.setCategories(kpAndQuestionResult.stream().map(r -> (String)r.get("subjectName")).collect(Collectors.toList()));
         DashboardStatsDTO.SeriesData kpSeries = new DashboardStatsDTO.SeriesData();
-        kpSeries.setName("知识点总数");
-        kpSeries.setData(statsResult.stream()
-                .map(r -> (Long)r.get("knowledgePointCount"))
-                .collect(Collectors.toList()));
-
-        // 创建题目数据系列 (Series)
+        kpSeries.setName("知识点数量");
+        kpSeries.setData(kpAndQuestionResult.stream().map(r -> ((Number)r.get("knowledgePointCount")).longValue()).collect(Collectors.toList()));
         DashboardStatsDTO.SeriesData questionSeries = new DashboardStatsDTO.SeriesData();
-        questionSeries.setName("题目总数");
-        questionSeries.setData(statsResult.stream()
-                .map(r -> (Long)r.get("questionCount"))
-                .collect(Collectors.toList()));
+        questionSeries.setName("题目数量");
+        questionSeries.setData(kpAndQuestionResult.stream().map(r -> ((Number)r.get("questionCount")).longValue()).collect(Collectors.toList()));
+        kpAndQuestionChart.setSeries(List.of(kpSeries, questionSeries));
+        dto.setKpAndQuestionStats(kpAndQuestionChart);
 
-        chartData.setSeries(Arrays.asList(kpSeries, questionSeries));
-        dto.setKpAndQuestionStats(chartData);
+        // 3. 【新增】处理错题统计图表
+        List<Map<String, Object>> wrongQuestionResult = dashboardMapper.getWrongQuestionStatsBySubject();
+        DashboardStatsDTO.ChartData wrongQuestionChart = new DashboardStatsDTO.ChartData();
+        wrongQuestionChart.setCategories(wrongQuestionResult.stream().map(r -> (String)r.get("subjectName")).collect(Collectors.toList()));
+        DashboardStatsDTO.SeriesData wrongCountSeries = new DashboardStatsDTO.SeriesData();
+        wrongCountSeries.setName("错题数量");
+        wrongCountSeries.setData(wrongQuestionResult.stream().map(r -> ((Number)r.get("wrongCount")).longValue()).collect(Collectors.toList()));
+        wrongQuestionChart.setSeries(Collections.singletonList(wrongCountSeries));
+        dto.setWrongQuestionStats(wrongQuestionChart);
 
-        // 3. 获取通知
+        // 4. 【新增】处理每月新增题目图表
+        List<Map<String, Object>> monthlyCreationResult = dashboardMapper.getMonthlyQuestionCreationStats();
+        DashboardStatsDTO.ChartData monthlyCreationChart = new DashboardStatsDTO.ChartData();
+        monthlyCreationChart.setCategories(monthlyCreationResult.stream().map(r -> (String)r.get("month")).collect(Collectors.toList()));
+        DashboardStatsDTO.SeriesData monthlyCountSeries = new DashboardStatsDTO.SeriesData();
+        monthlyCountSeries.setName("新增题目数");
+        monthlyCountSeries.setData(monthlyCreationResult.stream().map(r -> ((Number)r.get("count")).longValue()).collect(Collectors.toList()));
+        monthlyCreationChart.setSeries(Collections.singletonList(monthlyCountSeries));
+        dto.setMonthlyQuestionCreationStats(monthlyCreationChart);
+
+        // 5. 获取通知
         List<SysNotification> notifications = notificationService.list(
                 new QueryWrapper<SysNotification>()
                         .eq("is_published", true)
                         .orderByDesc("publish_time")
                         .last("LIMIT 3")
         );
-
         List<DashboardStatsDTO.Notification> notificationDTOs = notifications.stream().map(n -> {
             DashboardStatsDTO.Notification notificationDto = new DashboardStatsDTO.Notification();
-            notificationDto.setId(n.getId()); // 【修改】在这里设置通知的ID
+            notificationDto.setId(n.getId());
             notificationDto.setContent(n.getTitle());
             notificationDto.setDate(n.getPublishTime().format(DateTimeFormatter.ofPattern("MM-dd")));
             return notificationDto;
         }).collect(Collectors.toList());
-
         dto.setNotifications(notificationDTOs);
 
         return dto;

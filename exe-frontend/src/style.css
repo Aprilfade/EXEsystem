@@ -16,6 +16,10 @@
   --header-bg: #ffffff;
   --brand-color: #409eff;
   --card-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+  --glass-bg: rgba(255, 255, 255, 0.5); /* 玻璃背景色 */
+  --glass-border: 1px solid rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
+  --backdrop-filter: blur(10px);
 }
 
 /* 定义暗色主题变量 (暂未启用，但已预留) */
@@ -29,4 +33,26 @@ html, body, #app {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-color);
   color: var(--text-color-primary);
+  /* 添加一张炫酷的背景图 */
+  background-image: url('../public/login-bg.png'); /* 你可以换成任何你喜欢的图片 */
+  background-size: cover;
+  background-attachment: fixed;
+}
+/* 对 Element Plus 的 el-card 组件进行样式覆盖 */
+.el-card {
+  background: var(--glass-bg) !important;
+  border-radius: 12px !important;
+  border: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  backdrop-filter: var(--backdrop-filter) !important;
+  -webkit-backdrop-filter: var(--backdrop-filter) !important;
+}
+/* 对话框也应用此效果 */
+.el-dialog {
+  background: var(--glass-bg) !important;
+  border-radius: 12px !important;
+  border: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  backdrop-filter: var(--backdrop-filter) !important;
+  -webkit-backdrop-filter: var(--backdrop-filter) !important;
 }
