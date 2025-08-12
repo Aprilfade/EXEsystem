@@ -33,7 +33,6 @@
         s.id
     </select>
 
-
     <select id="getWrongQuestionStatsBySubject" resultType="java.util.Map">
         SELECT
             s.name AS subjectName,
@@ -58,5 +57,19 @@
             month
         ORDER BY
             month ASC
+    </select>
+
+    <select id="getSubjectStatsByGrade" resultType="java.util.Map">
+        SELECT
+            s.name AS subjectName,
+            COUNT(st.id) AS studentCount
+        FROM
+            biz_subject s
+                LEFT JOIN
+            biz_student st ON s.id = st.subject_id
+        GROUP BY
+            s.id, s.name
+        ORDER BY
+            s.id
     </select>
 </mapper>

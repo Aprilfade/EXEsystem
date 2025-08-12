@@ -20,7 +20,7 @@ public class SysNotificationController {
     private SysNotificationService notificationService;
 
     @PostMapping
-    @CacheEvict(value = "dashboardStats", allEntries = true) // 2. 添加注解，清除名为 "dashboardStats" 的所有缓存
+    //@CacheEvict(value = "dashboardStats", allEntries = true) // 2. 添加注解，清除名为 "dashboardStats" 的所有缓存
     public Result createNotification(@RequestBody SysNotification notification) {
         if (notification.getIsPublished() != null && notification.getIsPublished()) {
             notification.setPublishTime(LocalDateTime.now());
@@ -43,7 +43,7 @@ public class SysNotificationController {
     }
 
     @PutMapping("/{id}")
-    @CacheEvict(value = "dashboardStats", allEntries = true) // 2. 添加注解，清除名为 "dashboardStats" 的所有缓存
+  //  @CacheEvict(value = "dashboardStats", allEntries = true) // 2. 添加注解，清除名为 "dashboardStats" 的所有缓存
     public Result updateNotification(@PathVariable Long id, @RequestBody SysNotification notification) {
         notification.setId(id);
         // 如果状态从“未发布”变为“发布”，则记录当前时间为发布时间
@@ -56,7 +56,7 @@ public class SysNotificationController {
     }
 
     @DeleteMapping("/{id}")
-    @CacheEvict(value = "dashboardStats", allEntries = true) // 2. 添加注解，清除名为 "dashboardStats" 的所有缓存
+//@CacheEvict(value = "dashboardStats", allEntries = true) // 2. 添加注解，清除名为 "dashboardStats" 的所有缓存
     public Result deleteNotification(@PathVariable Long id) {
         boolean success = notificationService.removeById(id);
         return success ? Result.suc() : Result.fail();

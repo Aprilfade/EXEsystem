@@ -10,8 +10,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-// 导入 NoOpPasswordEncoder
-import org.springframework.security.crypto.password.NoOpPasswordEncoder;
+// 【新增】导入 BCryptPasswordEncoder
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -26,9 +26,9 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // 使用 NoOpPasswordEncoder，它不对密码进行任何操作
-        // 这是一个已过时但不移除的类，专门用于测试
-        return NoOpPasswordEncoder.getInstance();
+        // 【修改】将密码编码器更换为 BCryptPasswordEncoder
+        // 它会自动处理加盐哈希，安全性更高
+        return new BCryptPasswordEncoder();
     }
 
     @Bean
@@ -43,7 +43,6 @@ public class SecurityConfig {
                 .cors(cors -> {})
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // 修改这里，允许对 /api/v1/files/** 和 /api/v1/auth/login 的公开访问
                         .requestMatchers("/api/v1/auth/login", "/api/v1/files/**").permitAll()
                         .anyRequest().authenticated()
                 )

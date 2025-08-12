@@ -109,11 +109,10 @@
       <el-col :span="24">
         <el-card shadow="never">
           <template #header><div class="card-header-v2">科目统计</div></template>
-          <el-empty description="此图表需后端接口支持(按年级统计)" />
+          <div ref="subjectStatsChart" class="chart-container" style="height: 250px;"></div>
         </el-card>
       </el-col>
     </el-row>
-
     <notification-preview-dialog
         v-model:visible="isPreviewVisible"
         :notification="selectedNotification"
@@ -122,18 +121,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import * as echarts from 'echarts';
 import { ElMessage } from 'element-plus';
 import { getDashboardStats, type DashboardStats, type ChartData } from '@/api/dashboard';
 import NotificationPreviewDialog from "@/components/notification/NotificationPreviewDialog.vue";
 import { fetchNotificationById, type Notification } from '@/api/notification';
 import { gsap } from "gsap";
-// 【新增】导入 Element Plus 的警告图标
 import { Warning } from '@element-plus/icons-vue';
 
 const kpAndQuestionChart = ref<HTMLElement | null>(null);
-let chartInstance: echarts.ECharts | null = null;
+const subjectStatsChart = ref<HTMLElement | null>(null); // 【新增】为科目统计图表创建 ref
+
+let kpChartInstance: echarts.ECharts | null = null;
+let subjectStatsChartInstance: echarts.ECharts | null = null; // 【新增】图表实例变量
 let resizeObserver: ResizeObserver | null = null;
 
 const isPreviewVisible = ref(false);
@@ -141,53 +142,76 @@ const selectedNotification = ref<Notification | undefined>(undefined);
 const stats = ref<DashboardStats>({
   studentCount: 0, subjectCount: 0, knowledgePointCount: 0,
   questionCount: 0, paperCount: 0, notifications: [],
-  kpAndQuestionStats: { categories: [], series: [] }
+  kpAndQuestionStats: { categories: [], series: [] },
+  wrongQuestionStats: { categories: [], series: [] },
+  monthlyQuestionCreationStats: { categories: [], series: [] },
+  subjectStatsByGrade: { categories: [], series: [] }
 });
-// 【新增】用于绑定日期选择器的值，默认为当前月份
 const selectedMonth = ref(new Date());
 
-// 【新增】当用户选择新月份时触发的函数
 const handleMonthChange = (newVal: Date | null) => {
   if (!newVal) return;
   const year = newVal.getFullYear();
   const month = newVal.getMonth() + 1;
-  // 提示用户此功能需要后端支持
   ElMessage.info(`您选择了 ${year}年${month}月，数据刷新功能待后端实现。`);
-
-  // 未来实现：
-  // fetchData(formatDate(newVal)); // 传入新的日期参数重新请求数据
 };
 
-const initChart = () => {
-  if (kpAndQuestionChart.value) {
-    chartInstance = echarts.init(kpAndQuestionChart.value);
-    setChartOptions(stats.value.kpAndQuestionStats);
+// 初始化“知识点&题目统计”图表
+const initKpAndQuestionChart = (chartData: ChartData) => {
+  if (kpAndQuestionChart.value && chartData?.series) {
+    kpChartInstance = echarts.init(kpAndQuestionChart.value);
+    const seriesColors = ['#5B93FF', '#A5D5FF'];
+    kpChartInstance.setOption({
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: { data: chartData.series.map(s => s.name), right: '4%', top: 0, icon: 'circle', itemWidth: 8, itemHeight: 8 },
+      grid: { top: '22%', left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      xAxis: { type: 'category', data: chartData.categories, axisTick: { show: false }, axisLine: { lineStyle: { color: '#DCDFE6' } }, axisLabel: { color: '#606266', interval: 0 } },
+      yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } } },
+      series: chartData.series.map((s: any, index: number) => ({
+        name: s.name, type: 'bar', barWidth: '30%', data: s.data,
+        itemStyle: { color: seriesColors[index % seriesColors.length], borderRadius: [4, 4, 0, 0] },
+      })),
+    });
   }
 };
 
-const setChartOptions = (chartData: ChartData) => {
-  if (!chartInstance || !chartData?.series) return;
-  // 【修改点1】: 将颜色数组更新为您参考图中的蓝色主题
-  const seriesColors = ['#5B93FF', '#A5D5FF'];
-  chartInstance.setOption({
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { data: chartData.series.map(s => s.name), right: '4%', top: 0, icon: 'circle', itemWidth: 8, itemHeight: 8 },
-    grid: { top: '22%', left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: chartData.categories, axisTick: { show: false }, axisLine: { lineStyle: { color: '#DCDFE6' } }, axisLabel: { color: '#606266', interval: 0 } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } } },
-    series: chartData.series.map((s: any, index: number) => ({
-      name: s.name,
-      type: 'bar',
-      // 【修改点2】: 增加柱子的宽度，使其更大气
-      barWidth: '30%',
-      data: s.data,
-      itemStyle: {
-        color: seriesColors[index % seriesColors.length],
-        borderRadius: [4, 4, 0, 0]
+// 【修改】将这个函数替换为下面的新版本
+const initSubjectStatsChart = (chartData: ChartData) => {
+  if (subjectStatsChart.value && chartData?.series?.[0]?.data) {
+    subjectStatsChartInstance = echarts.init(subjectStatsChart.value);
+    subjectStatsChartInstance.setOption({
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' }
       },
-    })),
-    animation: true,
-  });
+      grid: { top: 40, left: 50, right: 20, bottom: 30 },
+      xAxis: {
+        type: 'category',
+        data: chartData.categories,
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: '#DCDFE6' } },
+        axisLabel: { color: '#606266' }
+      },
+      yAxis: {
+        type: 'value',
+        name: '学生数',
+        splitLine: { lineStyle: { type: 'dashed' } }
+      },
+      series: [{
+        name: '学生数量',
+        // 1. 将图表类型改为 'bar'
+        type: 'bar',
+        // 2. 设置柱子宽度
+        barWidth: '40%',
+        data: chartData.series[0].data,
+        // 3. (可选) 为柱子顶部添加圆角，使其更美观
+        itemStyle: {
+          color: '#5B93FF', // 统一颜色风格
+          borderRadius: [4, 4, 0, 0]
+        },
+      }],
+    });
+  }
 };
 
 const fetchData = async () => {
@@ -195,8 +219,18 @@ const fetchData = async () => {
     const res = await getDashboardStats();
     if (res.code === 200) {
       stats.value = res.data;
+
+      // 【核心修改】将图表初始化逻辑移入这里，确保在获取数据之后执行
+      initKpAndQuestionChart(stats.value.kpAndQuestionStats);
+      initSubjectStatsChart(stats.value.subjectStatsByGrade); // 调用科目统计图表初始化
+
+    } else {
+      // 如果后端返回的 code 不是 200，也提示错误
+      ElMessage.error(res.msg || '获取统计数据失败');
     }
   } catch (error) {
+    // 网络层或其他JS错误
+    console.error("获取工作台数据时发生错误:", error);
     ElMessage.error("获取统计数据失败");
   }
 };
@@ -207,23 +241,22 @@ onMounted(async () => {
     stagger: 0.1, ease: "back.out(1.7)",
   });
 
+  // 【核心修改】直接调用 fetchData 即可
   await fetchData();
 
-  // 【核心修改】: 将图表初始化操作放入 setTimeout 中
-  // 这样可以确保在 DOM 渲染完成后再执行初始化
-  setTimeout(() => {
-    initChart();
-  }, 0); // 延迟0毫秒即可
-
+  // 监听图表容器尺寸变化
   if (kpAndQuestionChart.value) {
     resizeObserver = new ResizeObserver(() => {
-      chartInstance?.resize();
+      kpChartInstance?.resize();
+      subjectStatsChartInstance?.resize();
     });
     resizeObserver.observe(kpAndQuestionChart.value);
   }
 });
+
 onUnmounted(() => {
-  chartInstance?.dispose();
+  kpChartInstance?.dispose();
+  subjectStatsChartInstance?.dispose();
   if (kpAndQuestionChart.value && resizeObserver) {
     resizeObserver.unobserve(kpAndQuestionChart.value);
   }

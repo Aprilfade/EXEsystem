@@ -9,6 +9,7 @@ import com.ice.exebackend.entity.BizStudent;
 import com.ice.exebackend.service.BizStudentService;
 import jakarta.servlet.http.HttpServletResponse; // 导入 HttpServletResponse
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -32,6 +33,7 @@ public class BizStudentController {
     private BizWrongRecordService wrongRecordService;
 
     @PostMapping
+    //@CacheEvict(value = "dashboardStats", allEntries = true) // 【新增】清除缓存
     public Result createStudent(@RequestBody BizStudent student) {
         boolean success = studentService.save(student);
         return success ? Result.suc() : Result.fail("学号已存在");
@@ -57,6 +59,7 @@ public class BizStudentController {
     }
 
     @PutMapping("/{id}")
+    //@CacheEvict(value = "dashboardStats", allEntries = true) // 【新增】清除缓存
     public Result updateStudent(@PathVariable Long id, @RequestBody BizStudent student) {
         student.setId(id);
         boolean success = studentService.updateById(student);
@@ -67,6 +70,7 @@ public class BizStudentController {
      * 删除学生 - 【已优化】
      */
     @DeleteMapping("/{id}")
+   // @CacheEvict(value = "dashboardStats", allEntries = true) // 【新增】清除缓存
     public Result deleteStudent(@PathVariable Long id) {
         // 【新增】 安全删除检查
         // 1. 检查该学生是否已存在错题记录
@@ -83,6 +87,7 @@ public class BizStudentController {
     }
 
     @PostMapping("/import")
+   // @CacheEvict(value = "dashboardStats", allEntries = true) // 【新增】清除缓存
     public Result importStudents(@RequestParam("file") MultipartFile file,
                                  @RequestParam("subjectId") Long subjectId) {
         try {

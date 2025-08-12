@@ -26,8 +26,18 @@ public class DashboardStatsDTO implements Serializable {
 
     // 通知列表
     private List<Notification> notifications;
+    // 【新增】"科目统计" 图表数据
+    private ChartData subjectStatsByGrade;
 
     // --- 手动添加所有 Getter 和 Setter ---
+
+    public ChartData getSubjectStatsByGrade() {
+        return subjectStatsByGrade;
+    }
+
+    public void setSubjectStatsByGrade(ChartData subjectStatsByGrade) {
+        this.subjectStatsByGrade = subjectStatsByGrade;
+    }
 
     public long getStudentCount() {
         return studentCount;
