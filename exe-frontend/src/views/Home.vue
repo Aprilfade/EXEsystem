@@ -157,10 +157,11 @@ onMounted(async () => {
 
   await fetchData();
 
-  // **最终解决方案**：使用 setTimeout 将图表初始化推迟到下一个事件循环
+  // 【核心修改】: 将图表初始化操作放入 setTimeout 中
+  // 这样可以确保在 DOM 渲染完成后再执行初始化
   setTimeout(() => {
     initChart();
-  }, 0);
+  }, 0); // 延迟0毫秒即可
 
   if (kpAndQuestionChart.value) {
     resizeObserver = new ResizeObserver(() => {
@@ -169,7 +170,6 @@ onMounted(async () => {
     resizeObserver.observe(kpAndQuestionChart.value);
   }
 });
-
 onUnmounted(() => {
   chartInstance?.dispose();
   if (kpAndQuestionChart.value && resizeObserver) {
@@ -187,6 +187,8 @@ const handleNotificationClick = async (id: number) => {
   } catch (error) { /* silent fail */ }
 };
 </script>
+
+/* 文件: exe-frontend/src/views/Home.vue */
 
 <style scoped>
 /* 样式部分保持不变 */
@@ -239,24 +241,36 @@ const handleNotificationClick = async (id: number) => {
   color: #606266;
   margin-left: 4px;
 }
-.chart-container {
-  height: 100%;
-  width: 100%;
-}
 .wrong-stats-card :deep(.el-card__body) {
   height: 220px;
 }
 .notification-card :deep(.el-card__body) {
   height: 220px;
 }
+
+/* --- 核心修改开始 --- */
 .full-height-card {
-  height: calc(220px * 2 + 20px + 32px*2);
+  height: calc(220px * 2 + 68px + 32px*2); /* 保持总高度不变 */
   display: flex;
   flex-direction: column;
 }
-.full-height-card .chart-container {
-  flex-grow: 1;
+
+/*
+  让 el-card 的内容区域 (body) 自动填充剩余空间。
+  这是解决问题的关键。
+*/
+.full-height-card :deep(.el-card__body) {
+  flex-grow: 1; /* 应用到正确的元素上 */
+  display: flex; /* 让内部的 chart-container 可以使用 height: 100% */
+  padding: 16px;
 }
+
+.chart-container {
+  height: 100%; /* 占满父容器 (el-card__body) 的高度 */
+  width: 100%;
+}
+/* --- 核心修改结束 --- */
+
 .notification-list {
   list-style: none;
   padding: 0;
@@ -289,9 +303,6 @@ const handleNotificationClick = async (id: number) => {
   flex-shrink: 0;
   margin-left: 16px;
   font-size: 13px;
-}
-:deep(.el-card__body) {
-  padding: 16px;
 }
 :deep(.el-card__header) {
   padding: 16px;
