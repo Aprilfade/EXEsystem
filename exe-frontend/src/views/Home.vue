@@ -45,11 +45,11 @@
 
     <el-row :gutter="20" class="main-content-row">
       <el-col :span="8">
-        <el-card shadow="never" class="grid-card" style="margin-bottom: 20px;">
+        <el-card shadow="never" class="grid-card wrong-stats-card" style="margin-bottom: 20px;">
           <template #header><div class="card-header-v2">错题统计</div></template>
           <el-empty description="此图表需后端接口支持" />
         </el-card>
-        <el-card shadow="never" class="grid-card">
+        <el-card shadow="never" class="grid-card notification-card">
           <template #header><div class="card-header-v2">系统通知</div></template>
           <ul class="notification-list">
             <el-empty v-if="!stats.notifications || stats.notifications.length === 0" description="暂无通知" :image-size="60" />
@@ -257,23 +257,28 @@ const handleNotificationClick = async (id: number) => {
 }
 
 .chart-container {
-  height: 100%; /* 让图表填满父容器 */
+  height: 100%;
   width: 100%;
 }
 
-.grid-card :deep(.el-card__body) {
+/* 【修改点4】: 设置左侧两个卡片的body高度 */
+.wrong-stats-card :deep(.el-card__body) {
+  height: 220px;
+}
+.notification-card :deep(.el-card__body) {
   height: 220px;
 }
 
+/* 【修改点5】: 设置右侧卡片为flex布局，并使其高度与左侧对齐 */
 .full-height-card {
-  height: calc(220px * 2 + 20px + 32px); /* (卡片高度*2 + 间距 + card-header的padding) */
+  height: calc(220px * 2 + 65px + 32px*2); /* (卡片body高度 * 2) + 间距 + (两个卡片header的padding) */
   display: flex;
   flex-direction: column;
 }
-
 .full-height-card .chart-container {
-  flex-grow: 1;
+  flex-grow: 1; /* 图表区域自动伸展占满剩余空间 */
 }
+
 
 /* 通知列表样式 */
 .notification-list {
