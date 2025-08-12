@@ -23,7 +23,7 @@ public class DashboardController {
     private DashboardService dashboardService;
 
     @GetMapping("/stats")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('sys:home')")
     public Result getStats(@RequestParam(required = false) String month) {
         logger.info("开始获取工作台统计数据...");
         try {

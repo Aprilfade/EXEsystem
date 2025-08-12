@@ -22,7 +22,7 @@ public class SysRoleController {
      * 获取所有角色列表
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+
     public Result getAllRoles() {
         List<SysRole> roles = sysRoleService.list();
         return Result.suc(roles);

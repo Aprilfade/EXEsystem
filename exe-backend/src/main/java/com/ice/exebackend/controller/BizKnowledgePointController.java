@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/knowledge-points")
+@PreAuthorize("hasAuthority('sys:kp:list')") // 类级别权限
 public class BizKnowledgePointController {
 
     @Autowired
@@ -30,7 +31,6 @@ public class BizKnowledgePointController {
      * 新增知识点
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result createKnowledgePoint(@RequestBody BizKnowledgePoint knowledgePoint) {
         boolean success = knowledgePointService.save(knowledgePoint);
         return success ? Result.suc() : Result.fail();
@@ -43,7 +43,6 @@ public class BizKnowledgePointController {
      * 分页获取知识点列表 (已更新为包含统计数据)
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result getKnowledgePointList(@RequestParam(defaultValue = "1") int current,
                                         @RequestParam(defaultValue = "10") int size,
                                         @RequestParam(required = false) Long subjectId,
@@ -67,7 +66,6 @@ public class BizKnowledgePointController {
      * 获取单个知识点详情
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result getKnowledgePointById(@PathVariable Long id) {
         BizKnowledgePoint knowledgePoint = knowledgePointService.getById(id);
         return Result.suc(knowledgePoint);
@@ -78,7 +76,6 @@ public class BizKnowledgePointController {
      * 更新知识点信息
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result updateKnowledgePoint(@PathVariable Long id, @RequestBody BizKnowledgePoint knowledgePoint) {
         knowledgePoint.setId(id);
         boolean success = knowledgePointService.updateById(knowledgePoint);
@@ -90,7 +87,6 @@ public class BizKnowledgePointController {
      * 删除知识点 - 【已优化】
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result deleteKnowledgePoint(@PathVariable Long id) {
         // 【新增】 安全删除检查
         // 1. 查询该知识点是否已关联任何试题

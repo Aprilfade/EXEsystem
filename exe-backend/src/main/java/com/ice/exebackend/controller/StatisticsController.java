@@ -8,7 +8,8 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/statistics")
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+// 【重要修改】更新权限注解
+@PreAuthorize("hasAuthority('sys:stats:list')")
 public class StatisticsController {
 
     @Autowired

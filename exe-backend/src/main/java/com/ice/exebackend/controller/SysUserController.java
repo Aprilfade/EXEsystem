@@ -24,7 +24,7 @@ public class SysUserController {
      * 新增用户
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('sys:user:create')")
     public Result createUser(@RequestBody SysUser user) {
         boolean success = sysUserService.createUser(user);
         return success ? Result.suc() : Result.fail();
@@ -34,7 +34,7 @@ public class SysUserController {
      * 分页获取用户列表
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('sys:user:list')")
     public Result getUserList(@RequestParam(defaultValue = "1") int current,
                               @RequestParam(defaultValue = "10") int size) {
         Page<SysUser> page = new Page<>(current, size);
@@ -47,7 +47,7 @@ public class SysUserController {
      * 获取单个用户详情
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('sys:user:list')") // 查看详情也归为list权限
     public Result getUserById(@PathVariable Long id) {
         SysUser user = sysUserService.getById(id);
         // 使用suc(data)方法返回单个对象
@@ -58,7 +58,7 @@ public class SysUserController {
      * 更新用户信息
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('sys:user:update')")
     public Result updateUser(@PathVariable Long id, @RequestBody SysUser user) {
         user.setId(id);
         // 修改前: boolean success = sysUserService.updateById(user);
@@ -70,7 +70,7 @@ public class SysUserController {
      * 删除用户（逻辑删除）
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('sys:user:delete')")
     public Result deleteUser(@PathVariable Long id) {
         boolean success = sysUserService.deleteUserById(id);
         return success ? Result.suc() : Result.fail();

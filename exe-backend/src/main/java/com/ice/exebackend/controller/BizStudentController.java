@@ -22,7 +22,7 @@ import java.net.URLEncoder; // 导入 URLEncoder
 import java.util.List;
 @RestController
 @RequestMapping("/api/v1/students")
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+@PreAuthorize("hasAuthority('sys:student:list')")
 public class BizStudentController {
 
     @Autowired

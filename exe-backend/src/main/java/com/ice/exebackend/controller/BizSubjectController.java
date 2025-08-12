@@ -22,6 +22,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/subjects")
+@PreAuthorize("hasAuthority('sys:subject:list')") // 在类级别添加通用权限
 public class BizSubjectController {
 
     @Autowired
@@ -47,13 +48,11 @@ public class BizSubjectController {
      * 新增科目
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result createSubject(@RequestBody BizSubject subject) {
         boolean success = subjectService.save(subject);
         return success ? Result.suc() : Result.fail();
     }
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result getSubjectList(@RequestParam(defaultValue = "1") int current,
                                  @RequestParam(defaultValue = "10") int size,
                                  // 【新增】接收搜索参数
@@ -76,7 +75,6 @@ public class BizSubjectController {
      * 获取所有科目列表（不分页，用于下拉框）
      */
     @GetMapping("/all")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result getAllSubjects() {
         List<BizSubject> list = subjectService.list();
         return Result.suc(list);
@@ -86,7 +84,6 @@ public class BizSubjectController {
      * 更新科目信息
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result updateSubject(@PathVariable Long id, @RequestBody BizSubject subject) {
         subject.setId(id);
         boolean success = subjectService.updateById(subject);
@@ -97,7 +94,6 @@ public class BizSubjectController {
      * 删除科目 (已加入完整的安全删除检查)
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result deleteSubject(@PathVariable Long id) {
         // 4. 安全删除检查: 检查该科目下是否有知识点
         long knowledgePointCount = knowledgePointService.count(new QueryWrapper<BizKnowledgePoint>().eq("subject_id", id));

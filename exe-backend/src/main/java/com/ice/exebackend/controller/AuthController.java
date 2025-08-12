@@ -4,6 +4,7 @@ import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.UserInfoDTO;
 import com.ice.exebackend.entity.SysRole;
 import com.ice.exebackend.entity.SysUser; // 导入 SysUser
+import com.ice.exebackend.mapper.SysPermissionMapper;
 import com.ice.exebackend.mapper.SysRoleMapper;
 import com.ice.exebackend.service.SysUserService; // 导入 SysUserService
 import com.ice.exebackend.utils.JwtUtil;
@@ -39,6 +40,8 @@ public class AuthController {
 
     @Autowired
     private SysRoleMapper sysRoleMapper; // 5. 注入 SysRoleMapper
+    @Autowired
+    private SysPermissionMapper sysPermissionMapper;
 
     @PostMapping("/login")
     public Result login(@RequestBody Map<String, String> loginRequest) {
@@ -58,7 +61,7 @@ public class AuthController {
 
 
     /**
-     * 修改后：获取当前登录用户信息及其角色
+     * 【已修改】获取当前登录用户信息、角色及权限
      */
     @GetMapping("/me")
     public Result getUserInfo() {
@@ -66,17 +69,23 @@ public class AuthController {
         SysUser user = sysUserService.lambdaQuery().eq(SysUser::getUsername, username).one();
 
         if (user == null) {
-            return Result.fail();
+            return Result.fail("用户不存在");
         }
 
-        // 6. 查询该用户的角色列表
+        // 查询角色列表
         List<SysRole> roles = sysRoleMapper.selectRolesByUserId(user.getId());
 
-        // 7. 构建 DTO 并返回
-        UserInfoDTO userInfoDTO = new UserInfoDTO();
-        BeanUtils.copyProperties(user, userInfoDTO); // 复制基础属性
-        userInfoDTO.setRoles(roles); // 设置角色列表
+        // 3. 查询权限标识列表
+        List<String> permissions = sysPermissionMapper.selectPermissionCodesByUserId(user.getId());
 
-        return Result.suc(userInfoDTO);
-    }
-}
+        // 构建 DTO
+        UserInfoDTO userInfoDTO = new UserInfoDTO();
+        BeanUtils.copyProperties(user, userInfoDTO);
+        userInfoDTO.setRoles(roles);
+
+        // 4. 将用户信息和权限列表放入一个 Map 中返回
+        return Result.suc(Map.of(
+                "user", userInfoDTO,
+                "permissions", permissions
+        ));
+    }}

@@ -18,6 +18,19 @@ const initializeApp = async () => {
     // 3. 在挂载路由前，先尝试获取用户信息
     // 这是解决刷新丢失数据的关键！
     const authStore = useAuthStore()
+
+    // 注册全局权限指令 v-permission
+    app.directive('permission', {
+        mounted(el, binding) {
+            const permissionCode = binding.value; // 获取指令的值 e.g., 'sys:user:delete'
+            if (permissionCode && !authStore.hasPermission(permissionCode)) {
+                // 如果用户没有权限，则从DOM中移除该元素
+                el.parentNode?.removeChild(el);
+            }
+        },
+    });
+
+
     if (authStore.token) {
         try {
             await authStore.fetchUserInfo()

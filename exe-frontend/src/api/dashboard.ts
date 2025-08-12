@@ -20,6 +20,11 @@ export interface DashboardStats {
     paperCount: number;
     notifications: { id: number; content: string, date: string }[];
     kpAndQuestionStats: ChartData;
+    // 添加上在Home.vue中使用的另外两个图表数据
+    wrongQuestionStats: ChartData;
+    monthlyQuestionCreationStats: ChartData;
+    subjectStatsByGrade: ChartData;
+    duplicateCount?: number; // 确保这个字段存在
 }
 
 export function getDashboardStats(): Promise<ApiResult<DashboardStats>> {

@@ -2,6 +2,7 @@ package com.ice.exebackend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.ice.exebackend.entity.SysUser;
+import com.ice.exebackend.mapper.SysPermissionMapper;
 import com.ice.exebackend.mapper.SysRoleMapper; // 1. 导入 SysRoleMapper
 import com.ice.exebackend.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,9 +24,8 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     @Autowired
     private SysUserService sysUserService;
 
-    // 4. 注入 SysRoleMapper 以便查询角色
     @Autowired
-    private SysRoleMapper sysRoleMapper;
+    private SysPermissionMapper sysPermissionMapper; // 注入
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
@@ -35,13 +35,12 @@ public class UserDetailsServiceImpl implements UserDetailsService {
             throw new UsernameNotFoundException("用户名或密码错误");
         }
 
-        // 5. 根据用户ID，从数据库动态查询该用户的角色列表
-        List<String> roleCodes = sysRoleMapper.selectRoleCodesByUserId(sysUser.getId());
+        // 根据用户ID，查询该用户的权限标识列表
+        List<String> permissionCodes = sysPermissionMapper.selectPermissionCodesByUserId(sysUser.getId());
 
-        // 6. 将角色编码（如 "SUPER_ADMIN", "ADMIN"）转换为Spring Security的权限对象
-        //    我们约定，角色的权限以 "ROLE_" 为前缀
-        List<GrantedAuthority> authorities = roleCodes.stream()
-                .map(roleCode -> new SimpleGrantedAuthority("ROLE_" + roleCode))
+        // 将权限标识转换为Spring Security的权限对象
+        List<GrantedAuthority> authorities = permissionCodes.stream()
+                .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toList());
 
         boolean isDisabled = !Objects.equals(sysUser.getIsEnabled(), 1);
@@ -49,7 +48,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         return User.builder()
                 .username(sysUser.getUsername())
                 .password(sysUser.getPassword())
-                .authorities(authorities) // 7. 将从数据库查出的真实权限赋予用户
+                .authorities(authorities) // 使用真实的权限列表
                 .disabled(isDisabled)
                 .accountExpired(false)
                 .credentialsExpired(false)

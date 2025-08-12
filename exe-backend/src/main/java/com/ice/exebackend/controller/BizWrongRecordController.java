@@ -15,7 +15,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/wrong-records")
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+// 【重要修改】更新权限注解
+@PreAuthorize("hasAuthority('sys:wrong:list')")
 public class BizWrongRecordController {
 
     @Autowired

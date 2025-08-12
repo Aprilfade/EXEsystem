@@ -21,7 +21,8 @@ import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/v1/papers")
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+// 【重要修改】将 hasAnyRole 修改为 hasAuthority
+@PreAuthorize("hasAuthority('sys:paper:list')")
 public class BizPaperController {
 
     @Autowired

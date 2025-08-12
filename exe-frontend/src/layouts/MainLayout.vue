@@ -6,48 +6,30 @@
         <h1>试题管理系统</h1>
       </div>
       <el-menu :default-active="$route.path" router class="main-menu">
-        <el-menu-item index="/home">
-          <el-icon><House /></el-icon><span>工作台</span>
-        </el-menu-item>
-        <el-menu-item index="/subjects">
-          <el-icon><Collection /></el-icon><span>科目管理</span>
-        </el-menu-item>
-        <el-menu-item index="/knowledge-points">
-          <el-icon><Reading /></el-icon><span>知识点管理</span>
-        </el-menu-item>
-        <el-menu-item index="/questions">
-          <el-icon><Tickets /></el-icon><span>题库管理</span>
-        </el-menu-item>
-        <el-menu-item index="/papers">
-          <el-icon><DocumentCopy /></el-icon><span>试卷管理</span>
-        </el-menu-item>
-        <el-menu-item index="/students">
-          <el-icon><Avatar /></el-icon><span>学生管理</span>
-        </el-menu-item>
-        <el-sub-menu index="error-management">
-          <template #title><el-icon><CircleClose /></el-icon><span>错题管理</span></template>
-          <el-menu-item index="/wrong-records">错题管理</el-menu-item>
-          <el-menu-item index="/wrong-record-stats">错题统计</el-menu-item>
-        </el-sub-menu>
-        <el-menu-item index="/statistics">
-          <el-icon><DataLine /></el-icon><span>教学统计分析</span>
-        </el-menu-item>
-        <el-menu-item index="/notifications">
-          <el-icon><Bell /></el-icon><span>通知管理</span>
-        </el-menu-item>
-        <el-menu-item index="/users" v-if="authStore.isAdmin">
-          <el-icon><User /></el-icon><span>成员管理</span>
-        </el-menu-item>
+        <template v-for="menu in visibleMenus" :key="menu.path">
+          <el-menu-item v-if="!menu.children" :index="menu.path">
+            <el-icon><component :is="menu.icon" /></el-icon>
+            <span>{{ menu.name }}</span>
+          </el-menu-item>
+          <el-sub-menu v-else :index="menu.path">
+            <template #title>
+              <el-icon><component :is="menu.icon" /></el-icon>
+              <span>{{ menu.name }}</span>
+            </template>
+            <el-menu-item v-for="child in menu.children" :key="child.path" :index="child.path">
+              {{ child.name }}
+            </el-menu-item>
+          </el-sub-menu>
+        </template>
       </el-menu>
 
       <div class="sidebar-footer">
         <div class="user-profile-small">
           <el-avatar v-if="authStore.user?.avatar" :size="32" :src="authStore.user.avatar" />
           <el-avatar v-else :size="32">{{ authStore.userNickname.charAt(0) }}</el-avatar>
-
           <div class="user-details">
             <span class="nickname">{{ authStore.userNickname }}</span>
-            <span class="email">{{ authStore.user?.username }}@probysui.com</span>
+            <span class="email">{{ authStore.user?.username }}</span>
           </div>
           <el-icon class="arrow"><ArrowRight /></el-icon>
         </div>
@@ -59,11 +41,13 @@
         <div class="header-left">
         </div>
         <div class="header-right">
-          <el-button circle :icon="Search"></el-button>
-          <el-button circle :icon="Bell"></el-button>
           <el-dropdown @command="handleCommand">
-            <el-avatar v-if="authStore.user?.avatar" :src="authStore.user.avatar" />
-            <el-avatar v-else>{{ authStore.userNickname.charAt(0) }}</el-avatar>
+            <span class="avatar-dropdown">
+              <el-avatar v-if="authStore.user?.avatar" :src="authStore.user.avatar" />
+              <el-avatar v-else>{{ authStore.userNickname.charAt(0) }}</el-avatar>
+              <span class="nickname-header">{{ authStore.userNickname }}</span>
+              <el-icon class="el-icon--right"><arrow-down /></el-icon>
+            </span>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="profile">个人中心</el-dropdown-item>
@@ -83,23 +67,50 @@
         v-model:visible="isProfileDialogVisible"
         @success="() => {}"
     />
-
   </el-container>
 </template>
 
+
+
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import ProfileEditDialog from '@/components/user/ProfileEditDialog.vue';
 import {
   Management, House, Collection, Reading, Tickets, DocumentCopy, Avatar, CircleClose, DataLine,
-  User, Search, Bell, ArrowRight
+  User, Search, Bell, ArrowRight,  ArrowDown //
 } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 const router = useRouter();
 const isProfileDialogVisible = ref(false);
+
+// 定义所有可能的菜单项及其所需的权限标识
+const allMenus = [
+  { path: '/home', name: '工作台', permission: 'sys:home', icon: House },
+  { path: '/subjects', name: '科目管理', permission: 'sys:subject:list', icon: Collection },
+  { path: '/knowledge-points', name: '知识点管理', permission: 'sys:kp:list', icon: Reading },
+  { path: '/questions', name: '题库管理', permission: 'sys:question:list', icon: Tickets },
+  { path: '/papers', name: '试卷管理', permission: 'sys:paper:list', icon: DocumentCopy },
+  { path: '/students', name: '学生管理', permission: 'sys:student:list', icon: Avatar },
+  {
+    path: '/error-management', name: '错题管理', permission: 'sys:wrong:list', icon: CircleClose,
+    children: [
+      { path: '/wrong-records', name: '错题管理' },
+      { path: '/wrong-record-stats', name: '错题统计' },
+    ]
+  },
+  { path: '/statistics', name: '教学统计分析', permission: 'sys:stats:list', icon: DataLine },
+  { path: '/notifications', name: '通知管理', permission: 'sys:notify:list', icon: Bell },
+  { path: '/users', name: '成员管理', permission: 'sys:user:list', icon: User },
+];
+
+// 计算属性：根据用户权限过滤出可见的菜单
+const visibleMenus = computed(() => {
+  return allMenus.filter(menu => authStore.hasPermission(menu.permission));
+});
+
 
 const handleCommand = (command: string) => {
   if (command === 'logout') {
@@ -109,6 +120,9 @@ const handleCommand = (command: string) => {
   }
 };
 </script>
+
+
+
 
 <style scoped>
 /* 样式部分无需改动 */
@@ -127,4 +141,8 @@ const handleCommand = (command: string) => {
 .header { background-color: var(--header-bg); display: flex; justify-content: space-between; align-items: center; padding: 0 24px; border-bottom: 1px solid var(--border-color); }
 .header-right { display: flex; align-items: center; gap: 16px; }
 .main-content { padding: 24px; background-color: var(--bg-color); }
+.main-layout { height: 100vh; background-color: var(--bg-color); }
+.aside { background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
+.logo-area { display: flex; align-items: center; padding: 20px; gap: 12px; }
+
 </style>

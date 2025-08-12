@@ -209,3 +209,65 @@ CREATE TABLE `biz_paper_group` (
 -- ----------------------------
 -- 为 biz_paper_question 表添加 group_id 字段，用于关联 biz_paper_group
 ALTER TABLE `biz_paper_question` ADD COLUMN `group_id` bigint DEFAULT NULL COMMENT '所属分组ID';
+
+
+-- ----------------------------
+-- 14. 权限表 (新增)
+-- ----------------------------
+CREATE TABLE `sys_permission` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '权限名称 (e.g., 用户管理)',
+  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '权限标识 (e.g., sys:user:list)',
+  `type` tinyint NOT NULL COMMENT '类型 (1:菜单, 2:按钮/操作)',
+  `parent_id` bigint DEFAULT '0' COMMENT '父权限ID',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code` (`code`)
+) ENGINE=InnoDB AUTO_INCREMENT=100 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='权限表';
+
+-- ----------------------------
+-- 15. 角色权限关联表 (新增)
+-- ----------------------------
+CREATE TABLE `sys_role_permission` (
+  `role_id` bigint NOT NULL COMMENT '角色ID',
+  `permission_id` bigint NOT NULL COMMENT '权限ID',
+  PRIMARY KEY (`role_id`,`permission_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色权限关联表';
+
+-- ----------------------------
+-- 初始化权限数据
+-- ----------------------------
+INSERT INTO `sys_permission` (id, name, code, type, parent_id) VALUES
+(1, '系统管理', 'sys', 1, 0),
+(2, '成员管理', 'sys:user', 1, 1),
+(10, '查看用户', 'sys:user:list', 2, 2),
+(11, '新增用户', 'sys:user:create', 2, 2),
+(12, '编辑用户', 'sys:user:update', 2, 2),
+(13, '删除用户', 'sys:user:delete', 2, 2),
+(20, '科目管理', 'sys:subject:list', 1, 0),
+(21, '知识点管理', 'sys:kp:list', 1, 0),
+(22, '题库管理', 'sys:question:list', 1, 0),
+(23, '试卷管理', 'sys:paper:list', 1, 0),
+(24, '学生管理', 'sys:student:list', 1, 0),
+(25, '错题管理', 'sys:wrong:list', 1, 0),
+(26, '教学统计', 'sys:stats:list', 1, 0),
+(27, '通知管理', 'sys:notify:list', 1, 0);
+
+
+-- ----------------------------
+-- 初始化角色权限关联数据 (为 ADMIN 角色分配所有权限)
+-- ----------------------------
+INSERT INTO `sys_role_permission` (role_id, permission_id) VALUES
+(2, 1),
+(2, 2),
+(2, 10),
+(2, 11),
+(2, 12),
+(2, 13),
+(2, 20),
+(2, 21),
+(2, 22),
+(2, 23),
+(2, 24),
+(2, 25),
+(2, 26),
+(2, 27);

@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/questions")
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+@PreAuthorize("hasAuthority('sys:question:list')") // 类级别权限
 public class BizQuestionController {
 
     @Autowired
@@ -81,7 +81,6 @@ public class BizQuestionController {
      * 权限：仅限管理员
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public Result deleteQuestion(@PathVariable Long id) {
         // 安全起见，删除试题前也删除其与知识点的关联关系
     /*    questionService.updateQuestionWithKnowledgePoints(new QuestionDTO() {{
