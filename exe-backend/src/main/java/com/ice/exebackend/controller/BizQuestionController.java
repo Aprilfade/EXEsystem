@@ -17,10 +17,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+// 1. 【新增】导入日志库
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @RestController
 @RequestMapping("/api/v1/questions")
 @PreAuthorize("hasAuthority('sys:question:list')") // 类级别权限
 public class BizQuestionController {
+
+
+    private static final Logger logger = LoggerFactory.getLogger(BizQuestionController.class);
+
 
     @Autowired
     private BizQuestionService questionService;
@@ -47,6 +55,10 @@ public class BizQuestionController {
                                   @RequestParam(required = false) Integer questionType,
                                   // 【新增此行】: 接收 grade 参数
                                   @RequestParam(required = false) String grade) {
+
+        // 3. 【新增】打印收到的请求参数
+        logger.info("开始查询试题列表... subjectId: {}, grade: {}, questionType: {}", subjectId, grade, questionType);
+
         Page<BizQuestion> page = new Page<>(current, size);
         QueryWrapper<BizQuestion> queryWrapper = new QueryWrapper<>();
         if (subjectId != null) {
@@ -62,6 +74,9 @@ public class BizQuestionController {
         queryWrapper.orderByDesc("id");
 
         questionService.page(page, queryWrapper);
+        // 4. 【新增】打印查询结果
+        logger.info("查询完成。为 subjectId: {} 找到了 {} 条记录。", subjectId, page.getRecords().size());
+
         return Result.suc(page.getRecords(), page.getTotal());
     }
 

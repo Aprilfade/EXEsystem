@@ -77,7 +77,9 @@
         </el-table-column>
       </el-table>
 
+
       <el-pagination
+          v-if="viewMode === 'list'"
           class="pagination"
           background
           layout="total, sizes, prev, pager, next, jumper"
@@ -89,6 +91,7 @@
     </el-card>
 
     <subject-edit-dialog
+        v-if="isDialogVisible"
         v-model:visible="isDialogVisible"
         :subject-data="editingSubject"
         @success="getList"
@@ -103,12 +106,11 @@
 </template>
 
 <script setup lang="ts">
-// ... script 部分无需改动 ...
-import { ref, reactive, onMounted } from 'vue';
+// 1. 确认导入了 computed 和 watch
+import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchSubjectList, deleteSubject } from '@/api/subject';
 import type { Subject, SubjectPageParams } from '@/api/subject';
-// 【修改点 2】: 导入更多图标
 import { Plus, Edit, Delete, Grid, Menu, MoreFilled } from '@element-plus/icons-vue';
 import SubjectEditDialog from '@/components/subject/SubjectEditDialog.vue';
 import SubjectDetailDialog from "@/components/subject/SubjectDetailDialog.vue";
@@ -119,11 +121,9 @@ const loading = ref(true);
 const isDialogVisible = ref(false);
 const editingSubject = ref<Subject | undefined>(undefined);
 const viewMode = ref<'grid' | 'list'>('grid');
-// 【修改点 5】: 新增用于控制详情弹窗的状态
 const isDetailDialogVisible = ref(false);
 const selectedSubjectId = ref<number | null>(null);
 const selectedSubjectName = ref('');
-
 
 const queryParams = reactive<SubjectPageParams>({
   current: 1,
@@ -131,16 +131,32 @@ const queryParams = reactive<SubjectPageParams>({
   name: ''
 });
 
+// 2. 【核心修改】改造 getList 函数
 const getList = async () => {
   loading.value = true;
   try {
-    const response = await fetchSubjectList(queryParams);
+    // 根据视图模式决定是分页加载还是全部加载
+    const paramsToUse = viewMode.value === 'list'
+        ? queryParams
+        : { current: 1, size: 9999, name: queryParams.name };
+
+    const response = await fetchSubjectList(paramsToUse);
     subjectList.value = response.data;
     total.value = response.total;
   } finally {
     loading.value = false;
   }
 };
+
+// 3. 【新增】监听视图模式的变化
+watch(viewMode, () => {
+  // 当切换到列表视图时，确保页码回到第一页
+  if (viewMode.value === 'list') {
+    queryParams.current = 1;
+  }
+  // 切换视图后总是重新加载数据
+  getList();
+});
 
 const handleQuery = () => {
   queryParams.current = 1;
@@ -165,7 +181,7 @@ const handleDelete = (id: number) => {
         getList();
       });
 };
-// 【修改点 6】: 新增卡片点击处理函数
+
 const handleCardClick = (subject: Subject) => {
   selectedSubjectId.value = subject.id;
   selectedSubjectName.value = subject.name;
