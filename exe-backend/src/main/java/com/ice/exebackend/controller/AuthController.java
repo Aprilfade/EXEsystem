@@ -3,11 +3,13 @@ package com.ice.exebackend.controller;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.UserInfoDTO;
 import com.ice.exebackend.entity.SysRole;
-import com.ice.exebackend.entity.SysUser; // 导入 SysUser
+import com.ice.exebackend.entity.SysUser;
 import com.ice.exebackend.mapper.SysPermissionMapper;
 import com.ice.exebackend.mapper.SysRoleMapper;
-import com.ice.exebackend.service.SysUserService; // 导入 SysUserService
+import com.ice.exebackend.service.SysLoginLogService;
+import com.ice.exebackend.service.SysUserService;
 import com.ice.exebackend.utils.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
@@ -15,9 +17,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder; // 导入 SecurityContextHolder
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*; // 导入 GetMapping
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
@@ -35,50 +38,102 @@ public class AuthController {
     private JwtUtil jwtUtil;
 
     @Autowired
-    private SysUserService sysUserService; // 注入 SysUserService
-
+    private SysUserService sysUserService;
 
     @Autowired
-    private SysRoleMapper sysRoleMapper; // 5. 注入 SysRoleMapper
+    private SysRoleMapper sysRoleMapper;
+
     @Autowired
     private SysPermissionMapper sysPermissionMapper;
 
+    // --- 以下为登录日志功能所需的新增注入 ---
+    @Autowired
+    private SysLoginLogService loginLogService;
+
+    @Autowired
+    private HttpServletRequest request;
+
+    private String getIpAddress() {
+        final String UNKNOWN = "unknown";
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.length() == 0 || UNKNOWN.equalsIgnoreCase(ip)) {
+            ip = request.getHeader("Proxy-Client-IP");
+        }
+        if (ip == null || ip.length() == 0 || UNKNOWN.equalsIgnoreCase(ip)) {
+            ip = request.getHeader("WL-Proxy-Client-IP");
+        }
+        if (ip == null || ip.length() == 0 || UNKNOWN.equalsIgnoreCase(ip)) {
+            ip = request.getHeader("HTTP_CLIENT_IP");
+        }
+        if (ip == null || ip.length() == 0 || UNKNOWN.equalsIgnoreCase(ip)) {
+            ip = request.getHeader("HTTP_X_FORWARDED_FOR");
+        }
+        if (ip == null || ip.length() == 0 || UNKNOWN.equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+
+        // 【关键】处理多级代理的情况，获取第一个真实的IP
+        if (ip != null && ip.length() > 0 && ip.contains(",")) {
+            ip = ip.substring(0, ip.indexOf(","));
+        }
+
+        // 【可选】对于本地开发，将IPv6的localhost转为IPv4格式，更易读
+        if ("0:0:0:0:0:0:0:1".equals(ip)) {
+            ip = "127.0.0.1";
+        }
+
+        return ip;
+    }
+
+    private String getUserAgent() {
+        return request.getHeader("User-Agent");
+    }
+
+
     @PostMapping("/login")
     public Result login(@RequestBody Map<String, String> loginRequest) {
+        // 【核心修复】将 username 的定义移动到方法开头
+        String username = loginRequest.get("username");
+
         try {
             Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(loginRequest.get("username"), loginRequest.get("password"))
+                    new UsernamePasswordAuthenticationToken(username, loginRequest.get("password"))
             );
             UserDetails userDetails = (UserDetails) authentication.getPrincipal();
             String token = jwtUtil.generateToken(userDetails);
             logger.info("用户 '{}' 登录成功!", userDetails.getUsername());
+
+            // 记录成功日志
+            loginLogService.recordLoginLog(username, "LOGIN_SUCCESS", getIpAddress(), getUserAgent());
+
             return Result.suc(Map.of("token", token));
-        } catch (Exception e) {
-            logger.error("认证失败: {}", e.getMessage());
-            return Result.fail();
+        } catch (AuthenticationException e) {
+            logger.error("用户 '{}' 认证失败: {}", username, e.getMessage());
+
+            // 记录失败日志 (现在可以安全地访问 username)
+            loginLogService.recordLoginLog(username, "LOGIN_FAILURE", getIpAddress(), getUserAgent());
+
+            return Result.fail("用户名或密码错误");
         }
     }
-    /**
-     * 【新增】用户注册接口
-     * @param user 包含用户名、密码、昵称等信息的SysUser对象
-     * @return Result
-     */
+
+    @PostMapping("/logout")
+    public Result logout() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        loginLogService.recordLoginLog(username, "LOGOUT", getIpAddress(), getUserAgent());
+        return Result.suc();
+    }
+
     @PostMapping("/register")
     public Result register(@RequestBody SysUser user) {
         try {
-            // 直接调用用户服务中的创建用户方法
             boolean success = sysUserService.createUser(user);
             return success ? Result.suc("注册成功，请登录！") : Result.fail("注册失败，请稍后再试。");
         } catch (RuntimeException e) {
-            // 捕获用户服务中抛出的“用户名已存在”等异常
             return Result.fail(e.getMessage());
         }
     }
 
-
-    /**
-     * 【已修改】获取当前登录用户信息、角色及权限
-     */
     @GetMapping("/me")
     public Result getUserInfo() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -88,20 +143,16 @@ public class AuthController {
             return Result.fail("用户不存在");
         }
 
-        // 查询角色列表
         List<SysRole> roles = sysRoleMapper.selectRolesByUserId(user.getId());
-
-        // 3. 查询权限标识列表
         List<String> permissions = sysPermissionMapper.selectPermissionCodesByUserId(user.getId());
 
-        // 构建 DTO
         UserInfoDTO userInfoDTO = new UserInfoDTO();
         BeanUtils.copyProperties(user, userInfoDTO);
         userInfoDTO.setRoles(roles);
 
-        // 4. 将用户信息和权限列表放入一个 Map 中返回
         return Result.suc(Map.of(
                 "user", userInfoDTO,
                 "permissions", permissions
         ));
-    }}
+    }
+}

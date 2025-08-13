@@ -281,3 +281,13 @@ INSERT INTO `sys_permission` (id, name, code, type, parent_id) VALUES (14, '角�
 -- 为 ADMIN 角色分配新的权限
 -- ----------------------------
 INSERT INTO `sys_role_permission` (role_id, permission_id) VALUES (2, 14);
+
+CREATE TABLE `sys_login_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `username` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '登录用户名',
+  `ip_address` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '登录IP地址',
+  `log_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '日志类型 (LOGIN_SUCCESS, LOGIN_FAILURE, LOGOUT)',
+  `user_agent` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '浏览器用户代理',
+  `log_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '日志记录时间',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户登录日志表';

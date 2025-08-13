@@ -1,11 +1,11 @@
 <template>
   <el-container class="main-layout">
-    <el-aside width="220px" class="aside">
+    <el-aside :width="isCollapsed ? '64px' : '220px'" class="aside">
       <div class="logo-area">
         <el-icon :size="32" color="#409eff"><Management /></el-icon>
-        <h1>试题管理系统</h1>
+        <h1 v-show="!isCollapsed">试题管理系统</h1>
       </div>
-      <el-menu :default-active="$route.path" router class="main-menu">
+      <el-menu :default-active="$route.path" router class="main-menu" :collapse="isCollapsed" :collapse-transition="false">
         <template v-for="menu in visibleMenus" :key="menu.path">
           <el-menu-item v-if="!menu.children" :index="menu.path">
             <el-icon><component :is="menu.icon" /></el-icon>
@@ -24,7 +24,7 @@
         </template>
       </el-menu>
 
-      <div class="sidebar-footer">
+      <div class="sidebar-footer" v-show="!isCollapsed">
         <div class="user-profile-small">
           <el-avatar v-if="authStore.user?.avatar" :size="32" :src="authStore.user.avatar" />
           <el-avatar v-else :size="32">{{ authStore.userNickname.charAt(0) }}</el-avatar>
@@ -40,6 +40,9 @@
     <el-container>
       <el-header class="header">
         <div class="header-left">
+          <el-icon class="collapse-btn" @click="isCollapsed = !isCollapsed" :size="22">
+            <component :is="isCollapsed ? Expand : Fold" />
+          </el-icon>
         </div>
         <div class="header-right">
           <el-dropdown @command="handleCommand">
@@ -72,15 +75,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed } from 'vue'; // 【修改】导入 computed
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import ProfileEditDialog from '@/components/user/ProfileEditDialog.vue';
-// 【核心修复】在这里导入 Lock 时使用别名 LockIcon
+// 【修改】在这里导入 Lock 时使用别名 LockIcon，并新增 Fold 和 Expand
 import {
   Management, House, Collection, Reading, Tickets, DocumentCopy, Avatar, CircleClose, DataLine,
-  User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting
+  User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting, Fold, Expand, Document // <-- 新增 Document
 } from '@element-plus/icons-vue';
+
+// 【新增】用于控制侧边栏折叠的响应式变量
+const isCollapsed = ref(false);
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -106,19 +112,17 @@ const allMenus = [
     path: '/system', name: '系统管理', permission: 'sys:user:list', icon: Setting,
     children: [
       { path: '/users', name: '成员管理',  permission: 'sys:user:list',icon: User },
-      // 【核心修复】在这里使用别名 LockIcon
       { path: '/roles', name: '角色管理', permission: 'sys:user:list', icon: LockIcon },
+      { path: '/logs/login', name: '登录日志', permission: 'sys:log:login', icon: Document },
     ]
   },
 ];
 
 const visibleMenus = computed(() => {
   return allMenus.filter(menu => {
-    // 如果菜单有子菜单，只要有一个子菜单有权限，父菜单就应该显示
     if (menu.children && menu.children.length > 0) {
       return menu.children.some(child => authStore.hasPermission(child.permission || ''));
     }
-    // 否则，按自身权限判断
     return authStore.hasPermission(menu.permission);
   });
 });
@@ -153,5 +157,35 @@ const handleCommand = (command: string) => {
 
 .el-menu-item .el-icon {
   margin-right: 5px;
+}
+/* ... 原有样式保持不变 ... */
+
+/* --- 在这里追加下面的新样式 --- */
+.aside {
+  transition: width 0.3s ease; /* 【新增】为侧边栏宽度变化添加平滑过渡 */
+}
+
+.logo-area {
+  transition: padding 0.3s ease; /* 【新增】为 logo 区域的内边距添加过渡效果 */
+}
+
+/* 【新增】当折叠时，调整 logo 区域的样式，使其居中 */
+.el-aside.is-collapse .logo-area {
+  padding: 20px 0;
+  justify-content: center;
+}
+.el-aside:not(.is-collapse) .logo-area {
+  padding: 20px;
+}
+
+
+.collapse-btn {
+  cursor: pointer;
+  color: var(--text-color-regular);
+}
+
+.main-menu {
+  /* 【新增】解决折叠时文字不消失的bug */
+  border-right: none;
 }
 </style>

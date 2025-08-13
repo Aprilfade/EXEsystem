@@ -63,3 +63,9 @@ export function getUserInfo(): Promise<ApiResult<UserInfoResponse>> {
         method: 'get'
     });
 }
+export function logoutApi(): Promise<ApiResult<null>> {
+    return request({
+        url: '/api/v1/auth/logout',
+        method: 'post'
+    });
+}

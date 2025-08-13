@@ -28,6 +28,7 @@ const routes: Array<RouteRecordRaw> = [
             { path: 'wrong-record-stats', name: 'WrongRecordStats', component: () => import('@/views/WrongRecordStats.vue'), meta: { permission: 'sys:wrong:list', title: '错题统计' } },
             { path: 'statistics', name: 'StatisticsDashboard', component: () => import('@/views/StatisticsDashboard.vue'), meta: { permission: 'sys:stats:list', title: '教学统计' } },
             { path: 'notifications', name: 'NotificationManagement', component: () => import('@/views/NotificationManage.vue'), meta: { permission: 'sys:notify:list', title: '通知管理' } },
+            { path: 'logs/login', name: 'LoginLog', component: () => import('@/views/LoginLog.vue'), meta: { permission: 'sys:log:login', title: '登录日志' } },
         ]
     }
 ];
