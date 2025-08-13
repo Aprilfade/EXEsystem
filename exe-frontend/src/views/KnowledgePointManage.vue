@@ -45,11 +45,13 @@
           </el-button-group>
         </div>
       </div>
-
       <div v-if="viewMode === 'grid'" class="card-grid">
         <div v-for="kp in filteredList" :key="kp.id" class="knowledge-point-card">
           <div class="card-header">
-            <el-tag size="small">{{ getSubjectName(kp.subjectId) }}</el-tag>
+            <div>
+              <el-tag size="small">{{ getSubjectName(kp.subjectId) }}</el-tag>
+              <el-tag v-if="kp.grade" size="small" type="success" style="margin-left: 8px;">{{ kp.grade }}</el-tag>
+            </div>
             <el-dropdown>
               <el-icon class="el-dropdown-link"><MoreFilled /></el-icon>
               <template #dropdown>
@@ -75,7 +77,7 @@
       <el-table v-if="viewMode === 'list'" :data="filteredList" v-loading="loading" style="width: 100%; margin-top: 20px;">
         <el-table-column type="index" label="序号" width="80" align="center" />
         <el-table-column prop="name" label="知识点名称" />
-        <el-table-column prop="code" label="编码" />
+        <el-table-column prop="grade" label="年级" width="120" /> <el-table-column prop="code" label="编码" />
         <el-table-column prop="questionCount" label="关联题目数" width="120" align="center"/>
         <el-table-column prop="description" label="描述" show-overflow-tooltip />
         <el-table-column prop="tags" label="标签" />
@@ -98,6 +100,7 @@
 </template>
 
 <script lang="ts" setup>
+// ... script 部分无需改动 ...
 import { ref, reactive, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchKnowledgePointList, deleteKnowledgePoint } from '@/api/knowledgePoint';
@@ -191,6 +194,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* ... style 部分无需改动 ... */
 .page-container {
   padding: 24px;
 }

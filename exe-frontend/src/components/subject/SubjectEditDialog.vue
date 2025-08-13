@@ -9,6 +9,24 @@
       <el-form-item label="科目名称" prop="name">
         <el-input v-model="form.name" placeholder="请输入科目名称" />
       </el-form-item>
+
+      <el-form-item label="所属年级" prop="grade">
+        <el-select v-model="form.grade" placeholder="请选择年级" style="width: 100%;">
+          <el-option label="一年级" value="一年级" />
+          <el-option label="二年级" value="二年级" />
+          <el-option label="三年级" value="三年级" />
+          <el-option label="四年级" value="四年级" />
+          <el-option label="五年级" value="五年级" />
+          <el-option label="六年级" value="六年级" />
+          <el-option label="七年级" value="七年级" />
+          <el-option label="八年级" value="八年级" />
+          <el-option label="九年级" value="九年级" />
+          <el-option label="高一" value="高一" />
+          <el-option label="高二" value="高二" />
+          <el-option label="高三" value="高三" />
+        </el-select>
+      </el-form-item>
+
       <el-form-item label="科目简介" prop="description">
         <el-input v-model="form.description" type="textarea" placeholder="请输入科目简介" />
       </el-form-item>
@@ -45,8 +63,8 @@ watch(() => props.visible, (isVisible) => {
       // 编辑
       form.value = { ...props.subjectData };
     } else {
-      // 新增
-      form.value = { name: '', description: '' };
+      // 新增，【修改此行】
+      form.value = { name: '', description: '', grade: '' };
     }
   } else {
     form.value = null;

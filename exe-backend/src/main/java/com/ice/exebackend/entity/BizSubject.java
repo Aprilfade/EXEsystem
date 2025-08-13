@@ -18,9 +18,21 @@ public class BizSubject {
 
     private String description;
 
+    private String grade;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;
+
+
+    // 【新增】为 grade 字段添加 Getter 和 Setter
+    public String getGrade() {
+        return grade;
+    }
+
+    public void setGrade(String grade) {
+        this.grade = grade;
+    }
 
     public void setCreateTime(LocalDateTime createTime) {
         this.createTime = createTime;

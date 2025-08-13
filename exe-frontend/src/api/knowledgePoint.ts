@@ -10,6 +10,7 @@ export interface KnowledgePoint {
     code: string;
     name: string;
     description: string;
+    grade?: string; // 【新增此行】
     tags?: string;
     remark?: string;
     createTime?: string;

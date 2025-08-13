@@ -15,6 +15,7 @@ export interface QuestionOption {
 export interface Question {
     id: number;
     subjectId: number;
+    grade?: string; // 【新增此行】
     questionType: number; // 1-单选, 2-多选, 3-填空, 4-判断, 5-主观
     content: string;
     imageUrl?: string;
@@ -34,6 +35,7 @@ export interface QuestionPageParams {
     size: number;
     subjectId?: number;
     questionType?: number;
+    grade?: string; // 【新增此行】
 }
 
 /**

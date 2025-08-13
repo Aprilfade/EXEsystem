@@ -22,6 +22,8 @@ public class BizKnowledgePoint {
 
     private String description; // 详细描述
 
+    private String grade; // 【新增此行】
+
     private String tags; // 标签
 
     private String remark; // 备注
@@ -29,6 +31,14 @@ public class BizKnowledgePoint {
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;
+
+    // 【新增】为 grade 字段添加 Getter 和 Setter
+    public String getGrade() {
+        return grade;
+    }
+    public void setGrade(String grade) {
+        this.grade = grade;
+    }
 
     public Long getId() {
         return id;

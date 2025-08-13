@@ -16,11 +16,20 @@ public class BizPaper {
     private String code;
     private Long subjectId;
     private String description;
+    private String grade; // 【新增此行】
     private Integer totalScore;
     private Integer paperType; // 【新增】 1-手动选题, 2-图片拼接
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 
+
+    // 【新增】为 grade 字段添加 Getter 和 Setter
+    public String getGrade() {
+        return grade;
+    }
+    public void setGrade(String grade) {
+        this.grade = grade;
+    }
     public Integer getPaperType() {
         return paperType;
     }

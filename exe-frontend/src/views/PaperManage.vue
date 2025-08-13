@@ -44,6 +44,11 @@
         <el-input v-model="searchQuery" placeholder="输入试卷名称或编码搜索" size="large" style="width: 300px;"/>
         <div>
           <el-select v-model="queryParams.subjectId" placeholder="按科目筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 20px;"></el-select>
+          <el-select v-model="queryParams.grade" placeholder="按年级筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 20px;">
+            <el-option label="七年级" value="七年级" />
+            <el-option label="八年级" value="八年级" />
+            <el-option label="九年级" value="九年级" />
+          </el-select>
           <el-button-group>
             <el-button :icon="Grid" :type="viewMode === 'grid' ? 'primary' : 'default'" @click="viewMode = 'grid'"/>
             <el-button :icon="Menu" :type="viewMode === 'list' ? 'primary' : 'default'" @click="viewMode = 'list'"/>
@@ -54,7 +59,10 @@
       <div v-if="viewMode === 'grid'" class="card-grid">
         <div v-for="paper in filteredList" :key="paper.id" class="paper-card">
           <div class="card-header">
-            <el-tag size="small">{{ getSubjectName(paper.subjectId) }}</el-tag>
+            <div>
+              <el-tag size="small">{{ getSubjectName(paper.subjectId) }}</el-tag>
+              <el-tag v-if="paper.grade" size="small" type="success" style="margin-left: 8px;">{{ paper.grade }}</el-tag>
+            </div>
             <el-dropdown>
               <el-icon class="el-dropdown-link"><MoreFilled /></el-icon>
               <template #dropdown>
@@ -83,6 +91,7 @@
         <el-table-column label="所属科目" width="150">
           <template #default="scope">{{ getSubjectName(scope.row.subjectId) }}</template>
         </el-table-column>
+        <el-table-column prop="grade" label="年级" width="120" /> <el-table-column prop="totalScore" label="总分" width="100" />
         <el-table-column prop="totalScore" label="总分" width="100" />
         <el-table-column label="操作" width="280" align="center">
           <template #default="scope">
@@ -140,16 +149,19 @@ const searchQuery = ref('');
 const queryParams = reactive<PaperPageParams>({
   current: 1,
   size: 10,
-  subjectId: undefined
+  subjectId: undefined,
+  grade: undefined // 【新增此行】
 });
 
+// 【修改】: filteredList 计算属性，增加年级过滤逻辑
 const filteredList = computed(() => {
   return allPaperList.value.filter(item => {
     const searchMatch = searchQuery.value
         ? item.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || (item.code && item.code.toLowerCase().includes(searchQuery.value.toLowerCase()))
         : true;
     const subjectMatch = queryParams.subjectId ? item.subjectId === queryParams.subjectId : true;
-    return searchMatch && subjectMatch;
+    const gradeMatch = queryParams.grade ? item.grade === queryParams.grade : true; // <-- 新增
+    return searchMatch && subjectMatch && gradeMatch; // <-- 新增
   });
 });
 
@@ -189,7 +201,8 @@ const handleQuery = () => {
   }
 };
 
-watch(() => queryParams.subjectId, () => {
+// 【修改】: watch 侦听器，增加对 grade 的监听
+watch(() => [queryParams.subjectId, queryParams.grade], () => { // <-- 修改
   if (viewMode.value === 'list') {
     handleQuery();
   }

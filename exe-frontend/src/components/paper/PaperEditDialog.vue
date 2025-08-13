@@ -21,6 +21,24 @@
           </el-form-item>
         </el-col>
         <el-col :span="8">
+          <el-form-item label="所属年级" prop="grade">
+            <el-select v-model="form.grade" placeholder="请选择年级" style="width: 100%;">
+              <el-option label="一年级" value="一年级" />
+              <el-option label="二年级" value="二年级" />
+              <el-option label="三年级" value="三年级" />
+              <el-option label="四年级" value="四年级" />
+              <el-option label="五年级" value="五年级" />
+              <el-option label="六年级" value="六年级" />
+              <el-option label="七年级" value="七年级" />
+              <el-option label="八年级" value="八年级" />
+              <el-option label="九年级" value="九年级" />
+              <el-option label="高一" value="高一" />
+              <el-option label="高二" value="高二" />
+              <el-option label="高三" value="高三" />
+            </el-select>
+          </el-form-item>
+        </el-col>
+        <el-col :span="8">
           <el-form-item label="组卷方式" prop="paperType">
             <el-radio-group v-model="form.paperType" :disabled="!!props.paperId">
               <el-radio :label="1">手动选题</el-radio>
@@ -104,7 +122,7 @@ import type { Paper, PaperQuestion, PaperGroup, PaperImage } from '@/api/paper';
 import type { Subject } from '@/api/subject';
 import PaperQuestionManager from './PaperQuestionManager.vue';
 import { useAuthStore } from '@/stores/auth';
-import { UploadFilled } from '@element-plus/icons-vue';
+import { UploadFilled, Delete } from '@element-plus/icons-vue';
 
 
 
@@ -269,6 +287,7 @@ watchEffect(async () => {
         subjectId: undefined,
         description: '',
         paperType: 1,
+        grade: '', // <-- 新增
         groups: [], // <-- 必须是 groups: []
         paperImages: []
       };

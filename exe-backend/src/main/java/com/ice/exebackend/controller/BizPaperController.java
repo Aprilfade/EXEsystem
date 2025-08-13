@@ -12,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletResponse;
@@ -29,6 +30,7 @@ public class BizPaperController {
     private BizPaperService paperService;
 
     @PostMapping
+    @PreAuthorize("hasAuthority('sys:paper:create')") // 【新增】应用创建权限
     public Result createPaper(@RequestBody PaperDTO paperDTO) {
         boolean success = paperService.createPaperWithQuestions(paperDTO);
         return success ? Result.suc() : Result.fail();
@@ -37,11 +39,17 @@ public class BizPaperController {
     @GetMapping
     public Result getPaperList(@RequestParam(defaultValue = "1") int current,
                                @RequestParam(defaultValue = "10") int size,
-                               @RequestParam(required = false) Long subjectId) {
+                               @RequestParam(required = false) Long subjectId,
+                               // 【新增此行】
+                               @RequestParam(required = false) String grade) {
         Page<BizPaper> page = new Page<>(current, size);
         QueryWrapper<BizPaper> queryWrapper = new QueryWrapper<>();
         if (subjectId != null) {
             queryWrapper.eq("subject_id", subjectId);
+        }
+        // 【新增代码块】
+        if (StringUtils.hasText(grade)) {
+            queryWrapper.eq("grade", grade);
         }
         queryWrapper.orderByDesc("create_time");
 
@@ -56,6 +64,7 @@ public class BizPaperController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('sys:paper:update')") // 【新增】应用更新权限
     public Result updatePaper(@PathVariable Long id, @RequestBody PaperDTO paperDTO) {
         paperDTO.setId(id);
         boolean success = paperService.updatePaperWithQuestions(paperDTO);
@@ -63,6 +72,7 @@ public class BizPaperController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('sys:paper:delete')") // 【新增】应用删除权限
     public Result deletePaper(@PathVariable Long id) {
         boolean success = paperService.removeById(id);
         return success ? Result.suc() : Result.fail();

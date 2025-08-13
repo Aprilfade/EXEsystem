@@ -14,6 +14,8 @@ public class BizQuestion {
 
     private Long subjectId; // 关联科目ID
 
+    private String grade; // 【新增此行】
+
     private Integer questionType; // 题型: 1-单选, 2-多选, 3-填空, 4-判断, 5-主观题
 
     private String content; // 题干
@@ -27,6 +29,16 @@ public class BizQuestion {
     private String answerImageUrl; // 【新增】答案图片地址
 
     private String description; // 题目解析
+
+
+    // 【新增】为 grade 字段添加 Getter 和 Setter
+    public String getGrade() {
+        return grade;
+    }
+
+    public void setGrade(String grade) {
+        this.grade = grade;
+    }
 
 
     public String getAnswerImageUrl() {

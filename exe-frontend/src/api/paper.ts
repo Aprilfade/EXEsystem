@@ -17,6 +17,7 @@ export interface Paper {
     name: string;
     code: string;
     subjectId: number;
+    grade?: string; // 【新增此行】
     description: string;
     totalScore: number;
     paperType?: number; // 【新增】
@@ -31,6 +32,7 @@ export interface PaperPageParams {
     current: number;
     size: number;
     subjectId?: number;
+    grade?: string; // 【新增此行】
 }
 
 export interface PaperImage { // 【新增】

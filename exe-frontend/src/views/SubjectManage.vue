@@ -41,9 +41,11 @@
       <div v-if="viewMode === 'grid'" class="card-grid">
         <div v-for="subject in subjectList" :key="subject.id" class="subject-card" @click="handleCardClick(subject)">
           <div class="card-header">
-            <h3 class="card-title">{{ subject.name }}</h3>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3 class="card-title">{{ subject.name }}</h3>
+              <el-tag v-if="subject.grade" size="small">{{ subject.grade }}</el-tag>
+            </div>
             <el-dropdown @click.stop>
-
               <el-icon class="el-dropdown-link"><MoreFilled /></el-icon>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -63,7 +65,7 @@
 
       <el-table v-if="viewMode === 'list'" :data="subjectList" v-loading="loading" style="width: 100%; margin-top: 20px;">
         <el-table-column prop="name" label="科目名称" />
-        <el-table-column prop="description" label="简介" />
+        <el-table-column prop="grade" label="年级" width="120" /> <el-table-column prop="description" label="简介" />
         <el-table-column prop="knowledgePointCount" label="关联知识点数" width="150" align="center" />
         <el-table-column prop="questionCount" label="关联试题数" width="150" align="center" />
         <el-table-column prop="createTime" label="创建时间" />
@@ -84,7 +86,6 @@
           v-model:page-size="queryParams.size"
           @size-change="getList"
           @current-change="getList" />
-
     </el-card>
 
     <subject-edit-dialog
@@ -92,8 +93,6 @@
         :subject-data="editingSubject"
         @success="getList"
     />
-
-
     <subject-detail-dialog
         v-if="isDetailDialogVisible"
         v-model:visible="isDetailDialogVisible"
@@ -104,6 +103,7 @@
 </template>
 
 <script setup lang="ts">
+// ... script 部分无需改动 ...
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchSubjectList, deleteSubject } from '@/api/subject';
@@ -176,7 +176,7 @@ onMounted(getList);
 </script>
 
 <style scoped>
-/* ... (省略页面和表单的通用样式) ... */
+/* ... style 部分无需改动 ... */
 .page-container { padding: 24px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { font-size: 24px; font-weight: 600; }

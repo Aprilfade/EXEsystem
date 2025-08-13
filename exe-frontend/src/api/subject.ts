@@ -8,6 +8,7 @@ export interface Subject {
     id: number;
     name: string;
     description: string;
+    grade?: string; // 【新增此行】
     createTime?: string;
     updateTime?: string;
     knowledgePointCount?: number; // 【新增此行】

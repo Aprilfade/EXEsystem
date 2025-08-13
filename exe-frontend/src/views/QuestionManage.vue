@@ -34,6 +34,20 @@
           <el-select v-model="queryParams.subjectId" placeholder="按科目筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 10px;">
             <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
           </el-select>
+          <el-select v-model="queryParams.grade" placeholder="按年级筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 10px;">
+            <el-option label="一年级" value="一年级" />
+            <el-option label="二年级" value="二年级" />
+            <el-option label="三年级" value="三年级" />
+            <el-option label="四年级" value="四年级" />
+            <el-option label="五年级" value="五年级" />
+            <el-option label="六年级" value="六年级" />
+            <el-option label="七年级" value="七年级" />
+            <el-option label="八年级" value="八年级" />
+            <el-option label="九年级" value="九年级" />
+            <el-option label="高一" value="高一" />
+            <el-option label="高二" value="高二" />
+            <el-option label="高三" value="高三" />
+          </el-select>
           <el-select v-model="queryParams.questionType" placeholder="按题型筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 20px;">
             <el-option label="单选题" :value="1" />
             <el-option label="多选题" :value="2" />
@@ -51,7 +65,10 @@
       <div v-if="viewMode === 'grid'" class="card-grid">
         <div v-for="q in questionList" :key="q.id" class="question-card" @click="handlePreview(q.id)">
           <div class="card-header">
-            <el-tag size="small">{{ getSubjectName(q.subjectId) }}</el-tag>
+            <div>
+              <el-tag size="small">{{ getSubjectName(q.subjectId) }}</el-tag>
+              <el-tag v-if="q.grade" size="small" type="success" style="margin-left: 8px;">{{ q.grade }}</el-tag>
+            </div>
             <el-dropdown @click.stop>
               <el-icon class="el-dropdown-link"><MoreFilled /></el-icon>
               <template #dropdown>
@@ -72,7 +89,18 @@
       <el-table v-if="viewMode === 'list'" :data="questionList" v-loading="loading" style="width: 100%; margin-top: 20px;">
         <el-table-column type="index" label="序号" width="80" align="center" />
         <el-table-column prop="content" label="题干" show-overflow-tooltip />
+        <el-table-column label="所属科目" width="150">
+          <template #default="scope">
+            {{ getSubjectName(scope.row.subjectId) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="grade" label="年级" width="100" align="center" /> <el-table-column prop="questionType" label="题型" width="100" align="center">
+        <template #default="scope">
+          <el-tag>{{ questionTypeMap[scope.row.questionType] }}</el-tag>
+        </template>
+      </el-table-column>
         <el-table-column prop="questionType" label="题型" width="100" align="center">
+
           <template #default="scope">
             <el-tag>{{ questionTypeMap[scope.row.questionType] }}</el-tag>
           </template>
@@ -149,6 +177,7 @@ const queryParams = reactive<QuestionPageParams>({
   size: 10,
   subjectId: undefined,
   questionType: undefined,
+  grade: undefined, // 【新增此行】
   content: ''
 });
 

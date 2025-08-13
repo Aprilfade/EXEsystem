@@ -37,11 +37,16 @@ public class BizQuestionController {
     /**
      * 分页、条件查询试题列表
      */
+    /**
+     * 分页、条件查询试题列表
+     */
     @GetMapping
     public Result getQuestionList(@RequestParam(defaultValue = "1") int current,
                                   @RequestParam(defaultValue = "10") int size,
                                   @RequestParam(required = false) Long subjectId,
-                                  @RequestParam(required = false) Integer questionType) {
+                                  @RequestParam(required = false) Integer questionType,
+                                  // 【新增此行】: 接收 grade 参数
+                                  @RequestParam(required = false) String grade) {
         Page<BizQuestion> page = new Page<>(current, size);
         QueryWrapper<BizQuestion> queryWrapper = new QueryWrapper<>();
         if (subjectId != null) {
@@ -49,6 +54,10 @@ public class BizQuestionController {
         }
         if (questionType != null) {
             queryWrapper.eq("question_type", questionType);
+        }
+        // 【新增代码块】: 如果 grade 参数有值，则加入查询条件
+        if (StringUtils.hasText(grade)) {
+            queryWrapper.eq("grade", grade);
         }
         queryWrapper.orderByDesc("id");
 
