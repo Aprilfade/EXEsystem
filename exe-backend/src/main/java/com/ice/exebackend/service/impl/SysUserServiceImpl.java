@@ -15,6 +15,8 @@ import com.ice.exebackend.service.SysUserService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,20 +81,34 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     @Override
     @Transactional
     public boolean updateUserAndRoles(SysUser user) {
+        // 密码更新逻辑保持不变
         if(user.getPassword() != null && !user.getPassword().isEmpty()){
             user.setPassword(passwordEncoder.encode(user.getPassword()));
         } else {
             user.setPassword(null);
         }
 
+        // 先更新用户基本信息
         boolean result = this.updateById(user);
 
+        // 【核心修改】在更新角色之前，增加权限校验
         if (result) {
-            updateUserRoles(user.getId(), user.getRoleIds());
+            // 从安全上下文中获取当前操作的用户信息
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            // 检查当前用户是否拥有 'ROLE_SUPER_ADMIN' 权限
+            boolean isSuperAdmin = authentication.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
+
+            // 只有超级管理员才能更新角色
+            if (isSuperAdmin) {
+                updateUserRoles(user.getId(), user.getRoleIds());
+            }
+            // 如果一个非超级管理员的请求试图修改角色 (即 roleIds 字段不为空),
+            // 即使前端被绕过，后端也会忽略角色修改，或者可以选择抛出异常。
+            // 这里我们选择静默忽略，只更新基本信息，更加安全稳健。
         }
         return result;
     }
-
     private void updateUserRoles(Long userId, List<Long> roleIds) {
         sysUserRoleMapper.delete(new QueryWrapper<SysUserRole>().eq("user_id", userId));
 

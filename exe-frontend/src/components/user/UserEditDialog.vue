@@ -17,7 +17,12 @@
       </el-form-item>
 
       <el-form-item v-if="showRoleSelector" label="角色" prop="roleIds">
-        <el-select v-model="userForm.roleIds" multiple placeholder="请选择角色" style="width: 100%" :disabled="isTargetSuperAdmin">
+        <el-select
+            v-model="userForm.roleIds"
+            multiple
+            placeholder="请选择角色"
+            style="width: 100%"
+            :disabled="isRoleSelectorDisabled">
           <el-option
               v-for="item in filteredRoles"
               :key="item.id"
@@ -118,6 +123,11 @@ const rules = computed<FormRules>(() => ({
 
 const handleClose = () => emit('update:visible', false);
 
+// 【新增此计算属性】
+const isRoleSelectorDisabled = computed(() => {
+  // 核心逻辑：只有超级管理员 (isSuperAdmin) 才能编辑角色，其他人一律禁用。
+  return !authStore.isSuperAdmin;
+});
 // 【新增此计算属性】
 const isTargetSuperAdmin = computed(() => {
   // 如果当前登录的不是超级管理员，并且正在编辑的用户是超级管理员，则返回 true
