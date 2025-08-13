@@ -61,8 +61,8 @@
         </el-table-column>
         <el-table-column label="操作" width="220" align="center">
           <template #default="scope">
-            <el-button type="primary" link @click="handleUpdate(scope.row.id)">编辑</el-button>
-            <div v-if="canManage(scope.row)" style="display: inline-block;">
+            <div v-if="canManage(scope.row)">
+              <el-button type="primary" link @click="handleUpdate(scope.row.id)">编辑</el-button>
               <el-button type="danger" link @click="handleDelete(scope.row.id)">删除</el-button>
             </div>
           </template>
@@ -149,14 +149,31 @@ const handleUpdate = (id: number) => {
 
 const canManage = (targetUser: UserInfo) => {
   const currentUser = authStore.user;
-  if (!currentUser || currentUser.id === targetUser.id) return false;
-  if (authStore.isSuperAdmin) return true;
-  if (authStore.isAdmin) {
-    const targetIsAnyAdmin = targetUser.roles?.some(r => r.code === 'ADMIN' || r.code === 'SUPER_ADMIN');
-    return !targetIsAnyAdmin;
+  // 任何人都不能管理自己
+  if (!currentUser || currentUser.id === targetUser.id) {
+    return false;
   }
+
+  // 如果当前用户是超级管理员，则可以管理任何人
+  if (authStore.isSuperAdmin) {
+    return true;
+  }
+
+  // 如果当前用户是普通管理员
+  if (authStore.isAdmin) {
+    // 检查目标用户是否是管理员或超级管理员
+    const targetIsAdminOrSuper = targetUser.roles?.some(
+        r => r.code === 'ADMIN' || r.code === 'SUPER_ADMIN'
+    );
+    // 如果目标是任何一种管理员，则普通管理员不能管理
+    return !targetIsAdminOrSuper;
+  }
+
+  // 其他所有普通用户都不能管理
   return false;
 };
+
+
 
 const handleDelete = (id: number) => {
   ElMessageBox.confirm('确定要删除该用户吗?', '提示', { type: 'warning' }).then(async () => {

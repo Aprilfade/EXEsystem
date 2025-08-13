@@ -10,6 +10,7 @@ import com.ice.exebackend.mapper.SysRoleMapper;
 import com.ice.exebackend.mapper.SysRolePermissionMapper;
 import com.ice.exebackend.service.SysRoleService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional; // 【重要】确保导入此注解
 
@@ -62,6 +63,7 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
 
     @Override
     @Transactional
+    @CacheEvict(value = "user_details", allEntries = true) // 清除所有用户的权限缓存
     public boolean updateRolePermissions(Long roleId, List<Long> permissionIds) {
         // 1. 先删除该角色所有的旧权限
         rolePermissionMapper.delete(new QueryWrapper<SysRolePermission>().eq("role_id", roleId));

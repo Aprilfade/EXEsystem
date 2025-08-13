@@ -17,9 +17,9 @@
       </el-form-item>
 
       <el-form-item v-if="showRoleSelector" label="角色" prop="roleIds">
-        <el-select v-model="userForm.roleIds" multiple placeholder="请选择角色" style="width: 100%">
+        <el-select v-model="userForm.roleIds" multiple placeholder="请选择角色" style="width: 100%" :disabled="isTargetSuperAdmin">
           <el-option
-              v-for="item in allRoles"
+              v-for="item in filteredRoles"
               :key="item.id"
               :label="item.name"
               :value="item.id"
@@ -117,6 +117,25 @@ const rules = computed<FormRules>(() => ({
 }));
 
 const handleClose = () => emit('update:visible', false);
+
+// 【新增此计算属性】
+const isTargetSuperAdmin = computed(() => {
+  // 如果当前登录的不是超级管理员，并且正在编辑的用户是超级管理员，则返回 true
+  if (!authStore.isSuperAdmin) {
+    return userForm.value?.roles?.some(r => r.code === 'SUPER_ADMIN') ?? false;
+  }
+  return false;
+});
+
+// 【新增】创建 filteredRoles 计算属性
+const filteredRoles = computed(() => {
+  // 如果当前用户不是超级管理员，则从角色列表中过滤掉“超级管理员”
+  if (!authStore.isSuperAdmin) {
+    return allRoles.value.filter(role => role.code !== 'SUPER_ADMIN');
+  }
+  // 如果是超级管理员，则返回所有角色
+  return allRoles.value;
+});
 
 const submitForm = () => {
   userFormRef.value?.validate(async (valid) => {

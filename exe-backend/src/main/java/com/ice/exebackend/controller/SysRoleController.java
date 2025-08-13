@@ -37,7 +37,7 @@ public class SysRoleController {
 
     // 【新增】更新角色的权限
     @PutMapping("/{id}/permissions")
-    @PreAuthorize("hasAuthority('sys:role:perm')") // 定义一个新的权限标识
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('sys:role:perm')") //
     public Result updateRolePermissions(@PathVariable Long id, @RequestBody List<Long> permissionIds) {
         boolean success = sysRoleService.updateRolePermissions(id, permissionIds);
         return success ? Result.suc() : Result.fail("更新失败");

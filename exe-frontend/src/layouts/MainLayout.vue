@@ -105,9 +105,9 @@ const allMenus = [
   {
     path: '/system', name: '系统管理', permission: 'sys:user:list', icon: Setting,
     children: [
-      { path: '/users', name: '成员管理', icon: User },
+      { path: '/users', name: '成员管理',  permission: 'sys:user:list',icon: User },
       // 【核心修复】在这里使用别名 LockIcon
-      { path: '/roles', name: '角色管理', permission: 'sys:role:perm', icon: LockIcon },
+      { path: '/roles', name: '角色管理', permission: 'sys:user:list', icon: LockIcon },
     ]
   },
 ];
