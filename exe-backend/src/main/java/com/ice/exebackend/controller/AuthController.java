@@ -58,6 +58,22 @@ public class AuthController {
             return Result.fail();
         }
     }
+    /**
+     * 【新增】用户注册接口
+     * @param user 包含用户名、密码、昵称等信息的SysUser对象
+     * @return Result
+     */
+    @PostMapping("/register")
+    public Result register(@RequestBody SysUser user) {
+        try {
+            // 直接调用用户服务中的创建用户方法
+            boolean success = sysUserService.createUser(user);
+            return success ? Result.suc("注册成功，请登录！") : Result.fail("注册失败，请稍后再试。");
+        } catch (RuntimeException e) {
+            // 捕获用户服务中抛出的“用户名已存在”等异常
+            return Result.fail(e.getMessage());
+        }
+    }
 
 
     /**

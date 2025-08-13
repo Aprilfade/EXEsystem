@@ -11,6 +11,12 @@ interface LoginCredentials {
 interface LoginResponse {
     token: string;
 }
+// 【新增】定义注册请求的数据类型
+interface RegisterCredentials {
+    username: string;
+    password: string;
+    nickName: string; // 后端 SysUser 实体有这个字段，注册时可以一起传
+}
 
 // 【新增】定义后端返回的 Permission 接口类型
 export interface Permission {
@@ -36,6 +42,17 @@ export function login(data: LoginCredentials): Promise<ApiResult<LoginResponse>>
     });
 }
 
+/**
+ * 【新增】用户注册
+ * @param data 注册信息
+ */
+export function register(data: RegisterCredentials): Promise<ApiResult<null>> {
+    return request({
+        url: '/api/v1/auth/register',
+        method: 'post',
+        data
+    });
+}
 /**
  * 【修改】获取当前登录用户信息 (包含权限)
  * @returns Promise<ApiResult<UserInfoResponse>>

@@ -55,9 +55,24 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
         boolean result = this.save(user);
 
-        if (result && !CollectionUtils.isEmpty(user.getRoleIds())) {
+
+        // 【修改开始】
+        // 如果是注册场景 (roleIds为空)，则赋予默认角色
+        if (result && CollectionUtils.isEmpty(user.getRoleIds())) {
+            // 假设 "普通用户" 角色的code是 'USER'
+            SysRole defaultRole = sysRoleMapper.selectOne(new QueryWrapper<SysRole>().eq("code", "USER"));
+            if (defaultRole != null) {
+                SysUserRole userRole = new SysUserRole();
+                userRole.setUserId(user.getId());
+                userRole.setRoleId(defaultRole.getId());
+                sysUserRoleMapper.insert(userRole);
+            }
+        }
+        // 如果是管理员创建用户指定了角色，则走原来的逻辑
+        else if (result && !CollectionUtils.isEmpty(user.getRoleIds())) {
             updateUserRoles(user.getId(), user.getRoleIds());
         }
+        // 【修改结束】
         return result;
     }
 

@@ -96,8 +96,8 @@ const allMenus = [
   {
     path: '/error-management', name: '错题管理', permission: 'sys:wrong:list', icon: CircleClose,
     children: [
-      { path: '/wrong-records', name: '错题管理' },
-      { path: '/wrong-record-stats', name: '错题统计' },
+      { path: '/wrong-records', name: '错题管理',permission: 'sys:wrong:list' },
+      { path: '/wrong-record-stats', name: '错题统计',permission: 'sys:wrong:list' },
     ]
   },
   { path: '/statistics', name: '教学统计分析', permission: 'sys:stats:list', icon: DataLine },
