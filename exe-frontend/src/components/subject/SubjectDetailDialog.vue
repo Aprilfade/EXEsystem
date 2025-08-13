@@ -34,10 +34,12 @@ import { fetchKnowledgePointList, type KnowledgePoint } from '@/api/knowledgePoi
 import { fetchQuestionList, type Question } from '@/api/question';
 import { ElMessage } from 'element-plus';
 
+// 接收父组件传来的所有属性，包括 subjectGrade
 const props = defineProps<{
   visible: boolean;
   subjectId: number | null;
   subjectName: string;
+  subjectGrade?: string;
 }>();
 
 const emit = defineEmits(['update:visible']);
@@ -52,13 +54,8 @@ const questionTypeMap: { [key: number]: string } = {
   1: '单选题', 2: '多选题', 3: '填空题', 4: '判断题', 5: '主观题',
 };
 
-// 【重要修改】拆分API调用并增加详细日志
 const fetchDetails = async (sId: number) => {
-  console.log(`[调试] 1. fetchDetails 开始执行, subjectId: ${sId}`);
-  if (!sId) {
-    console.error('[调试] 错误：subjectId 无效，函数提前返回');
-    return;
-  }
+  if (!sId) return;
 
   // 重置状态
   knowledgePoints.value = [];
@@ -67,51 +64,46 @@ const fetchDetails = async (sId: number) => {
   loadingQ.value = true;
   activeTab.value = 'knowledgePoints';
 
-  // --- 知识点获取 ---
   try {
-    console.log(`[调试] 2. 准备获取知识点, subjectId: ${sId}`);
-    const kpRes = await fetchKnowledgePointList({ current: 1, size: 9999, subjectId: sId });
-    console.log('[调试] 3. 知识点API原始返回:', kpRes);
+    // 并行发起两个请求
+    const [kpRes, qRes] = await Promise.all([
+      // 请求知识点 (逻辑不变)
+      fetchKnowledgePointList({ current: 1, size: 9999, subjectId: sId }),
+
+      // **【核心修复点在这里】**
+      // 请求试题时，把 props.subjectGrade 作为 grade 参数传给后端
+      fetchQuestionList({ current: 1, size: 9999, subjectId: sId, grade: props.subjectGrade })
+    ]);
+
+    // 处理知识点返回结果
     if (kpRes.code === 200) {
       knowledgePoints.value = kpRes.data;
-      console.log(`[调试] 4. 成功加载 ${kpRes.data.length} 个知识点`);
     } else {
       ElMessage.error('加载知识点失败: ' + kpRes.msg);
     }
-  } catch (error) {
-    console.error('[调试] 错误：获取知识点时发生异常:', error);
-    ElMessage.error('加载知识点时发生网络或脚本错误');
-  } finally {
-    loadingKp.value = false;
-  }
 
-  // --- 试题获取 ---
-  try {
-    console.log(`[调试] 5. 准备获取试题, subjectId: ${sId}`);
-    const qRes = await fetchQuestionList({ current: 1, size: 9999, subjectId: sId });
-    console.log('[调试] 6. 试题API原始返回:', qRes);
+    // 处理试题返回结果
     if (qRes.code === 200) {
       questions.value = qRes.data;
-      console.log(`[调试] 7. 成功加载 ${qRes.data.length} 道试题`);
     } else {
       ElMessage.error('加载关联试题失败: ' + qRes.msg);
     }
+
+    // 如果没有知识点但有试题，则默认显示试题Tab
+    if(knowledgePoints.value.length === 0 && questions.value.length > 0){
+      activeTab.value = 'questions';
+    }
+
   } catch (error) {
-    console.error('[调试] 错误：获取试题时发生异常:', error);
-    ElMessage.error('加载关联试题时发生网络或脚本错误');
+    console.error('加载科目详情时发生错误:', error);
+    ElMessage.error('加载详情失败，请检查网络或联系管理员。');
   } finally {
+    loadingKp.value = false;
     loadingQ.value = false;
   }
-
-  // 切换Tab逻辑
-  if(knowledgePoints.value.length === 0 && questions.value.length > 0){
-    activeTab.value = 'questions';
-  }
-  console.log('[调试] 8. fetchDetails 执行完毕');
 };
 
 watch(() => props.visible, (isVisible) => {
-  console.log(`[调试] 0. 'visible' 状态改变为: ${isVisible}, subjectId 为: ${props.subjectId}`);
   if (isVisible && props.subjectId) {
     fetchDetails(props.subjectId);
   }

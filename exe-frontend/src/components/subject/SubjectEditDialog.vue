@@ -1,130 +1,119 @@
 <template>
   <el-dialog
       :model-value="visible"
-      :title="subjectName + ' - 详情'"
-      width="60%"
+      :title="dialogTitle"
+      width="600px"
       @close="handleClose"
+      :close-on-click-modal="false"
   >
-    <el-tabs v-model="activeTab">
-      <el-tab-pane label="关联知识点" name="knowledgePoints">
-        <el-table :data="knowledgePoints" v-loading="loadingKp" height="400px">
-          <el-table-column property="name" label="知识点名称" />
-          <el-table-column property="code" label="编码" width="150" />
-          <el-table-column property="description" label="描述" show-overflow-tooltip />
-        </el-table>
-      </el-tab-pane>
-      <el-tab-pane label="关联试题" name="questions">
-        <el-table :data="questions" v-loading="loadingQ" height="400px">
-          <el-table-column type="index" label="序号" width="80" />
-          <el-table-column property="content" label="题干" show-overflow-tooltip />
-          <el-table-column property="questionType" label="题型" width="120">
-            <template #default="scope">
-              <el-tag>{{ questionTypeMap[scope.row.questionType] }}</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
-    </el-tabs>
+    <div v-if="!form" style="padding: 20px; color: red; font-weight: bold;">
+      诊断信息：表单数据(form)为空，组件未能正确加载数据。
+    </div>
+
+    <el-form v-if="form" ref="formRef" :model="form" :rules="rules" label-width="100px">
+      <el-form-item label="科目名称" prop="name">
+        <el-input v-model="form.name" placeholder="请输入科目名称" />
+      </el-form-item>
+      <el-form-item label="所属年级" prop="grade">
+        <el-select v-model="form.grade" placeholder="请选择年级" style="width: 100%;">
+          <el-option label="一年级" value="一年级" />
+          <el-option label="二年级" value="二年级" />
+          <el-option label="三年级" value="三年级" />
+          <el-option label="四年级" value="四年级" />
+          <el-option label="五年级" value="五年级" />
+          <el-option label="六年级" value="六年级" />
+          <el-option label="七年级" value="七年级" />
+          <el-option label="八年级" value="八年级" />
+          <el-option label="九年级" value="九年级" />
+          <el-option label="高一" value="高一" />
+          <el-option label="高二" value="高二" />
+          <el-option label="高三" value="高三" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="科目简介" prop="description">
+        <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入科目简介" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <div class="dialog-footer">
+        <el-button @click="handleClose">取 消</el-button>
+        <el-button type="primary" @click="submitForm">确 定</el-button>
+      </div>
+    </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
-import { fetchKnowledgePointList, type KnowledgePoint } from '@/api/knowledgePoint';
-import { fetchQuestionList, type Question } from '@/api/question';
+import { ref, reactive, computed, watch } from 'vue';
+import type { FormInstance, FormRules } from 'element-plus';
 import { ElMessage } from 'element-plus';
-import type {Subject} from "@/api/subject.ts";
+import { createSubject, updateSubject } from '@/api/subject';
+import type { Subject } from '@/api/subject';
 
-// 【核心修改】这里的 props 定义需要保持如下所示
+// 诊断日志 1: 确认脚本已开始执行
+console.log('[诊断日志] SubjectEditDialog.vue 组件脚本已加载');
+
 const props = defineProps<{
   visible: boolean;
-  subjectData?: Subject; // 属性名应为 subjectData，且是可选的
+  subjectData?: Subject;
 }>();
 
-const emit = defineEmits(['update:visible']);
+const emit = defineEmits(['update:visible', 'success']);
 
-const activeTab = ref('knowledgePoints');
-const knowledgePoints = ref<KnowledgePoint[]>([]);
-const questions = ref<Question[]>([]);
-const loadingKp = ref(false);
-const loadingQ = ref(false);
+const formRef = ref<FormInstance>();
+const form = ref<Partial<Subject> | null>(null);
 
-const questionTypeMap: { [key: number]: string } = {
-  1: '单选题', 2: '多选题', 3: '填空题', 4: '判断题', 5: '主观题',
-};
-
-const fetchDetails = async (sId: number) => {
-  // 【调试日志 1】: 确认函数被调用
-  console.log(`[调试] fetchDetails 开始执行, subjectId: ${sId}`);
-  if (!sId) {
-    console.log('[调试] subjectId 无效，函数提前返回');
-    return;
-  }
-
-  // 重置状态
-  knowledgePoints.value = [];
-  questions.value = [];
-  loadingKp.value = true;
-  loadingQ.value = true;
-  activeTab.value = 'knowledgePoints';
-
-  try {
-    // 【调试日志 2】: 确认准备发起API请求
-    console.log('[调试] 准备并行获取知识点和试题...');
-
-    const [kpRes, qRes] = await Promise.all([
-      fetchKnowledgePointList({ current: 1, size: 9999, subjectId: sId }),
-      fetchQuestionList({ current: 1, size: 9999, subjectId: sId })
-    ]);
-
-    // 【调试日志 3】: 打印API返回的原始结果
-    console.log('[调试] 知识点API原始返回:', kpRes);
-    console.log('[调试] 试题API原始返回:', qRes);
-
-    if (kpRes.code === 200) {
-      knowledgePoints.value = kpRes.data;
-      console.log(`[调试] 已加载 ${kpRes.data.length} 个知识点`);
-    }
-    if (qRes.code === 200) {
-      questions.value = qRes.data;
-      console.log(`[调试] 已加载 ${qRes.data.length} 道试题`);
-    }
-
-    if(knowledgePoints.value.length === 0 && questions.value.length > 0){
-      activeTab.value = 'questions';
-    }
-
-  } catch (error) {
-    // 【调试日志 4】: 捕获并打印任何在请求过程中发生的错误
-    console.error('[调试] fetchDetails 执行出错:', error);
-    ElMessage.error('加载科目详情失败，请查看浏览器控制台获取详细错误信息。');
-  } finally {
-    loadingKp.value = false;
-    loadingQ.value = false;
-    console.log('[调试] fetchDetails 执行完毕');
-  }
-};
+const dialogTitle = computed(() => (props.subjectData?.id ? '编辑科目' : '新增科目'));
 
 watch(() => props.visible, (isVisible) => {
+  // 诊断日志 2: 观察 props.visible 的变化
+  console.log(`[诊断日志] 弹窗 visible 状态变为: ${isVisible}`);
+
   if (isVisible) {
+    // 诊断日志 3: 查看父组件传递过来的数据
+    console.log('[诊断日志] 接收到的 subjectData:', JSON.stringify(props.subjectData || null));
+
     if (props.subjectData) {
-      // 编辑模式
       form.value = { ...props.subjectData };
+      // 诊断日志 4: 查看表单数据是否被赋值
+      console.log('[诊断日志] 编辑模式，form 被赋值为:', JSON.stringify(form.value));
     } else {
-      // 新增模式
       form.value = { name: '', description: '', grade: '' };
+      console.log('[诊断日志] 新增模式，form 已初始化');
     }
   } else {
     form.value = null;
-    formRef.value?.resetFields();
   }
+}, { immediate: true }); // <-- 请在这里加上这一行！
+
+const rules = reactive<FormRules>({
+  name: [{ required: true, message: '请输入科目名称', trigger: 'blur' }],
+  grade: [{ required: true, message: '请选择年级', trigger: 'change' }],
 });
 
 const handleClose = () => {
   emit('update:visible', false);
 };
-</script>
 
-<style scoped>
-/* 样式保持不变 */
-</style>
+const submitForm = async () => {
+  if (!formRef.value || !form.value) return;
+  await formRef.value.validate(async (valid) => {
+    if (valid) {
+      try {
+        if (form.value?.id) {
+          await updateSubject(form.value.id, form.value);
+          ElMessage.success('更新成功');
+        } else {
+          await createSubject(form.value!);
+          ElMessage.success('新增成功');
+        }
+        emit('success');
+        handleClose();
+      } catch (error) {
+        console.error('操作失败:', error);
+      }
+    }
+  });
+};
+
+</script>

@@ -96,12 +96,12 @@
         :subject-data="editingSubject"
         @success="getList"
     />
-    <subject-detail-dialog
-        v-if="isDetailDialogVisible"
-        v-model:visible="isDetailDialogVisible"
-        :subject-id="selectedSubjectId"
-        :subject-name="selectedSubjectName"
-    />
+      <<subject-detail-dialog
+      v-if="isDetailDialogVisible"
+      v-model:visible="isDetailDialogVisible"
+      :subject-id="selectedSubjectId"
+      :subject-name="selectedSubjectName"
+      :subject-grade="selectedSubjectGrade" />
   </div>
 </template>
 
@@ -124,6 +124,7 @@ const viewMode = ref<'grid' | 'list'>('grid');
 const isDetailDialogVisible = ref(false);
 const selectedSubjectId = ref<number | null>(null);
 const selectedSubjectName = ref('');
+const selectedSubjectGrade = ref<string | undefined>(undefined); // <-- 新增这一行
 
 const queryParams = reactive<SubjectPageParams>({
   current: 1,
@@ -185,9 +186,9 @@ const handleDelete = (id: number) => {
 const handleCardClick = (subject: Subject) => {
   selectedSubjectId.value = subject.id;
   selectedSubjectName.value = subject.name;
+  selectedSubjectGrade.value = subject.grade; // <-- 新增这一行来保存年级
   isDetailDialogVisible.value = true;
 };
-
 onMounted(getList);
 </script>
 
