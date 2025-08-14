@@ -39,7 +39,7 @@
       </div>
 
       <div v-if="viewMode === 'grid'" class="card-grid">
-        <div v-for="subject in subjectList" :key="subject.id" class="subject-card" @click="handleCardClick(subject)">
+        <div v-for="subject in subjectList" :key="subject.id" class="subject-card">
           <div class="card-header">
             <div style="display: flex; align-items: center; gap: 8px;">
               <h3 class="card-title">{{ subject.name }}</h3>
@@ -97,13 +97,6 @@
         @success="getList"
     />
 
-    <subject-detail-dialog
-        v-if="isDetailDialogVisible"
-        v-model:visible="isDetailDialogVisible"
-        :subject-id="selectedSubjectId"
-        :subject-name="selectedSubjectName"
-        :subject-grade="selectedSubjectGrade"
-    />
   </div>
 </template>
 
@@ -114,7 +107,7 @@ import { fetchSubjectList, deleteSubject } from '@/api/subject';
 import type { Subject, SubjectPageParams } from '@/api/subject';
 import { Plus, Edit, Delete, Grid, Menu, MoreFilled } from '@element-plus/icons-vue';
 import SubjectEditDialog from '@/components/subject/SubjectEditDialog.vue';
-import SubjectDetailDialog from "@/components/subject/SubjectDetailDialog.vue";
+// 【核心修改】移除了 SubjectDetailDialog 的导入
 
 const subjectList = ref<Subject[]>([]);
 const total = ref(0);
@@ -122,10 +115,12 @@ const loading = ref(true);
 const isDialogVisible = ref(false);
 const editingSubject = ref<Subject | undefined>(undefined);
 const viewMode = ref<'grid' | 'list'>('grid');
-const isDetailDialogVisible = ref(false);
-const selectedSubjectId = ref<number | null>(null);
-const selectedSubjectName = ref('');
-const selectedSubjectGrade = ref<string | undefined>(undefined);
+
+// 【核心修改】移除了所有与详情弹窗相关的 ref 变量
+// const isDetailDialogVisible = ref(false);
+// const selectedSubjectId = ref<number | null>(null);
+// const selectedSubjectName = ref('');
+// const selectedSubjectGrade = ref<string | undefined>(undefined);
 
 const queryParams = reactive<SubjectPageParams>({
   current: 1,
@@ -179,12 +174,8 @@ const handleDelete = (id: number) => {
       });
 };
 
-const handleCardClick = (subject: Subject) => {
-  selectedSubjectId.value = subject.id;
-  selectedSubjectName.value = subject.name;
-  selectedSubjectGrade.value = subject.grade;  // 修复：确保传递年级信息
-  isDetailDialogVisible.value = true;
-};
+// 【核心修改】移除了 handleCardClick 函数
+// const handleCardClick = (subject: Subject) => { ... };
 
 onMounted(getList);
 </script>
@@ -200,7 +191,8 @@ onMounted(getList);
 .stat-item .value { font-size: 28px; font-weight: bold; }
 .content-card { background-color: var(--bg-color-container); }
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-.subject-card { border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; cursor: pointer; transition: all 0.3s; }
+/* 【核心修改】移除了 subject-card 的 cursor: pointer 样式 */
+.subject-card { border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; transition: all 0.3s; }
 .subject-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); border-color: var(--color-primary); }
 .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
 .card-title { font-size: 18px; font-weight: 600; margin: 0; }
