@@ -10,10 +10,16 @@ const routes: Array<RouteRecordRaw> = [
         name: 'Login',
         component: () => import('@/views/Login.vue'),
     },
+    // 【新增】导航首页的路由，注意没有 meta: { requiresAuth: true }
+    {
+        path: '/portal',
+        name: 'Portal',
+        component: () => import('@/views/Portal.vue'),
+    },
     {
         path: '/',
         component: MainLayout,
-        redirect: '/home',
+        redirect: '/portal',
         meta: { requiresAuth: true },
         children: [
             { path: 'home', name: 'Home', component: () => import('@/views/Home.vue'), meta: { permission: 'sys:home', title: '工作台' } },
@@ -38,42 +44,40 @@ const router = createRouter({
     routes,
 });
 
-// 全局前置守卫 (最终优化版)
+// 【修改】全局前置守卫 (最终优化版)
 router.beforeEach(async (to, from, next) => {
     const authStore = useAuthStore();
     const isAuthenticated = authStore.isAuthenticated;
 
-    if (isAuthenticated) {
-        // 如果已登录
-        if (!authStore.user) {
-            try {
-                // 如果是刷新页面，Pinia中没有用户信息，则重新获取
-                await authStore.fetchUserInfo();
-            } catch {
-                // 如果获取失败（token失效等），则登出
-                authStore.logout();
-                return; // 中断导航，因为logout会重定向到/login
+    // 目标路径需要认证
+    if (to.meta.requiresAuth) {
+        if (isAuthenticated) {
+            // 如果已登录
+            if (!authStore.user) {
+                try {
+                    await authStore.fetchUserInfo();
+                } catch {
+                    authStore.logout();
+                    // 【新增】如果获取用户信息失败，也应该重定向到登录页
+                    return next({ path: '/login', query: { redirect: to.fullPath } });
+                }
             }
-        }
 
-        // 检查目标路由权限
-        const requiredPermission = to.meta.permission as string | undefined;
-        if (requiredPermission && !authStore.hasPermission(requiredPermission)) {
-            // 如果没有权限，提示并中断导航，停留在当前页面或跳转到主页
-            ElMessage.error('您没有权限访问该页面');
-            // 如果from.path存在且不是登录页，则返回上一页，否则去主页
-            next(from.path && from.path !== '/login' ? false : '/home');
+            // 权限检查
+            const requiredPermission = to.meta.permission as string | undefined;
+            if (requiredPermission && !authStore.hasPermission(requiredPermission)) {
+                ElMessage.error('您没有权限访问该页面');
+                next(from.path && from.path !== '/login' ? false : '/home');
+            } else {
+                next();
+            }
         } else {
-            // 有权限，或目标路由不需要权限，直接放行
-            next();
+            // 如果未登录，则重定向到登录页，并带上目标路径
+            next({ path: '/login', query: { redirect: to.fullPath } });
         }
     } else {
-        // 如果未登录
-        if (to.path !== '/login') {
-            next({ path: '/login' });
-        } else {
-            next();
-        }
+        // 目标路径不需要认证（例如登录页、导航首页），直接放行
+        next();
     }
 });
 

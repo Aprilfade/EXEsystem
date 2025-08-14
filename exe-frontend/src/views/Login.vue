@@ -51,12 +51,18 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue';
+// 【新增】导入 useRoute
+import { useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { ElMessage } from 'element-plus';
 import { register } from '../api/auth';
 
+
+
 const isSignUp = ref(false);
 const authStore = useAuthStore();
+// 【新增】获取当前路由信息
+const route = useRoute();
 
 const signInForm = reactive({
   username: 'admin',
@@ -74,9 +80,9 @@ const handleSignIn = () => {
     ElMessage.warning('请输入用户名和密码');
     return;
   }
-  authStore.login(signInForm);
+  // 【修改】调用 login 时，将路由查询参数中的 redirect 传过去
+  authStore.login(signInForm, route.query.redirect as string | undefined);
 };
-
 const handleSignUp = async () => {
   if (!signUpForm.username || !signUpForm.password || !signUpForm.nickName) {
     ElMessage.warning('请填写完整的注册信息');

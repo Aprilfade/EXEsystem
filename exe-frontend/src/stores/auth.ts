@@ -4,7 +4,8 @@ import { login as loginApi, getUserInfo as getUserInfoApi, logoutApi } from '../
 import type { UserInfo } from '../api/user'; // UserInfo 来自 api/user.ts
 import type { UserInfoResponse } from '../api/auth';
 import router from '../router';
-
+// 【新增】从 vue-router 导入 RouteLocationRaw
+import type { RouteLocationRaw } from 'vue-router';
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
@@ -26,20 +27,21 @@ export const useAuthStore = defineStore('auth', {
         },
     },
     actions: {
-        async login(credentials: any) {
+        // 【修改】login action 增加一个可选的 redirect 参数
+        async login(credentials: any, redirect?: RouteLocationRaw) {
             try {
                 const response = await loginApi(credentials);
                 if (response && response.code === 200) {
                     this.token = response.data.token;
                     localStorage.setItem('token', this.token);
                     await this.fetchUserInfo();
-                    router.push('/home');
+                    // 【修改】优先跳转到 redirect 参数指定的路径，如果没有则跳转到首页
+                    router.push(redirect || '/home');
                 }
             } catch (error) {
                 console.error('登录失败:', error);
             }
         },
-
         async fetchUserInfo() {
             if (!this.token) return Promise.reject("No token");
             try {
