@@ -24,6 +24,12 @@ public class BizStudent {
     @ExcelProperty("联系方式")
     private String contact;
 
+    // 【新增】密码字段
+    private String password;
+
+    // 【新增】头像字段
+    private String avatar;
+
     // 所属科目ID在导入时需要特殊处理，不直接映射
     private Long subjectId;
 
@@ -34,6 +40,22 @@ public class BizStudent {
 
     private LocalDateTime updateTime;
 
+    // 【新增】为新字段添加 Getter 和 Setter
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public String getAvatar() {
+        return avatar;
+    }
+
+    public void setAvatar(String avatar) {
+        this.avatar = avatar;
+    }
 
     public Long getId(){
         return id;

@@ -5,14 +5,12 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
-import java.util.Base64;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 
 @Component
@@ -58,8 +56,22 @@ public class JwtUtil {
 
     public String generateToken(UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
+        // 将权限信息放入claims，这是给管理员/教师端使用的
         claims.put("authorities", userDetails.getAuthorities());
         return doGenerateToken(claims, userDetails.getUsername());
+    }
+
+    /**
+     * 【新增】专门为学生生成Token的方法
+     * @param studentNo 学号
+     * @return JWT Token
+     */
+    public String generateTokenForStudent(String studentNo) {
+        Map<String, Object> claims = new HashMap<>();
+        // 放入一个固定的角色标识，用于后续接口权限验证
+        claims.put("authorities", Collections.singletonList(new SimpleGrantedAuthority("ROLE_STUDENT")));
+        // 使用学号作为JWT的主题(subject)
+        return doGenerateToken(claims, studentNo);
     }
 
     private String doGenerateToken(Map<String, Object> claims, String subject) {

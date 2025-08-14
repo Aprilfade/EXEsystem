@@ -7,6 +7,7 @@ import com.ice.exebackend.mapper.SysRoleMapper; // 确保导入 SysRoleMapper
 import com.ice.exebackend.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.annotation.Primary;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;

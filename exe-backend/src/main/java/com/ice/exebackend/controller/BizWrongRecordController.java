@@ -5,11 +5,15 @@ import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.PaperStatsVO;
 import com.ice.exebackend.dto.WrongRecordDTO;
 import com.ice.exebackend.dto.WrongRecordVO;
+import com.ice.exebackend.entity.BizStudent;
 import com.ice.exebackend.entity.BizWrongRecord;
 import com.ice.exebackend.service.BizWrongRecordService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication; // 确保导入
+import com.ice.exebackend.entity.BizStudent; // 确保导入
+import com.ice.exebackend.service.BizStudentService; // 确保导入
 
 import java.util.List;
 
@@ -21,6 +25,9 @@ public class BizWrongRecordController {
 
     @Autowired
     private BizWrongRecordService wrongRecordService;
+
+    @Autowired
+    private BizStudentService studentService;
 
     @PostMapping
     public Result createRecord(@RequestBody WrongRecordDTO dto) {
@@ -70,3 +77,4 @@ public class BizWrongRecordController {
         return Result.suc(stats);
     }
 }
+

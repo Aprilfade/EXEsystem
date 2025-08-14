@@ -7,7 +7,13 @@
         <div class="system-card" @click="navigateTo('/home')">
           <el-icon :size="48" color="#409eff"><Management /></el-icon>
           <h2 class="system-name">试题管理系统</h2>
-          <p class="system-description">高效管理科目、知识点、试题与试卷，支持教学统计分析。</p>
+          <p class="system-description">（教师/管理员端）高效管理科目、知识点、试题与试卷。</p>
+        </div>
+
+        <div class="system-card" @click="navigateTo('/student/dashboard')">
+          <el-icon :size="48" color="#67c23a"><School /></el-icon>
+          <h2 class="system-name">在线学习系统</h2>
+          <p class="system-description">（学生端）进行在线练习、查看错题、参加模拟考试。</p>
         </div>
 
         <div class="system-card" @click="navigateToExternal('https://www.bilibili.com/')">
@@ -29,12 +35,6 @@
         </div>
 
         <div class="system-card disabled">
-          <el-icon :size="48" color="#909399"><School /></el-icon>
-          <h2 class="system-name">在线学习系统</h2>
-          <p class="system-description">（即将上线）学生在线学习、完成作业、参加模拟考试的平台。</p>
-        </div>
-
-        <div class="system-card disabled">
           <el-icon :size="48" color="#909399"><DataAnalysis /></el-icon>
           <h2 class="system-name">数据分析平台</h2>
           <p class="system-description">（即将上线）深度挖掘教学数据，提供决策支持。</p>
@@ -46,7 +46,6 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
-// 【修改】导入新用到的图标
 import { Management, School, DataAnalysis, VideoPlay, Monitor, Headset } from '@element-plus/icons-vue';
 
 const router = useRouter();
@@ -56,13 +55,14 @@ const navigateTo = (path: string) => {
   router.push(path);
 };
 
-// 【修改】跳转到外部系统，现在会直接在新标签页中打开链接
+// 跳转到外部系统
 const navigateToExternal = (url: string) => {
   window.open(url, '_blank');
 };
 </script>
 
 <style scoped>
+/* 样式部分无需修改，保持原样 */
 .portal-wrapper {
   display: flex;
   justify-content: center;
@@ -92,7 +92,7 @@ const navigateToExternal = (url: string) => {
 
 .portal-subtitle {
   font-size: 1.2rem;
-  margin-top: 15px;
+  margin-top: -10px;
   margin-bottom: 40px;
   opacity: 0.9;
 }
@@ -109,10 +109,10 @@ const navigateToExternal = (url: string) => {
   border-radius: 15px;
   transition: all 0.3s ease;
   cursor: pointer;
-  display: flex; /* 新增flex布局，便于内容对齐 */
-  flex-direction: column; /* 新增，使内容垂直排列 */
-  justify-content: center; /* 新增，垂直居中 */
-  align-items: center; /* 新增，水平居中 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .system-card:hover {
@@ -140,6 +140,6 @@ const navigateToExternal = (url: string) => {
   font-size: 0.9rem;
   opacity: 0.8;
   line-height: 1.5;
-  flex-grow: 1; /* 让描述区域占据剩余空间 */
+  flex-grow: 1;
 }
 </style>

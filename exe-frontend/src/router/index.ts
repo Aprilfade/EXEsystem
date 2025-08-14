@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import MainLayout from '@/layouts/MainLayout.vue';
 import { ElMessage } from "element-plus";
+import { useStudentAuthStore } from '../stores/studentAuth'; // 导入学生store
 
 const routes: Array<RouteRecordRaw> = [
     {
@@ -36,6 +37,42 @@ const routes: Array<RouteRecordRaw> = [
             { path: 'notifications', name: 'NotificationManagement', component: () => import('@/views/NotificationManage.vue'), meta: { permission: 'sys:notify:list', title: '通知管理' } },
             { path: 'logs/login', name: 'LoginLog', component: () => import('@/views/LoginLog.vue'), meta: { permission: 'sys:log:login', title: '登录日志' } },
         ]
+    },
+    // --- 学生端路由 ---
+    {
+        path: '/student/login',
+        name: 'StudentLogin',
+        component: () => import('@/views/StudentLogin.vue'),
+    },
+    {
+        path: '/student',
+        component: () => import('@/layouts/StudentLayout.vue'),
+        meta: { requiresAuth: true, role: 'STUDENT' },
+        redirect: '/student/dashboard',
+        children: [
+            {
+                path: 'dashboard',
+                name: 'StudentDashboard',
+                // 【核心修改】将这里的 component 指向我们创建的完整文件
+                component: () => import('@/views/student/StudentDashboard.vue') // 原来可能是一个占位符
+            },
+            {
+                path: 'wrong-records',
+                name: 'MyWrongRecords',
+                component: () => import('@/views/student/MyWrongRecords.vue')
+            },
+            {
+                path: 'practice',
+                name: 'StudentPractice',
+                // 【核心修改】将 component 指向我们新创建的练习页面文件
+                component: () => import('@/views/student/Practice.vue')
+            },
+            {
+                path: 'exams',
+                name: 'StudentExams',
+                component: { template: '<div style="padding: 40px; text-align: center;"><h1>模拟考试功能开发中...</h1></div>' }
+            },
+        ]
     }
 ];
 
@@ -44,39 +81,45 @@ const router = createRouter({
     routes,
 });
 
-// 【修改】全局前置守卫 (最终优化版)
 router.beforeEach(async (to, from, next) => {
     const authStore = useAuthStore();
-    const isAuthenticated = authStore.isAuthenticated;
+    const studentAuthStore = useStudentAuthStore();
 
-    // 目标路径需要认证
-    if (to.meta.requiresAuth) {
-        if (isAuthenticated) {
-            // 如果已登录
-            if (!authStore.user) {
-                try {
-                    await authStore.fetchUserInfo();
-                } catch {
-                    authStore.logout();
-                    // 【新增】如果获取用户信息失败，也应该重定向到登录页
-                    return next({ path: '/login', query: { redirect: to.fullPath } });
+    const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+
+    if (requiresAuth) {
+        const requiredRole = to.meta.role;
+
+        if (requiredRole === 'STUDENT') {
+            // --- 学生端路由保护 ---
+            if (studentAuthStore.isAuthenticated) {
+                if (!studentAuthStore.student) {
+                    await studentAuthStore.fetchStudentInfo();
                 }
-            }
-
-            // 权限检查
-            const requiredPermission = to.meta.permission as string | undefined;
-            if (requiredPermission && !authStore.hasPermission(requiredPermission)) {
-                ElMessage.error('您没有权限访问该页面');
-                next(from.path && from.path !== '/login' ? false : '/home');
-            } else {
                 next();
+            } else {
+                next({ path: '/student/login', query: { redirect: to.fullPath } });
             }
         } else {
-            // 如果未登录，则重定向到登录页，并带上目标路径
-            next({ path: '/login', query: { redirect: to.fullPath } });
+            // --- 管理后台路由保护 (默认) ---
+            if (authStore.isAuthenticated) {
+                if (!authStore.user) {
+                    await authStore.fetchUserInfo();
+                }
+                // 权限检查... (保持原有逻辑)
+                const requiredPermission = to.meta.permission as string | undefined;
+                if (requiredPermission && !authStore.hasPermission(requiredPermission)) {
+                    ElMessage.error('您没有权限访问该页面');
+                    next(from.path && from.path !== '/login' ? false : '/home');
+                } else {
+                    next();
+                }
+            } else {
+                next({ path: '/login', query: { redirect: to.fullPath } });
+            }
         }
     } else {
-        // 目标路径不需要认证（例如登录页、导航首页），直接放行
+        // 不需要认证的页面直接放行
         next();
     }
 });

@@ -19,6 +19,7 @@ import com.ice.exebackend.service.BizPaperService;   // 新增导入
 
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/subjects")
@@ -130,5 +131,28 @@ public class BizSubjectController {
     public Result getQuestionsForSubject(@PathVariable Long id) {
         List<BizQuestion> questions = subjectService.getQuestionsForSubject(id);
         return Result.suc(questions);
+    }
+
+    /**
+     * 【新增】获取所有科目中不重复的年级列表
+     * 这个接口将供学生端的在线练习模块使用
+     * URL: GET /api/v1/subjects/grades
+     */
+    @GetMapping("/grades")
+    public Result getDistinctGrades() {
+        // 创建查询条件，只查询 'grade' 字段
+        QueryWrapper<BizSubject> queryWrapper = new QueryWrapper<>();
+        queryWrapper.select("DISTINCT grade"); // 使用 DISTINCT 关键字去重
+
+        List<BizSubject> subjectsWithGrades = subjectService.list(queryWrapper);
+
+        // 提取 grade 字段，并过滤掉 null 或空字符串
+        List<String> grades = subjectsWithGrades.stream()
+                .map(BizSubject::getGrade)
+                .filter(grade -> grade != null && !grade.trim().isEmpty())
+                .sorted() // 可选：对年级进行排序
+                .collect(Collectors.toList());
+
+        return Result.suc(grades);
     }
 }
