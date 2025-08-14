@@ -1,17 +1,27 @@
 package com.ice.exebackend.controller;
 
+import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.QuestionDTO;
+import com.ice.exebackend.dto.QuestionExcelDTO;
+import com.ice.exebackend.dto.QuestionPageParams;
 import com.ice.exebackend.entity.BizQuestion;
 import com.ice.exebackend.service.BizQuestionService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.apache.commons.text.similarity.LevenshteinDistance;
+import com.ice.exebackend.dto.QuestionPageParams; // 【新增】
+import jakarta.servlet.http.HttpServletResponse; // 【新增】
+import org.springframework.web.multipart.MultipartFile; // 【新增】
+import java.io.IOException; // 【新增】
+import java.net.URLEncoder; // 【新增】
 
+import java.net.URLEncoder;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +29,7 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/questions")
@@ -119,5 +130,26 @@ public class BizQuestionController {
                 .collect(Collectors.toList());
 
         return Result.suc(similarQuestions);
+    }
+    @PostMapping("/import")
+    public Result importQuestions(@RequestParam("file") MultipartFile file) {
+        try {
+            questionService.importQuestions(file);
+            return Result.suc("导入成功");
+        } catch (Exception e) {
+            return Result.fail("导入失败: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/export")
+    public void exportQuestions(HttpServletResponse response, QuestionPageParams params) throws IOException {
+        List<QuestionExcelDTO> list = questionService.getQuestionsForExport(params);
+
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setCharacterEncoding("utf-8");
+        String fileName = URLEncoder.encode("题库试题", "UTF-8").replaceAll("\\+", "%20");
+        response.setHeader("Content-disposition", "attachment;filename*=utf-8''" + fileName + ".xlsx");
+
+        EasyExcel.write(response.getOutputStream(), QuestionExcelDTO.class).sheet("试题列表").doWrite(list);
     }
 }

@@ -29,6 +29,18 @@
 
     <el-card shadow="never" class="content-card">
       <div class="content-header">
+        <div>
+          <el-upload
+              :action="''"
+              :show-file-list="false"
+              :http-request="handleImport"
+              style="margin: 0 12px; display: inline-block;"
+          >
+            <el-button size="large" :icon="Upload">导入</el-button>
+          </el-upload>
+          <el-button size="large" :icon="Download" @click="handleExport">导出</el-button>
+
+        </div>
         <el-input v-model="queryParams.content" placeholder="输入题干内容搜索" size="large" style="width: 300px;" @keyup.enter="handleQuery" clearable @clear="handleQuery"/>
         <div>
           <el-select v-model="queryParams.subjectId" placeholder="按科目筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 10px;">
@@ -162,6 +174,10 @@ import type { KnowledgePoint } from '@/api/knowledgePoint';
 import { Plus, Edit, Delete, Grid, Menu, MoreFilled, View } from '@element-plus/icons-vue';
 import QuestionEditDialog from '@/components/question/QuestionEditDialog.vue';
 import QuestionPreviewDialog from '@/components/question/QuestionPreviewDialog.vue';
+import { importQuestions, exportQuestions } from '@/api/question';
+import { Upload, Download } from '@element-plus/icons-vue';
+import type { UploadRequestOptions } from 'element-plus';
+
 
 const questionList = ref<Question[]>([]);
 const allSubjects = ref<Subject[]>([]);
@@ -268,6 +284,36 @@ const handlePreview = async (id: number) => {
     isPreviewVisible.value = true;
   } else {
     ElMessage.error('获取题目详情失败');
+  }
+};
+const handleImport = async (options: UploadRequestOptions) => {
+  const formData = new FormData();
+  formData.append('file', options.file);
+  try {
+    await importQuestions(formData);
+    ElMessage.success('导入成功');
+    getList(); // 刷新列表
+  } catch (error) {
+    ElMessage.error('导入失败');
+  }
+};
+
+const handleExport = async () => {
+  try {
+    ElMessage.info('正在生成Excel文件，请稍候...');
+    const response = await exportQuestions(queryParams);
+
+    const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', '题库试题.xlsx');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    ElMessage.error('导出失败，请稍后重试。');
   }
 };
 

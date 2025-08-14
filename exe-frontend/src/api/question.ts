@@ -90,3 +90,28 @@ export function deleteQuestion(id: number): Promise<ApiResult<null>> {
         method: 'delete'
     });
 }
+/**
+ * 【新增】上传Excel文件导入试题
+ */
+export function importQuestions(data: FormData): Promise<ApiResult<null>> {
+    return request({
+        url: '/api/v1/questions/import',
+        method: 'post',
+        data: data,
+        headers: {
+            'Content-Type': 'multipart/form-data'
+        }
+    });
+}
+
+/**
+ * 【新增】导出试题Excel文件
+ */
+export function exportQuestions(params: QuestionPageParams): Promise<any> {
+    return request({
+        url: '/api/v1/questions/export',
+        method: 'get',
+        params: params,
+        responseType: 'blob'
+    });
+}

@@ -2,7 +2,14 @@ package com.ice.exebackend.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ice.exebackend.dto.QuestionDTO;
+import com.ice.exebackend.dto.QuestionExcelDTO;
+import com.ice.exebackend.dto.QuestionPageParams;
 import com.ice.exebackend.entity.BizQuestion;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException; // 【新增】 导入
+import java.util.List; // 【新增】 导入
+
+import java.util.List;
 
 public interface BizQuestionService extends IService<BizQuestion> {
 
@@ -26,4 +33,9 @@ public interface BizQuestionService extends IService<BizQuestion> {
      * @return QuestionDTO
      */
     QuestionDTO getQuestionWithKnowledgePointsById(Long id);
+    // 【新增】导入试题
+    void importQuestions(MultipartFile file) throws IOException;
+
+    // 【新增】根据查询条件导出试题
+    List<QuestionExcelDTO> getQuestionsForExport(QuestionPageParams params);
 }

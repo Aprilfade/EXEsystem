@@ -1,8 +1,11 @@
 package com.ice.exebackend.service.impl;
 
+import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ice.exebackend.dto.QuestionDTO;
+import com.ice.exebackend.dto.QuestionExcelDTO;
+import com.ice.exebackend.dto.QuestionPageParams;
 import com.ice.exebackend.entity.BizQuestion;
 import com.ice.exebackend.entity.BizQuestionKnowledgePoint;
 import com.ice.exebackend.mapper.BizQuestionKnowledgePointMapper;
@@ -13,7 +16,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException; // 【新增】 导入
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -92,4 +99,51 @@ public class BizQuestionServiceImpl extends ServiceImpl<BizQuestionMapper, BizQu
             }
         }
     }
+    @Override
+    @Transactional
+    public void importQuestions(MultipartFile file) throws IOException {
+        List<QuestionExcelDTO> excelData = EasyExcel.read(file.getInputStream())
+                .head(QuestionExcelDTO.class)
+                .sheet()
+                .doReadSync();
+
+        for (QuestionExcelDTO dto : excelData) {
+            QuestionDTO questionDTO = new QuestionDTO();
+            BeanUtils.copyProperties(dto, questionDTO);
+
+            // 处理知识点ID
+            if (StringUtils.hasText(dto.getKnowledgePointIds())) {
+                List<Long> kpIds = Arrays.stream(dto.getKnowledgePointIds().split(","))
+                        .map(String::trim)
+                        .map(Long::parseLong)
+                        .collect(Collectors.toList());
+                questionDTO.setKnowledgePointIds(kpIds);
+            }
+
+            this.createQuestionWithKnowledgePoints(questionDTO);
+        }
+    }
+    @Override
+    public List<QuestionExcelDTO> getQuestionsForExport(QuestionPageParams params) {
+        QueryWrapper<BizQuestion> queryWrapper = new QueryWrapper<>();
+        // ... (此处省略与 Controller 中相同的查询条件构造逻辑) ...
+
+        List<BizQuestion> questions = this.list(queryWrapper);
+
+        // 将 BizQuestion 转换为 QuestionExcelDTO
+        return questions.stream().map(q -> {
+            QuestionDTO fullQuestion = this.getQuestionWithKnowledgePointsById(q.getId());
+            QuestionExcelDTO dto = new QuestionExcelDTO();
+            BeanUtils.copyProperties(fullQuestion, dto);
+
+            if (!CollectionUtils.isEmpty(fullQuestion.getKnowledgePointIds())) {
+                String kpIds = fullQuestion.getKnowledgePointIds().stream()
+                        .map(String::valueOf)
+                        .collect(Collectors.joining(","));
+                dto.setKnowledgePointIds(kpIds);
+            }
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
 }
