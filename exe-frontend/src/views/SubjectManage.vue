@@ -191,9 +191,21 @@ onMounted(getList);
 .stat-item .value { font-size: 28px; font-weight: bold; }
 .content-card { background-color: var(--bg-color-container); }
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-/* 【核心修改】移除了 subject-card 的 cursor: pointer 样式 */
-.subject-card { border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; transition: all 0.3s; }
-.subject-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); border-color: var(--color-primary); }
+
+/* --- 核心修改开始 --- */
+.subject-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  transition: all 0.3s; /* 保持过渡动画 */
+}
+.subject-card:hover {
+  transform: translateY(-5px); /* 新增：向上移动5px */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--color-primary);
+}
+/* --- 核心修改结束 --- */
+
 .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
 .card-title { font-size: 18px; font-weight: 600; margin: 0; }
 .card-desc { color: var(--text-color-secondary); font-size: 14px; margin-bottom: 16px; min-height: 40px; }

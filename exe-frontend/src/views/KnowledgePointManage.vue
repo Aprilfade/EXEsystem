@@ -46,13 +46,13 @@
         </div>
       </div>
       <div v-if="viewMode === 'grid'" class="card-grid">
-        <div v-for="kp in filteredList" :key="kp.id" class="knowledge-point-card">
+        <div v-for="kp in filteredList" :key="kp.id" class="knowledge-point-card" @click="handlePreview(kp.id)">
           <div class="card-header">
             <div>
               <el-tag size="small">{{ getSubjectName(kp.subjectId) }}</el-tag>
               <el-tag v-if="kp.grade" size="small" type="success" style="margin-left: 8px;">{{ kp.grade }}</el-tag>
             </div>
-            <el-dropdown>
+            <el-dropdown @click.stop>
               <el-icon class="el-dropdown-link"><MoreFilled /></el-icon>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -73,7 +73,6 @@
           </div>
         </div>
       </div>
-
       <el-table v-if="viewMode === 'list'" :data="filteredList" v-loading="loading" style="width: 100%; margin-top: 20px;">
         <el-table-column type="index" label="序号" width="80" align="center" />
         <el-table-column prop="name" label="知识点名称" />
@@ -96,6 +95,12 @@
         :knowledge-point-id="editingId"
         @success="getList"
     />
+    <knowledge-point-detail-dialog
+        v-if="isDetailDialogVisible"
+        v-model:visible="isDetailDialogVisible"
+        :knowledge-point-id="selectedKpId"
+    />
+
   </div>
 </template>
 
@@ -109,6 +114,9 @@ import { fetchAllSubjects } from '@/api/subject';
 import type { Subject } from '@/api/subject';
 import { Plus, Edit, Delete, Search, Refresh, Grid, Menu, MoreFilled } from '@element-plus/icons-vue';
 import KnowledgePointEditDialog from '@/components/knowledge-point/KnowledgePointEditDialog.vue';
+// 【新增】导入新的详情弹窗组件
+import KnowledgePointDetailDialog from '@/components/knowledge-point/KnowledgePointDetailDialog.vue';
+
 
 const knowledgePointList = ref<KnowledgePoint[]>([]);
 const allSubjects = ref<Subject[]>([]);
@@ -119,6 +127,10 @@ const isDialogVisible = ref(false);
 const editingId = ref<number | undefined>(undefined);
 const viewMode = ref<'grid' | 'list'>('grid');
 const searchQuery = ref('');
+// 【新增】为详情弹窗创建 ref
+const isDetailDialogVisible = ref(false);
+const selectedKpId = ref<number | null>(null);
+
 
 // 计算关联试题总数
 const totalAssociatedQuestions = computed(() => {
@@ -188,6 +200,13 @@ const handleDelete = (id: number) => {
       });
 };
 
+// 【新增】处理卡片点击事件的函数
+const handlePreview = (id: number) => {
+  selectedKpId.value = id;
+  isDetailDialogVisible.value = true;
+};
+
+
 onMounted(() => {
   getAllSubjects().then(getList);
 });
@@ -231,6 +250,7 @@ onMounted(() => {
   padding: 20px;
   background-color: var(--bg-color);
   transition: all 0.3s;
+  cursor: pointer; /* 【新增】添加鼠标手型，提示用户可点击 */
 }
 .knowledge-point-card:hover {
   box-shadow: var(--card-shadow);

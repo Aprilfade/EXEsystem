@@ -81,3 +81,12 @@ export function deleteKnowledgePoint(id: number): Promise<ApiResult<null>> {
         method: 'delete'
     });
 }
+/**
+ * 【新增】根据知识点ID获取其关联的所有试题
+ */
+export function fetchQuestionsForKnowledgePoint(id: number): Promise<ApiResult<any[]>> {
+    return request({
+        url: `/api/v1/knowledge-points/${id}/questions`,
+        method: 'get'
+    });
+}
