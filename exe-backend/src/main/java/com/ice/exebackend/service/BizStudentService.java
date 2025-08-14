@@ -1,6 +1,7 @@
 package com.ice.exebackend.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.ice.exebackend.dto.StudentDashboardStatsDTO;
 import com.ice.exebackend.dto.StudentExportDTO;
 import com.ice.exebackend.entity.BizStudent;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,4 +25,10 @@ public interface BizStudentService extends IService<BizStudent> {
      * @return 用于导出的学生DTO列表
      */
     List<StudentExportDTO> getStudentExportList(Long subjectId, String name);
+    /**
+     * 【新增】获取学生仪表盘的统计数据
+     * @param studentId 学生ID
+     * @return 统计数据DTO
+     */
+    StudentDashboardStatsDTO getStudentDashboardStats(Long studentId);
 }

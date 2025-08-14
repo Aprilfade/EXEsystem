@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.PracticeResultDTO;
 import com.ice.exebackend.dto.PracticeSubmissionDTO;
+import com.ice.exebackend.dto.StudentDashboardStatsDTO;
 import com.ice.exebackend.dto.WrongRecordVO;
 import com.ice.exebackend.entity.BizQuestion;
 import com.ice.exebackend.entity.BizStudent;
@@ -211,6 +212,22 @@ public class StudentDataController {
         resultDTO.setResults(answerResults);
 
         return Result.suc(resultDTO);
+    }
+    /**
+     * 【新增】获取学生仪表盘的统计数据
+     */
+    @GetMapping("/dashboard-stats")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result getDashboardStats(Authentication authentication) {
+        String studentNo = authentication.getName();
+        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
+        if (student == null) {
+            return Result.fail("当前用户不是一个有效的学生");
+        }
+
+        StudentDashboardStatsDTO stats = studentService.getStudentDashboardStats(student.getId());
+
+        return Result.suc(stats);
     }
 }
 

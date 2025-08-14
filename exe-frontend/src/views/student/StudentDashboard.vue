@@ -19,7 +19,7 @@
             <el-icon><Tickets /></el-icon>
             <div class="stat-text">
               <div class="label">累计答题总数</div>
-              <div class="value">358</div>
+              <div class="value">{{ stats.totalAnswered }}</div>
             </div>
           </div>
         </el-card>
@@ -30,7 +30,7 @@
             <el-icon color="#67C23A"><Select /></el-icon>
             <div class="stat-text">
               <div class="label">平均正确率</div>
-              <div class="value">88%</div>
+              <div class="value">{{ stats.averageAccuracy }}%</div>
             </div>
           </div>
         </el-card>
@@ -41,7 +41,7 @@
             <el-icon color="#F56C6C"><CloseBold /></el-icon>
             <div class="stat-text">
               <div class="label">错题总数</div>
-              <div class="value">43</div>
+              <div class="value">{{ stats.wrongRecordCount }}</div>
             </div>
           </div>
         </el-card>
@@ -52,7 +52,7 @@
             <el-icon color="#E6A23C"><Clock /></el-icon>
             <div class="stat-text">
               <div class="label">学习时长</div>
-              <div class="value">28 小时</div>
+              <div class="value">{{ stats.studyDurationHours }} 小时</div>
             </div>
           </div>
         </el-card>
@@ -107,13 +107,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStudentAuthStore } from '@/stores/studentAuth';
 import { Tickets, Select, CloseBold, Clock, EditPen, Memo, DataLine, Finished } from '@element-plus/icons-vue';
+// 【新增】导入API函数和类型
+import { fetchStudentDashboardStats, type StudentDashboardStats } from '@/api/studentAuth';
+import { ElMessage } from 'element-plus';
 
 const studentAuth = useStudentAuthStore();
 const router = useRouter();
+
+
+// 【新增】用于存储统计数据的响应式变量
+const loading = ref(true);
+const stats = ref<StudentDashboardStats>({
+  totalAnswered: 0,
+  averageAccuracy: 0,
+  wrongRecordCount: 0,
+  studyDurationHours: 0,
+});
 
 const welcomeMessage = computed(() => {
   const hour = new Date().getHours();
@@ -132,102 +145,42 @@ const navigateTo = (path: string) => {
   }
   router.push(path);
 };
+
+// 【新增】在组件挂载后获取数据
+onMounted(async () => {
+  loading.value = true;
+  try {
+    const res = await fetchStudentDashboardStats();
+    if (res.code === 200) {
+      stats.value = res.data;
+    }
+  } catch (error) {
+    console.error("获取仪表盘统计数据失败:", error);
+    ElMessage.error("获取统计数据失败，请稍后重试");
+  } finally {
+    loading.value = false;
+  }
+});
 </script>
 
 <style scoped>
 .dashboard-container {
   padding: 24px;
 }
-
-.welcome-card {
-  margin-bottom: 20px;
-}
-
-.welcome-content {
-  display: flex;
-  align-items: center;
-}
-
-.welcome-avatar {
-  margin-right: 20px;
-  flex-shrink: 0; /* 防止头像被压缩 */
-}
-
-.welcome-text h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0 0 8px 0;
-}
-
-.welcome-text p {
-  color: #606266;
-  font-size: 0.9rem;
-  margin: 0;
-}
-
-.stats-row {
-  margin-bottom: 20px;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.stat-item .el-icon {
-  font-size: 48px;
-  color: #409EFF;
-}
-
-.stat-text .label {
-  font-size: 14px;
-  color: #909399;
-  margin-bottom: 4px;
-}
-
-.stat-text .value {
-  font-size: 24px;
-  font-weight: bold;
-}
-
-.card-header {
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.quick-access-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  height: 120px;
-}
-
-.access-item {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease-in-out;
-}
-
-.access-item:hover {
-  border-color: #409EFF;
-  color: #409EFF;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  transform: translateY(-4px);
-}
-
-.access-item .el-icon {
-  font-size: 32px;
-  margin-bottom: 8px;
-}
-
-.timeline {
-  padding-left: 5px;
-  height: 120px; /* 限制高度使其不会太长 */
-}
+.welcome-card { margin-bottom: 20px; }
+.welcome-content { display: flex; align-items: center; }
+.welcome-avatar { margin-right: 20px; flex-shrink: 0; }
+.welcome-text h2 { font-size: 1.5rem; font-weight: 600; margin: 0 0 8px 0; }
+.welcome-text p { color: #606266; font-size: 0.9rem; margin: 0; }
+.stats-row { margin-bottom: 20px; }
+.stat-item { display: flex; align-items: center; gap: 16px; }
+.stat-item .el-icon { font-size: 48px; color: #409EFF; }
+.stat-text .label { font-size: 14px; color: #909399; margin-bottom: 4px; }
+.stat-text .value { font-size: 24px; font-weight: bold; }
+.card-header { font-size: 1rem; font-weight: 600; }
+.quick-access-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; height: 120px; }
+.access-item { display: flex; flex-direction: column; justify-content: center; align-items: center; border: 1px solid #e4e7ed; border-radius: 8px; cursor: pointer; transition: all 0.2s ease-in-out; }
+.access-item:hover { border-color: #409EFF; color: #409EFF; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-4px); }
+.access-item .el-icon { font-size: 32px; margin-bottom: 8px; }
+.timeline { padding-left: 5px; height: 120px; }
 </style>

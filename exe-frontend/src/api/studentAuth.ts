@@ -43,3 +43,18 @@ export function updateStudentProfile(data: Partial<Student>): Promise<ApiResult<
         data
     });
 }
+// 【新增】定义仪表盘统计数据的接口类型
+export interface StudentDashboardStats {
+    totalAnswered: number;
+    averageAccuracy: number;
+    wrongRecordCount: number;
+    studyDurationHours: number;
+}
+
+// 【新增】获取学生仪表盘统计数据的API函数
+export function fetchStudentDashboardStats(): Promise<ApiResult<StudentDashboardStats>> {
+    return request({
+        url: '/api/v1/student/dashboard-stats',
+        method: 'get'
+    });
+}
