@@ -11,11 +11,12 @@ const routes: Array<RouteRecordRaw> = [
         name: 'Login',
         component: () => import('@/views/Login.vue'),
     },
-    // 【新增】导航首页的路由，注意没有 meta: { requiresAuth: true }
+    // 修改后
     {
         path: '/portal',
         name: 'Portal',
         component: () => import('@/views/Portal.vue'),
+        meta: { title: '系统导航' } // <-- 新增 meta.title
     },
     {
         path: '/',
@@ -82,6 +83,27 @@ const router = createRouter({
 });
 
 router.beforeEach(async (to, from, next) => {
+    // --- 最终版动态标题逻辑 ---
+    const pageTitle = to.meta.title as string;
+
+    if (to.path === '/portal' && pageTitle) {
+        // 特殊处理：如果是导航页，则直接使用它自己的标题，不加后缀
+        document.title = pageTitle;
+    } else {
+        // 其他页面的通用逻辑
+        let baseTitle = '试题管理综合系统'; // 默认主标题
+        if (to.path.startsWith('/student/')) {
+            baseTitle = '在线学习系统';
+        }
+
+        if (pageTitle) {
+            document.title = `${pageTitle} - ${baseTitle}`;
+        } else {
+            document.title = baseTitle;
+        }
+    }
+    // --- 标题逻辑结束 ---
+
     const authStore = useAuthStore();
     const studentAuthStore = useStudentAuthStore();
 
