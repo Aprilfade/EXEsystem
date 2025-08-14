@@ -4,9 +4,15 @@
       <div class="container__form container--signup">
         <form class="form" @submit.prevent="handleSignUp">
           <h2 class="form__title">注 册</h2>
-          <input type="text" placeholder="用户名" class="input" v-model="signUpForm.username" />
-          <input type="text" placeholder="昵称" class="input" v-model="signUpForm.nickName" />
-          <input type="password" placeholder="密码" class="input" v-model="signUpForm.password" />
+          <div class="input-wrap">
+            <input type="text" placeholder="用户名" class="input" v-model="signUpForm.username" required />
+          </div>
+          <div class="input-wrap">
+            <input type="text" placeholder="昵称" class="input" v-model="signUpForm.nickName" required />
+          </div>
+          <div class="input-wrap">
+            <input type="password" placeholder="密码" class="input" v-model="signUpForm.password" required />
+          </div>
           <button class="btn">注 册</button>
         </form>
       </div>
@@ -14,8 +20,12 @@
       <div class="container__form container--signin">
         <form class="form" @submit.prevent="handleSignIn">
           <h2 class="form__title">登 录</h2>
-          <input type="text" placeholder="用户名" class="input" v-model="signInForm.username" />
-          <input type="password" placeholder="密码" class="input" v-model="signInForm.password" />
+          <div class="input-wrap">
+            <input type="text" placeholder="用户名" class="input" v-model="signInForm.username" required />
+          </div>
+          <div class="input-wrap">
+            <input type="password" placeholder="密码" class="input" v-model="signInForm.password" required />
+          </div>
           <a href="#" class="link">忘记密码?</a>
           <button class="btn">登 录</button>
         </form>
@@ -24,9 +34,13 @@
       <div class="container__overlay">
         <div class="overlay">
           <div class="overlay__panel overlay--left">
+            <h1 class="overlay__title">已有帐号？</h1>
+            <p class="overlay__description">请使用您的帐号进行登录</p>
             <button class="btn" @click="isSignUp = false">登 录</button>
           </div>
           <div class="overlay__panel overlay--right">
+            <h1 class="overlay__title">没有帐号？</h1>
+            <p class="overlay__description">立即注册一个帐号，开始您的旅程</p>
             <button class="btn" @click="isSignUp = true">注 册</button>
           </div>
         </div>
@@ -41,28 +55,20 @@ import { useAuthStore } from '../stores/auth';
 import { ElMessage } from 'element-plus';
 import { register } from '../api/auth';
 
-// 控制切换动画的响应式变量
 const isSignUp = ref(false);
-
-// 获取 Pinia store
 const authStore = useAuthStore();
 
-// 登录表单数据
 const signInForm = reactive({
-  username: 'admin', // 预填数据方便测试
+  username: 'admin',
   password: 'password',
 });
 
-// 【修改】注册表单数据，与后端接口对应
 const signUpForm = reactive({
   username: '',
   nickName: '',
   password: '',
 });
-/**
- * @description 处理登录逻辑
- * 调用 authStore 中的 login action
- */
+
 const handleSignIn = () => {
   if (!signInForm.username || !signInForm.password) {
     ElMessage.warning('请输入用户名和密码');
@@ -71,10 +77,6 @@ const handleSignIn = () => {
   authStore.login(signInForm);
 };
 
-
-/**
- * 【修改】实现完整的注册逻辑
- */
 const handleSignUp = async () => {
   if (!signUpForm.username || !signUpForm.password || !signUpForm.nickName) {
     ElMessage.warning('请填写完整的注册信息');
@@ -84,52 +86,36 @@ const handleSignUp = async () => {
     const res = await register({
       username: signUpForm.username,
       password: signUpForm.password,
-      // 后端 SysUser 需要 nickName 字段
       nickName: signUpForm.nickName,
     });
-    // 后端返回的 Result 对象中 code 为 200 代表成功
     if (res.code === 200) {
       ElMessage.success(res.msg || '注册成功，请登录！');
-      // 注册成功后，清空表单并自动切换回登录界面
       signUpForm.username = '';
       signUpForm.nickName = '';
       signUpForm.password = '';
       isSignUp.value = false;
     }
   } catch (error) {
-    // API 请求本身失败或返回错误状态码时，错误会被 request.ts 拦截并提示
     console.error('注册失败:', error);
   }
 };
-
 </script>
 
 <style scoped>
-/* 这里是所有的新样式 */
+/* 样式已根据双面板布局进行修正 */
 .login-page-wrapper {
-  /* COLORS */
   --white: #e9e9e9;
   --gray: #333;
   --blue: #0367a6;
   --lightblue: #008997;
-  /* RADII */
   --button-radius: 0.7rem;
-  /* SIZES */
   --max-width: 758px;
-  --max-height: 420px;
+  --max-height: 480px; /* 增加高度以容纳更多内容 */
 
-  font-size: 16px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
   Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-
   align-items: center;
-  background-color: var(--white);
-  /* 使用你项目中的背景图 */
-  background: url("/login-bg.png");
-  background-attachment: fixed;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
+  background: url("/back.jpg") center/cover no-repeat fixed; /* 使用项目内的背景图 */
   display: grid;
   height: 100vh;
   place-items: center;
@@ -137,8 +123,9 @@ const handleSignUp = async () => {
 
 .form__title {
   font-weight: 300;
-  margin: 0;
-  margin-bottom: 1.25rem;
+  margin: 0 0 1.25rem;
+  color: var(--gray);
+  font-size: 2rem;
 }
 
 .link {
@@ -149,10 +136,9 @@ const handleSignUp = async () => {
 }
 
 .container {
-  background-color: var(--white);
+  background-color: transparent; /* 容器本身透明 */
   border-radius: var(--button-radius);
-  box-shadow: 0 0.9rem 1.7rem rgba(0, 0, 0, 0.25),
-  0 0.7rem 0.7rem rgba(0, 0, 0, 0.22);
+  box-shadow: 0 0.9rem 1.7rem rgba(0, 0, 0, 0.25), 0 0.7rem 0.7rem rgba(0, 0, 0, 0.22);
   height: var(--max-height);
   max-width: var(--max-width);
   overflow: hidden;
@@ -161,6 +147,12 @@ const handleSignUp = async () => {
 }
 
 .container__form {
+  /* ★ 核心修复：将玻璃背景应用到这里 ★ */
+  background-color: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+
   height: 100%;
   position: absolute;
   top: 0;
@@ -207,18 +199,25 @@ const handleSignUp = async () => {
 }
 
 .overlay {
-  background-color: var(--lightblue);
-  background: url("/login-bg.png");
-  background-attachment: fixed;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
+  background: url("/back.jpg") center/cover no-repeat fixed;
+  color: var(--white);
   height: 100%;
   left: -100%;
   position: relative;
   transform: translateX(0);
   transition: transform 0.6s ease-in-out;
   width: 200%;
+}
+
+/* 覆盖层上的文字样式 */
+.overlay__title {
+  font-size: 2rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+.overlay__description {
+  font-size: 1rem;
+  margin: 0 2rem 1.5rem;
 }
 
 .container.right-panel-active .overlay {
@@ -231,6 +230,7 @@ const handleSignUp = async () => {
   flex-direction: column;
   height: 100%;
   justify-content: center;
+  padding: 0 40px;
   position: absolute;
   text-align: center;
   top: 0;
@@ -271,7 +271,7 @@ const handleSignUp = async () => {
   transition: transform 80ms ease-in;
 }
 
-.form > .btn {
+.form .btn {
   margin-top: 1.5rem;
 }
 
@@ -284,7 +284,7 @@ const handleSignUp = async () => {
 }
 
 .form {
-  background-color: var(--white);
+  background-color: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -294,24 +294,36 @@ const handleSignUp = async () => {
   text-align: center;
 }
 
-.input {
-  background-color: #eee;
-  border: none;
-  padding: 0.9rem 0.9rem;
-  margin: 0.5rem 0;
+.input-wrap {
+  border: 1px solid #aaa;
+  background-color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 1rem;
+  height: 50px;
   width: 100%;
-  border-radius: 0.5rem;
+  border-radius: 50px;
+}
+
+.input {
+  background-color: transparent;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  color: var(--gray);
+  padding: 15px;
+  width: 100%;
+  height: 100%;
+}
+.input::placeholder {
+  font-size: 1rem;
+  color: #555;
 }
 
 @keyframes show {
-  0%,
-  49.99% {
+  0%, 49.99% {
     opacity: 0;
     z-index: 1;
   }
-
-  50%,
-  100% {
+  50%, 100% {
     opacity: 1;
     z-index: 5;
   }

@@ -34,7 +34,7 @@ html, body, #app {
   background-color: var(--bg-color);
   color: var(--text-color-primary);
   /* 添加一张炫酷的背景图 */
-  background-image: url('../public/login-bg.png'); /* 你可以换成任何你喜欢的图片 */
+  background-image: url('../public/1.png'); /* 你可以换成任何你喜欢的图片 */
   background-size: cover;
   background-attachment: fixed;
 }
