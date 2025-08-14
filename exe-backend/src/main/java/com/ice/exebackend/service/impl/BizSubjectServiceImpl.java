@@ -90,4 +90,28 @@ public class BizSubjectServiceImpl extends ServiceImpl<BizSubjectMapper, BizSubj
 
             return dto;
         });
-    }}
+
+    }
+    // 【新增】实现新方法的逻辑
+    @Override
+    public List<BizQuestion> getQuestionsForSubject(Long subjectId) {
+        // 1. 先根据ID获取科目信息
+        BizSubject subject = this.getById(subjectId);
+        if (subject == null) {
+            return Collections.emptyList(); // 如果科目不存在，返回空列表
+        }
+
+        // 2. 创建查询条件
+        QueryWrapper<BizQuestion> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("subject_id", subjectId);
+
+        // 3. 【关键逻辑】如果科目本身有年级，则必须用这个年级去筛选试题
+        if (StringUtils.hasText(subject.getGrade())) {
+            queryWrapper.eq("grade", subject.getGrade());
+        }
+
+        // 4. 返回查询结果 (这里的 questionService 应该已经在你的文件里注入了)
+        return questionService.list(queryWrapper);
+    }
+
+}

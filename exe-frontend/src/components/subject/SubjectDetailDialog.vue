@@ -31,15 +31,16 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { fetchKnowledgePointList, type KnowledgePoint } from '@/api/knowledgePoint';
-import { fetchQuestionList, type Question } from '@/api/question';
+// **【最终修复点 1】** 导入新的API函数
+import { fetchQuestionsForSubject } from '@/api/subject';
+import type { Question } from '@/api/question';
 import { ElMessage } from 'element-plus';
 
-// 接收父组件传来的所有属性，包括 subjectGrade
+// **【最终修复点 2】** 不再需要接收 grade，让后端智能处理
 const props = defineProps<{
   visible: boolean;
   subjectId: number | null;
   subjectName: string;
-  subjectGrade?: string;
 }>();
 
 const emit = defineEmits(['update:visible']);
@@ -57,7 +58,6 @@ const questionTypeMap: { [key: number]: string } = {
 const fetchDetails = async (sId: number) => {
   if (!sId) return;
 
-  // 重置状态
   knowledgePoints.value = [];
   questions.value = [];
   loadingKp.value = true;
@@ -65,38 +65,20 @@ const fetchDetails = async (sId: number) => {
   activeTab.value = 'knowledgePoints';
 
   try {
-    // 并行发起两个请求
     const [kpRes, qRes] = await Promise.all([
-      // 请求知识点 (逻辑不变)
       fetchKnowledgePointList({ current: 1, size: 9999, subjectId: sId }),
-
-      // **【核心修复点在这里】**
-      // 请求试题时，把 props.subjectGrade 作为 grade 参数传给后端
-      fetchQuestionList({ current: 1, size: 9999, subjectId: sId, grade: props.subjectGrade })
+      // **【最终修复点 3】** 调用我们全新的、专用的API函数
+      fetchQuestionsForSubject(sId)
     ]);
 
-    // 处理知识点返回结果
-    if (kpRes.code === 200) {
-      knowledgePoints.value = kpRes.data;
-    } else {
-      ElMessage.error('加载知识点失败: ' + kpRes.msg);
-    }
+    if (kpRes.code === 200) knowledgePoints.value = kpRes.data;
+    if (qRes.code === 200) questions.value = qRes.data;
 
-    // 处理试题返回结果
-    if (qRes.code === 200) {
-      questions.value = qRes.data;
-    } else {
-      ElMessage.error('加载关联试题失败: ' + qRes.msg);
-    }
-
-    // 如果没有知识点但有试题，则默认显示试题Tab
     if(knowledgePoints.value.length === 0 && questions.value.length > 0){
       activeTab.value = 'questions';
     }
-
   } catch (error) {
-    console.error('加载科目详情时发生错误:', error);
-    ElMessage.error('加载详情失败，请检查网络或联系管理员。');
+    ElMessage.error('加载详情失败');
   } finally {
     loadingKp.value = false;
     loadingQ.value = false;

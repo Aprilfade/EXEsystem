@@ -1,5 +1,6 @@
 import request from '@/utils/request';
 import type { ApiResult } from './user';
+import type {Question} from "./question.ts";
 
 /**
  * 科目接口定义
@@ -73,5 +74,16 @@ export function fetchAllSubjects(): Promise<ApiResult<Subject[]>> {
     return request({
         url: '/api/v1/subjects/all', // 对应后端的 /all 接口
         method: 'get'
+    });
+
+}
+
+/**
+ * 【新增】调用新接口，根据科目ID获取其关联的试题列表
+ */
+export function fetchQuestionsForSubject(subjectId: number): Promise<ApiResult<Question[]>> {
+    return request({
+        url: `/api/v1/subjects/${subjectId}/questions`,
+        method: 'get',
     });
 }

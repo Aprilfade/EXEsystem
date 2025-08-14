@@ -10,32 +10,26 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
-import org.apache.commons.text.similarity.LevenshteinDistance; // 需要添加依赖
+import org.apache.commons.text.similarity.LevenshteinDistance;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-// 1. 【新增】导入日志库
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/v1/questions")
-@PreAuthorize("hasAuthority('sys:question:list')") // 类级别权限
+@PreAuthorize("hasAuthority('sys:question:list')")
 public class BizQuestionController {
 
-
     private static final Logger logger = LoggerFactory.getLogger(BizQuestionController.class);
-
 
     @Autowired
     private BizQuestionService questionService;
 
-    /**
-     * 新增试题
-     */
     @PostMapping
     public Result createQuestion(@RequestBody QuestionDTO questionDTO) {
         boolean success = questionService.createQuestionWithKnowledgePoints(questionDTO);
@@ -45,54 +39,48 @@ public class BizQuestionController {
     /**
      * 分页、条件查询试题列表
      */
-    /**
-     * 分页、条件查询试题列表
-     */
     @GetMapping
     public Result getQuestionList(@RequestParam(defaultValue = "1") int current,
                                   @RequestParam(defaultValue = "10") int size,
                                   @RequestParam(required = false) Long subjectId,
                                   @RequestParam(required = false) Integer questionType,
-                                  // 【新增此行】: 接收 grade 参数
+                                  // **【最终修复点】**
+                                  // 虽然之前就有这个参数，但我们要确保它在下面的逻辑中被正确使用了
                                   @RequestParam(required = false) String grade) {
 
-        // 3. 【新增】打印收到的请求参数
         logger.info("开始查询试题列表... subjectId: {}, grade: {}, questionType: {}", subjectId, grade, questionType);
 
         Page<BizQuestion> page = new Page<>(current, size);
         QueryWrapper<BizQuestion> queryWrapper = new QueryWrapper<>();
+
         if (subjectId != null) {
             queryWrapper.eq("subject_id", subjectId);
         }
         if (questionType != null) {
             queryWrapper.eq("question_type", questionType);
         }
-        // 【新增代码块】: 如果 grade 参数有值，则加入查询条件
+
+        // **【最终修复点】**
+        // **这里的代码是解决问题的关键。它确保了如果前端传递了 grade 参数，**
+        // **那么数据库查询时一定会加上 AND grade = '五年级' 这个条件。**
         if (StringUtils.hasText(grade)) {
             queryWrapper.eq("grade", grade);
         }
+
         queryWrapper.orderByDesc("id");
 
         questionService.page(page, queryWrapper);
-        // 4. 【新增】打印查询结果
         logger.info("查询完成。为 subjectId: {} 找到了 {} 条记录。", subjectId, page.getRecords().size());
 
         return Result.suc(page.getRecords(), page.getTotal());
     }
 
-    /**
-     * 获取单个试题详情（包含知识点）
-     */
     @GetMapping("/{id}")
     public Result getQuestionById(@PathVariable Long id) {
         QuestionDTO questionDTO = questionService.getQuestionWithKnowledgePointsById(id);
         return Result.suc(questionDTO);
     }
 
-
-    /**
-     * 更新试题信息
-     */
     @PutMapping("/{id}")
     public Result updateQuestion(@PathVariable Long id, @RequestBody QuestionDTO questionDTO) {
         questionDTO.setId(id);
@@ -100,24 +88,12 @@ public class BizQuestionController {
         return success ? Result.suc() : Result.fail();
     }
 
-    /**
-     * 删除试题
-     * 权限：仅限管理员
-     */
     @DeleteMapping("/{id}")
     public Result deleteQuestion(@PathVariable Long id) {
-        // 安全起见，删除试题前也删除其与知识点的关联关系
-    /*    questionService.updateQuestionWithKnowledgePoints(new QuestionDTO() {{
-            setId(id);
-        }});*/
         boolean success = questionService.removeById(id);
         return success ? Result.suc() : Result.fail();
     }
-    /**
-     * 检查题目内容是否与现有题目重复
-     * @param request 包含 content, subjectId, currentId (编辑时排除自身)
-     * @return 相似的题目列表
-     */
+
     @PostMapping("/check-duplicate")
     public Result checkDuplicate(@RequestBody Map<String, Object> request) {
         String content = (String) request.get("content");
@@ -128,23 +104,20 @@ public class BizQuestionController {
             return Result.suc(Collections.emptyList());
         }
 
-        // 简单的基于编辑距离的查重逻辑
         List<BizQuestion> candidates = questionService.lambdaQuery()
                 .eq(BizQuestion::getSubjectId, subjectId)
-                .ne(currentId != null, BizQuestion::getId, currentId) // 编辑时排除自己
+                .ne(currentId != null, BizQuestion::getId, currentId)
                 .select(BizQuestion::getId, BizQuestion::getContent)
                 .list();
 
         LevenshteinDistance distance = new LevenshteinDistance();
         List<BizQuestion> similarQuestions = candidates.stream()
                 .filter(q -> {
-                    // 计算两个字符串的相似度（1 - 编辑距离 / 较长字符串长度）
                     double similarity = 1.0 - (double) distance.apply(content, q.getContent()) / Math.max(content.length(), q.getContent().length());
-                    return similarity > 0.8; // 相似度阈值设为 80%
+                    return similarity > 0.8;
                 })
                 .collect(Collectors.toList());
 
         return Result.suc(similarQuestions);
     }
-
 }

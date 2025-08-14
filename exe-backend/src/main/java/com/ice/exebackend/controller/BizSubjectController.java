@@ -123,4 +123,12 @@ public class BizSubjectController {
         boolean success = subjectService.removeById(id);
         return success ? Result.suc() : Result.fail();
     }
+    /**
+     * 【新增】根据科目ID获取其关联的试题列表 (已按年级智能筛选)
+     */
+    @GetMapping("/{id}/questions")
+    public Result getQuestionsForSubject(@PathVariable Long id) {
+        List<BizQuestion> questions = subjectService.getQuestionsForSubject(id);
+        return Result.suc(questions);
+    }
 }

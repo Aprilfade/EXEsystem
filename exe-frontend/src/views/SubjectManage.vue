@@ -65,7 +65,8 @@
 
       <el-table v-if="viewMode === 'list'" :data="subjectList" v-loading="loading" style="width: 100%; margin-top: 20px;">
         <el-table-column prop="name" label="科目名称" />
-        <el-table-column prop="grade" label="年级" width="120" /> <el-table-column prop="description" label="简介" />
+        <el-table-column prop="grade" label="年级" width="120" />
+        <el-table-column prop="description" label="简介" />
         <el-table-column prop="knowledgePointCount" label="关联知识点数" width="150" align="center" />
         <el-table-column prop="questionCount" label="关联试题数" width="150" align="center" />
         <el-table-column prop="createTime" label="创建时间" />
@@ -76,7 +77,6 @@
           </template>
         </el-table-column>
       </el-table>
-
 
       <el-pagination
           v-if="viewMode === 'list'"
@@ -96,18 +96,19 @@
         :subject-data="editingSubject"
         @success="getList"
     />
-      <<subject-detail-dialog
-      v-if="isDetailDialogVisible"
-      v-model:visible="isDetailDialogVisible"
-      :subject-id="selectedSubjectId"
-      :subject-name="selectedSubjectName"
-      :subject-grade="selectedSubjectGrade" />
+
+    <subject-detail-dialog
+        v-if="isDetailDialogVisible"
+        v-model:visible="isDetailDialogVisible"
+        :subject-id="selectedSubjectId"
+        :subject-name="selectedSubjectName"
+        :subject-grade="selectedSubjectGrade"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-// 1. 确认导入了 computed 和 watch
-import { ref, reactive, onMounted, computed, watch } from 'vue';
+import { ref, reactive, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchSubjectList, deleteSubject } from '@/api/subject';
 import type { Subject, SubjectPageParams } from '@/api/subject';
@@ -124,7 +125,7 @@ const viewMode = ref<'grid' | 'list'>('grid');
 const isDetailDialogVisible = ref(false);
 const selectedSubjectId = ref<number | null>(null);
 const selectedSubjectName = ref('');
-const selectedSubjectGrade = ref<string | undefined>(undefined); // <-- 新增这一行
+const selectedSubjectGrade = ref<string | undefined>(undefined);
 
 const queryParams = reactive<SubjectPageParams>({
   current: 1,
@@ -132,11 +133,9 @@ const queryParams = reactive<SubjectPageParams>({
   name: ''
 });
 
-// 2. 【核心修改】改造 getList 函数
 const getList = async () => {
   loading.value = true;
   try {
-    // 根据视图模式决定是分页加载还是全部加载
     const paramsToUse = viewMode.value === 'list'
         ? queryParams
         : { current: 1, size: 9999, name: queryParams.name };
@@ -149,13 +148,10 @@ const getList = async () => {
   }
 };
 
-// 3. 【新增】监听视图模式的变化
 watch(viewMode, () => {
-  // 当切换到列表视图时，确保页码回到第一页
   if (viewMode.value === 'list') {
     queryParams.current = 1;
   }
-  // 切换视图后总是重新加载数据
   getList();
 });
 
@@ -186,14 +182,14 @@ const handleDelete = (id: number) => {
 const handleCardClick = (subject: Subject) => {
   selectedSubjectId.value = subject.id;
   selectedSubjectName.value = subject.name;
-  selectedSubjectGrade.value = subject.grade; // <-- 新增这一行来保存年级
+  selectedSubjectGrade.value = subject.grade;  // 修复：确保传递年级信息
   isDetailDialogVisible.value = true;
 };
+
 onMounted(getList);
 </script>
 
 <style scoped>
-/* ... style 部分无需改动 ... */
 .page-container { padding: 24px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { font-size: 24px; font-weight: 600; }
@@ -203,61 +199,14 @@ onMounted(getList);
 .stat-item .label { color: var(--text-color-regular); font-size: 14px; margin-bottom: 8px;}
 .stat-item .value { font-size: 28px; font-weight: bold; }
 .content-card { background-color: var(--bg-color-container); }
-.content-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.pagination { margin-top: 20px; display: flex; justify-content: flex-end; }
-
-/* 【修改点 3】: 新增和优化卡片相关样式 */
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
-}
-
-/* 【修改点 7】: 为 subject-card 添加 cursor: pointer 以提示用户可以点击 */
-.subject-card {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 20px;
-  background-color: var(--bg-color);
-  display: flex;
-  flex-direction: column;
-  transition: all 0.2s ease-in-out;
-  cursor: pointer; /* 新增此行 */
-}
-.subject-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.card-title {
-  font-size: 18px;
-  font-weight: 600;
-}
-.el-dropdown-link {
-  cursor: pointer;
-  color: var(--text-color-regular);
-  font-size: 20px;
-}
-.card-desc {
-  font-size: 14px;
-  color: var(--text-color-regular);
-  flex-grow: 1;
-  min-height: 40px;
-  margin-bottom: 16px;
-}
-.card-footer {
-  font-size: 12px;
-  color: #999;
-  border-top: 1px solid var(--border-color);
-  padding-top: 12px;
-  margin-top: auto;
-  display: flex;
-  justify-content: space-between;
-}
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+.subject-card { border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; cursor: pointer; transition: all 0.3s; }
+.subject-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); border-color: var(--color-primary); }
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.card-title { font-size: 18px; font-weight: 600; margin: 0; }
+.card-desc { color: var(--text-color-secondary); font-size: 14px; margin-bottom: 16px; min-height: 40px; }
+.card-footer { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-color-regular); }
+.el-dropdown-link { cursor: pointer; }
+.content-header { display: flex; justify-content: space-between; align-items: center; }
+.pagination { margin-top: 20px; text-align: right; }
 </style>
