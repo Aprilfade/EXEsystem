@@ -92,7 +92,7 @@ const navigateToExternal = (url: string) => {
 
 .portal-subtitle {
   font-size: 1.2rem;
-  margin-top: -10px;
+  margin-top: 15px;
   margin-bottom: 40px;
   opacity: 0.9;
 }

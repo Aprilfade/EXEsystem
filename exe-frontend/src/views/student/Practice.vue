@@ -146,15 +146,23 @@ const loadAllSubjects = async () => {
   }
 };
 const selectGrade = (grade: string) => { currentGrade.value = grade; practiceState.value = 'selectingSubject'; };
-const startPractice = async (subject: Subject) => { /* ...保持不变，但最后要设置状态... */
+// 修改后的代码
+const startPractice = async (subject: Subject) => {
   currentSubject.value = subject;
   try {
-    const res = await request({ url: '/api/v1/student/practice-questions', method: 'get', params: { subjectId: subject.id, grade: currentGrade.value }});
+    const res = await request({
+      url: '/api/v1/student/practice-questions',
+      method: 'get',
+      params: {
+        subjectId: subject.id,
+        grade: currentGrade.value // <-- 新增这一行
+      }
+    });
     if (res.code === 200) {
       questions.value = res.data;
       currentQuestionIndex.value = 0;
       userAnswers.value = {};
-      practiceState.value = 'practicing'; // 设置为练习状态
+      practiceState.value = 'practicing';
     }
   } catch (e) { ElMessage.error('获取练习题失败'); }
 };
