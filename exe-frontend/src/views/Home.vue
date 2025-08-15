@@ -47,7 +47,7 @@
       <el-col :span="8">
         <el-card shadow="never" class="grid-card wrong-stats-card" style="margin-bottom: 20px;">
           <template #header><div class="card-header-v2">错题统计</div></template>
-          <el-empty description="此图表需后端接口支持" />
+          <div ref="wrongStatsChart" class="chart-container"></div>
         </el-card>
         <el-card shadow="never" class="grid-card notification-card">
           <template #header><div class="card-header-v2">系统通知</div></template>
@@ -132,6 +132,8 @@ import { Warning } from '@element-plus/icons-vue';
 
 const kpAndQuestionChart = ref<HTMLElement | null>(null);
 const subjectStatsChart = ref<HTMLElement | null>(null); // 【新增】为科目统计图表创建 ref
+const wrongStatsChart = ref<HTMLElement | null>(null);
+let wrongStatsChartInstance: echarts.ECharts | null = null;
 
 let kpChartInstance: echarts.ECharts | null = null;
 let subjectStatsChartInstance: echarts.ECharts | null = null; // 【新增】图表实例变量
@@ -171,6 +173,47 @@ const initKpAndQuestionChart = (chartData: ChartData) => {
         name: s.name, type: 'bar', barWidth: '30%', data: s.data,
         itemStyle: { color: seriesColors[index % seriesColors.length], borderRadius: [4, 4, 0, 0] },
       })),
+    });
+  }
+};
+
+// 【核心修改】新增错题统计图表的初始化函数
+const initWrongStatsChart = (chartData: ChartData) => {
+  if (wrongStatsChart.value && chartData?.series?.[0]?.data) {
+    wrongStatsChartInstance = echarts.init(wrongStatsChart.value);
+    wrongStatsChartInstance.setOption({
+      tooltip: { trigger: 'item' },
+      series: [
+        {
+          name: '错题分布',
+          type: 'pie',
+          radius: ['40%', '70%'],
+          avoidLabelOverlap: false,
+          itemStyle: {
+            borderRadius: 10,
+            borderColor: '#fff',
+            borderWidth: 2
+          },
+          label: {
+            show: false,
+            position: 'center'
+          },
+          emphasis: {
+            label: {
+              show: true,
+              fontSize: '20',
+              fontWeight: 'bold'
+            }
+          },
+          labelLine: {
+            show: false
+          },
+          data: chartData.categories.map((name, index) => ({
+            value: chartData.series[0].data[index],
+            name: name
+          }))
+        }
+      ]
     });
   }
 };
@@ -219,17 +262,15 @@ const fetchData = async () => {
     const res = await getDashboardStats();
     if (res.code === 200) {
       stats.value = res.data;
-
-      // 【核心修改】将图表初始化逻辑移入这里，确保在获取数据之后执行
       initKpAndQuestionChart(stats.value.kpAndQuestionStats);
-      initSubjectStatsChart(stats.value.subjectStatsByGrade); // 调用科目统计图表初始化
+      initSubjectStatsChart(stats.value.subjectStatsByGrade);
+      // 【核心修改】调用新增的图表初始化函数
+      initWrongStatsChart(stats.value.wrongQuestionStats);
 
     } else {
-      // 如果后端返回的 code 不是 200，也提示错误
       ElMessage.error(res.msg || '获取统计数据失败');
     }
   } catch (error) {
-    // 网络层或其他JS错误
     console.error("获取工作台数据时发生错误:", error);
     ElMessage.error("获取统计数据失败");
   }
@@ -244,19 +285,23 @@ onMounted(async () => {
   // 【核心修改】直接调用 fetchData 即可
   await fetchData();
 
-  // 监听图表容器尺寸变化
   if (kpAndQuestionChart.value) {
     resizeObserver = new ResizeObserver(() => {
       kpChartInstance?.resize();
       subjectStatsChartInstance?.resize();
+      // 【核心修改】让新图表也支持响应式缩放
+      wrongStatsChartInstance?.resize();
     });
     resizeObserver.observe(kpAndQuestionChart.value);
   }
 });
 
+
 onUnmounted(() => {
   kpChartInstance?.dispose();
   subjectStatsChartInstance?.dispose();
+  // 【核心修改】在组件卸载时销毁新图表的实例
+  wrongStatsChartInstance?.dispose();
   if (kpAndQuestionChart.value && resizeObserver) {
     resizeObserver.unobserve(kpAndQuestionChart.value);
   }
@@ -276,7 +321,14 @@ const handleNotificationClick = async (id: number) => {
 /* 文件: exe-frontend/src/views/Home.vue */
 
 <style scoped>
-/* 样式部分保持不变 */
+.wrong-stats-card :deep(.el-card__body),
+.notification-card :deep(.el-card__body) {
+  height: 220px;
+}
+.wrong-stats-card .chart-container {
+  height: 100%;
+  width: 100%;
+}
 .dashboard-container {
   padding: 24px;
   background-color: #f5f7fa;
@@ -371,8 +423,8 @@ const handleNotificationClick = async (id: number) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 4px;
-  font-size: 14px;
+  padding: 20px 6px;
+  font-size: 18px;
   cursor: pointer;
   border-bottom: 1px solid var(--border-color);
 }
