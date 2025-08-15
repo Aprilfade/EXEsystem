@@ -4,9 +4,7 @@ import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.common.Result;
-import com.ice.exebackend.dto.QuestionDTO;
-import com.ice.exebackend.dto.QuestionExcelDTO;
-import com.ice.exebackend.dto.QuestionPageParams;
+import com.ice.exebackend.dto.*;
 import com.ice.exebackend.entity.BizQuestion;
 import com.ice.exebackend.service.BizQuestionService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -151,5 +149,14 @@ public class BizQuestionController {
         response.setHeader("Content-disposition", "attachment;filename*=utf-8''" + fileName + ".xlsx");
 
         EasyExcel.write(response.getOutputStream(), QuestionExcelDTO.class).sheet("试题列表").doWrite(list);
+    }
+    /**
+     * 【新增】批量修改题目
+     */
+    @PutMapping("/batch-update")
+    @PreAuthorize("hasAuthority('sys:question:list')") // 沿用列表权限即可
+    public Result batchUpdateQuestions(@RequestBody QuestionBatchUpdateDTO dto) {
+        boolean success = questionService.batchUpdateQuestions(dto);
+        return success ? Result.suc("批量更新成功") : Result.fail("批量更新失败");
     }
 }

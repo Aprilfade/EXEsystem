@@ -2,7 +2,9 @@ package com.ice.exebackend.service.impl;
 
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ice.exebackend.dto.QuestionBatchUpdateDTO;
 import com.ice.exebackend.dto.QuestionDTO;
 import com.ice.exebackend.dto.QuestionExcelDTO;
 import com.ice.exebackend.dto.QuestionPageParams;
@@ -145,5 +147,42 @@ public class BizQuestionServiceImpl extends ServiceImpl<BizQuestionMapper, BizQu
             return dto;
         }).collect(Collectors.toList());
     }
+    /**
+     * 【新增】实现批量更新试题的方法
+     */
+    @Override
+    @Transactional
+    public boolean batchUpdateQuestions(QuestionBatchUpdateDTO dto) {
+        if (dto == null || CollectionUtils.isEmpty(dto.getQuestionIds())) {
+            return false; // 如果没有提供试题ID，则不执行任何操作
+        }
+
+        // 至少要提供一个新的科目或年级
+        if (dto.getSubjectId() == null && !StringUtils.hasText(dto.getGrade())) {
+            return false;
+        }
+
+        LambdaUpdateWrapper<BizQuestion> updateWrapper = new LambdaUpdateWrapper<>();
+        // 设置更新条件：IN (id1, id2, id3...)
+        updateWrapper.in(BizQuestion::getId, dto.getQuestionIds());
+
+        // 动态设置要更新的字段
+        boolean hasUpdate = false;
+        if (dto.getSubjectId() != null) {
+            updateWrapper.set(BizQuestion::getSubjectId, dto.getSubjectId());
+            hasUpdate = true;
+        }
+        if (StringUtils.hasText(dto.getGrade())) {
+            updateWrapper.set(BizQuestion::getGrade, dto.getGrade());
+            hasUpdate = true;
+        }
+
+        if(hasUpdate) {
+            return this.update(updateWrapper);
+        }
+
+        return false;
+    }
+
 
 }

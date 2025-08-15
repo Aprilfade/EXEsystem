@@ -1,6 +1,7 @@
 package com.ice.exebackend.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.ice.exebackend.dto.QuestionBatchUpdateDTO;
 import com.ice.exebackend.dto.QuestionDTO;
 import com.ice.exebackend.dto.QuestionExcelDTO;
 import com.ice.exebackend.dto.QuestionPageParams;
@@ -38,4 +39,6 @@ public interface BizQuestionService extends IService<BizQuestion> {
 
     // 【新增】根据查询条件导出试题
     List<QuestionExcelDTO> getQuestionsForExport(QuestionPageParams params);
+    // 【新增】批量更新试题的科目和年级
+    boolean batchUpdateQuestions(QuestionBatchUpdateDTO dto);
 }

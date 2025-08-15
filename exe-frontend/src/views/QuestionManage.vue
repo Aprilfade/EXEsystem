@@ -29,24 +29,32 @@
 
     <el-card shadow="never" class="content-card">
       <div class="content-header">
-        <div>
+        <div class="header-left-panel">
+          <el-button
+              type="primary"
+              :icon="Edit"
+              size="large"
+              :disabled="selectedQuestionIds.length === 0"
+              @click="handleBatchEdit"
+          >
+            批量修改
+          </el-button>
           <el-upload
               :action="''"
               :show-file-list="false"
               :http-request="handleImport"
-              style="margin: 0 12px; display: inline-block;"
+              style="margin-left: 12px; display: inline-block;"
           >
             <el-button size="large" :icon="Upload">导入</el-button>
           </el-upload>
-          <el-button size="large" :icon="Download" @click="handleExport">导出</el-button>
-
+          <el-button size="large" :icon="Download" @click="handleExport" style="margin-left: 12px;">导出</el-button>
         </div>
-        <el-input v-model="queryParams.content" placeholder="输入题干内容搜索" size="large" style="width: 300px;" @keyup.enter="handleQuery" clearable @clear="handleQuery"/>
-        <div>
-          <el-select v-model="queryParams.subjectId" placeholder="按科目筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 10px;">
+        <div class="header-right-panel">
+          <el-input v-model="queryParams.content" placeholder="输入题干内容搜索" size="large" style="width: 240px;" @keyup.enter="handleQuery" clearable @clear="handleQuery"/>
+          <el-select v-model="queryParams.subjectId" placeholder="按科目筛选" clearable @change="handleQuery" size="large" style="width: 140px;">
             <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
           </el-select>
-          <el-select v-model="queryParams.grade" placeholder="按年级筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 10px;">
+          <el-select v-model="queryParams.grade" placeholder="按年级筛选" clearable @change="handleQuery" size="large" style="width: 140px;">
             <el-option label="一年级" value="一年级" />
             <el-option label="二年级" value="二年级" />
             <el-option label="三年级" value="三年级" />
@@ -60,7 +68,7 @@
             <el-option label="高二" value="高二" />
             <el-option label="高三" value="高三" />
           </el-select>
-          <el-select v-model="queryParams.questionType" placeholder="按题型筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 20px;">
+          <el-select v-model="queryParams.questionType" placeholder="按题型筛选" clearable @change="handleQuery" size="large" style="width: 140px;">
             <el-option label="单选题" :value="1" />
             <el-option label="多选题" :value="2" />
             <el-option label="填空题" :value="3" />
@@ -98,7 +106,14 @@
         </div>
       </div>
 
-      <el-table v-if="viewMode === 'list'" :data="questionList" v-loading="loading" style="width: 100%; margin-top: 20px;">
+      <el-table
+          v-if="viewMode === 'list'"
+          :data="questionList"
+          v-loading="loading"
+          style="width: 100%; margin-top: 20px;"
+          @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="55" align="center" />
         <el-table-column type="index" label="序号" width="80" align="center" />
         <el-table-column prop="content" label="题干" show-overflow-tooltip />
         <el-table-column label="所属科目" width="150">
@@ -106,20 +121,10 @@
             {{ getSubjectName(scope.row.subjectId) }}
           </template>
         </el-table-column>
-        <el-table-column prop="grade" label="年级" width="100" align="center" /> <el-table-column prop="questionType" label="题型" width="100" align="center">
-        <template #default="scope">
-          <el-tag>{{ questionTypeMap[scope.row.questionType] }}</el-tag>
-        </template>
-      </el-table-column>
+        <el-table-column prop="grade" label="年级" width="100" align="center" />
         <el-table-column prop="questionType" label="题型" width="100" align="center">
-
           <template #default="scope">
             <el-tag>{{ questionTypeMap[scope.row.questionType] }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="所属科目" width="150">
-          <template #default="scope">
-            {{ getSubjectName(scope.row.subjectId) }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="220" align="center">
@@ -158,26 +163,31 @@
         :all-subjects="allSubjects"
         :all-knowledge-points="allKnowledgePoints"
     />
+
+    <question-batch-edit-dialog
+        v-if="isBatchEditDialogVisible"
+        v-model:visible="isBatchEditDialogVisible"
+        :question-ids="selectedQuestionIds"
+        @success="handleBatchSuccess"
+    />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { fetchQuestionList, deleteQuestion, fetchQuestionById } from '@/api/question';
+import { fetchQuestionList, deleteQuestion, fetchQuestionById, importQuestions, exportQuestions } from '@/api/question';
 import type { Question, QuestionPageParams } from '@/api/question';
 import { fetchAllSubjects } from '@/api/subject';
 import type { Subject } from '@/api/subject';
 import { getDashboardStats } from '@/api/dashboard';
 import { fetchKnowledgePointList } from '@/api/knowledgePoint';
 import type { KnowledgePoint } from '@/api/knowledgePoint';
-import { Plus, Edit, Delete, Grid, Menu, MoreFilled, View } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Grid, Menu, MoreFilled, View, Upload, Download } from '@element-plus/icons-vue';
 import QuestionEditDialog from '@/components/question/QuestionEditDialog.vue';
 import QuestionPreviewDialog from '@/components/question/QuestionPreviewDialog.vue';
-import { importQuestions, exportQuestions } from '@/api/question';
-import { Upload, Download } from '@element-plus/icons-vue';
+import QuestionBatchEditDialog from '@/components/question/QuestionBatchEditDialog.vue';
 import type { UploadRequestOptions } from 'element-plus';
-
 
 const questionList = ref<Question[]>([]);
 const allSubjects = ref<Subject[]>([]);
@@ -186,14 +196,16 @@ const total = ref(0);
 const loading = ref(true);
 const isDialogVisible = ref(false);
 const editingId = ref<number | undefined>(undefined);
-const viewMode = ref<'grid' | 'list'>('grid');
+const viewMode = ref<'list' | 'grid'>('list'); // 默认改为列表视图
+const selectedQuestionIds = ref<number[]>([]);
+const isBatchEditDialogVisible = ref(false);
 
 const queryParams = reactive<QuestionPageParams>({
   current: 1,
   size: 10,
   subjectId: undefined,
   questionType: undefined,
-  grade: undefined, // 【新增此行】
+  grade: undefined,
   content: ''
 });
 
@@ -207,9 +219,12 @@ const duplicateCount = ref(0);
 
 const duplicatePercentage = computed(() => {
   if (total.value === 0) return 0;
-  return ((duplicateCount.value / total.value) * 100).toFixed(0);
+  // 确保 duplicateCount.value 是一个数字
+  const count = Number(duplicateCount.value) || 0;
+  return ((count / total.value) * 100).toFixed(0);
 });
 
+// 【数据加载逻辑修复】
 const getList = async () => {
   loading.value = true;
   try {
@@ -223,13 +238,19 @@ const getList = async () => {
   }
 };
 
-// 【修复点】恢复 getExtraStats 函数的定义
+
+// 监听视图模式变化，自动刷新列表
+watch(viewMode, () => {
+  queryParams.current = 1; // 切换视图时重置到第一页
+  getList();
+});
+
+
 const getExtraStats = async () => {
   try {
     const res = await getDashboardStats();
     if (res.code === 200) {
-      // 确保只获取需要的数据
-      duplicateCount.value = res.data.duplicateCount;
+      duplicateCount.value = res.data.duplicateCount ?? 0;
     }
   } catch (error) {
     console.warn("获取额外统计数据失败:", error);
@@ -292,7 +313,7 @@ const handleImport = async (options: UploadRequestOptions) => {
   try {
     await importQuestions(formData);
     ElMessage.success('导入成功');
-    getList(); // 刷新列表
+    getList();
   } catch (error) {
     ElMessage.error('导入失败');
   }
@@ -317,14 +338,28 @@ const handleExport = async () => {
   }
 };
 
+const handleSelectionChange = (selectedRows: Question[]) => {
+  selectedQuestionIds.value = selectedRows.map(row => row.id);
+};
+
+const handleBatchEdit = () => {
+  isBatchEditDialogVisible.value = true;
+};
+
+const handleBatchSuccess = () => {
+  isBatchEditDialogVisible.value = false;
+  selectedQuestionIds.value = [];
+  getList();
+};
+
 onMounted(() => {
   getAllSubjects().then(getList);
   getExtraStats();
   getAllKnowledgePoints();
 });
 </script>
+
 <style scoped>
-/* 样式部分无需改动 */
 .page-container { padding: 24px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { font-size: 24px; font-weight: 600; }
@@ -335,6 +370,12 @@ onMounted(() => {
 .stat-item .value { font-size: 28px; font-weight: bold; }
 .content-card { background-color: var(--bg-color-container); }
 .content-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+/* 【布局修复】新增 flex 布局和间距 */
+.header-left-panel, .header-right-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .pagination { margin-top: 20px; display: flex; justify-content: flex-end; }
 
 /* 卡片样式 */
@@ -350,6 +391,12 @@ onMounted(() => {
   background-color: var(--bg-color);
   display: flex;
   flex-direction: column;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+.question-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 .card-header {
   display: flex;
@@ -380,14 +427,5 @@ onMounted(() => {
   align-items: center;
   border-top: 1px solid var(--border-color);
   padding-top: 12px;
-}
-.question-card {
-  transition: all 0.2s ease-in-out;
-  cursor: pointer;
-}
-
-.question-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 </style>

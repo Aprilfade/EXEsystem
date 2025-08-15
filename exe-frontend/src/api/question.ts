@@ -115,3 +115,13 @@ export function exportQuestions(params: QuestionPageParams): Promise<any> {
         responseType: 'blob'
     });
 }
+/**
+ * 【新增】批量更新试题的科目和年级
+ */
+export function batchUpdateQuestions(data: { questionIds: number[]; subjectId?: number; grade?: string }): Promise<ApiResult<null>> {
+    return request({
+        url: '/api/v1/questions/batch-update',
+        method: 'put',
+        data
+    });
+}
