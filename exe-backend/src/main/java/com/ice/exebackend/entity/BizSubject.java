@@ -11,21 +11,21 @@ import java.time.LocalDateTime;
 @TableName("biz_subject")
 public class BizSubject {
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
+   @TableId(value = "id", type = IdType.AUTO)
+   private Long id;
 
-    private String name;
+   private String name;
 
-    private String description;
+   private String description;
 
-    private String grade;
+   private String grade;
 
-    private LocalDateTime createTime;
+   private LocalDateTime createTime;
 
-    private LocalDateTime updateTime;
+   private LocalDateTime updateTime;
 
 
-    // 【新增】为 grade 字段添加 Getter 和 Setter
+   // 【新增】为 grade 字段添加 Getter 和 Setter
     public String getGrade() {
         return grade;
     }

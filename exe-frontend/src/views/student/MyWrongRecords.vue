@@ -11,31 +11,52 @@
         <el-table-column prop="wrongReason" label="错误原因" />
         <el-table-column prop="createTime" label="记录时间" />
       </el-table>
+
+      <el-pagination
+          class="pagination"
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="total"
+          v-model:current-page="queryParams.current"
+          v-model:page-size="queryParams.size"
+          @size-change="getMyRecords"
+          @current-change="getMyRecords"
+      />
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+// 【修改】导入 reactive
+import { ref, onMounted, reactive } from 'vue';
 import { ElMessage } from 'element-plus';
-import { fetchWrongRecordList } from '@/api/wrongRecord'; // 复用API
-import type { WrongRecordVO } from '@/api/wrongRecord';
+// 【修改】导入类型 WrongRecordPageParams
+import type { WrongRecordVO, WrongRecordPageParams } from '@/api/wrongRecord';
 import request from '@/utils/request';
 
 const wrongRecords = ref<WrongRecordVO[]>([]);
 const loading = ref(true);
+// 【新增】分页相关的响应式变量
+const total = ref(0);
+const queryParams = reactive<WrongRecordPageParams>({
+  current: 1,
+  size: 10,
+});
 
+// 【修改】更新 getMyRecords 方法以支持分页
 const getMyRecords = async () => {
   loading.value = true;
   try {
-    // 这里我们直接使用封装好的request，因为它会自动携带token
     const res = await request({
-      // 【核心修改】更新URL，指向新的学生专用接口
       url: '/api/v1/student/my-wrong-records',
       method: 'get',
+      // 【新增】将分页参数传递给后端
+      params: queryParams,
     });
     if (res.code === 200) {
       wrongRecords.value = res.data;
+      // 【新增】更新总数
+      total.value = res.total;
     }
   } catch (error) {
     ElMessage.error('加载错题本失败');
@@ -50,5 +71,11 @@ onMounted(getMyRecords);
 <style scoped>
 .page-container {
   padding: 24px;
+}
+/* 【新增】分页组件的样式 */
+.pagination {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

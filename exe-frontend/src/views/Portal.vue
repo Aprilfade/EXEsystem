@@ -16,6 +16,12 @@
           <p class="system-description">（学生端）进行在线练习、查看错题、参加模拟考试。</p>
         </div>
 
+        <div class="system-card" @click="navigateToExternal('http://localhost:8081')">
+          <el-icon :size="48" color="#90939"><DataAnalysis /></el-icon>
+          <h2 class="system-name">仓库管理系统</h2>
+          <p class="system-description">为学校搭建的仓库管理系统，用于管理学校物品、设备、资产等。</p>
+        </div>
+
         <div class="system-card" @click="navigateToExternal('https://www.bilibili.com/')">
           <el-icon :size="48" color="#00a1d6"><VideoPlay /></el-icon>
           <h2 class="system-name">哔哩哔哩</h2>
@@ -34,11 +40,6 @@
           <p class="system-description">全球领先的数字游戏发行平台，放松身心的好去处。</p>
         </div>
 
-        <div class="system-card disabled">
-          <el-icon :size="48" color="#909399"><DataAnalysis /></el-icon>
-          <h2 class="system-name">数据分析平台</h2>
-          <p class="system-description">（即将上线）深度挖掘教学数据，提供决策支持。</p>
-        </div>
       </div>
     </div>
   </div>
