@@ -6,8 +6,10 @@ import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.PaperDTO;
 import com.ice.exebackend.entity.BizPaper;
 import com.ice.exebackend.service.BizPaperService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate; // 1. 导入 RedisTemplate
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -15,44 +17,51 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayOutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/v1/papers")
-// 【重要修改】将 hasAnyRole 修改为 hasAuthority
 @PreAuthorize("hasAuthority('sys:paper:list')")
 public class BizPaperController {
 
     @Autowired
     private BizPaperService paperService;
 
+    // 2. 注入 RedisTemplate
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
+    // 3. 定义缓存键常量
+    private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
+
     @PostMapping
-    @PreAuthorize("hasAuthority('sys:paper:create')") // 【新增】应用创建权限
+    @PreAuthorize("hasAuthority('sys:paper:create')")
     public Result createPaper(@RequestBody PaperDTO paperDTO) {
         boolean success = paperService.createPaperWithQuestions(paperDTO);
+        if (success) {
+            // 4. 操作成功后，清除缓存
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+        }
         return success ? Result.suc() : Result.fail();
     }
 
+    // ... [此处省略所有 GET 查询和导出方法，它们不需要修改] ...
     @GetMapping
     public Result getPaperList(@RequestParam(defaultValue = "1") int current,
                                @RequestParam(defaultValue = "10") int size,
                                @RequestParam(required = false) Long subjectId,
-                               // 【新增此行】
                                @RequestParam(required = false) String grade) {
         Page<BizPaper> page = new Page<>(current, size);
         QueryWrapper<BizPaper> queryWrapper = new QueryWrapper<>();
         if (subjectId != null) {
             queryWrapper.eq("subject_id", subjectId);
         }
-        // 【新增代码块】
         if (StringUtils.hasText(grade)) {
             queryWrapper.eq("grade", grade);
         }
         queryWrapper.orderByDesc("create_time");
-
         paperService.page(page, queryWrapper);
         return Result.suc(page.getRecords(), page.getTotal());
     }
@@ -61,21 +70,6 @@ public class BizPaperController {
     public Result getPaperById(@PathVariable Long id) {
         PaperDTO paperDTO = paperService.getPaperWithQuestionsById(id);
         return Result.suc(paperDTO);
-    }
-
-    @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('sys:paper:update')") // 【新增】应用更新权限
-    public Result updatePaper(@PathVariable Long id, @RequestBody PaperDTO paperDTO) {
-        paperDTO.setId(id);
-        boolean success = paperService.updatePaperWithQuestions(paperDTO);
-        return success ? Result.suc() : Result.fail();
-    }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('sys:paper:delete')") // 【新增】应用删除权限
-    public Result deletePaper(@PathVariable Long id) {
-        boolean success = paperService.removeById(id);
-        return success ? Result.suc() : Result.fail();
     }
 
     @GetMapping("/export/{id}")
@@ -97,8 +91,31 @@ public class BizPaperController {
                     .body(out.toByteArray());
 
         } catch (Exception e) {
-            // Log the exception
             return ResponseEntity.status(500).build();
         }
+    }
+
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('sys:paper:update')")
+    public Result updatePaper(@PathVariable Long id, @RequestBody PaperDTO paperDTO) {
+        paperDTO.setId(id);
+        boolean success = paperService.updatePaperWithQuestions(paperDTO);
+        if (success) {
+            // 4. 操作成功后，清除缓存
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+        }
+        return success ? Result.suc() : Result.fail();
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('sys:paper:delete')")
+    public Result deletePaper(@PathVariable Long id) {
+        boolean success = paperService.removeById(id);
+        if (success) {
+            // 4. 操作成功后，清除缓存
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+        }
+        return success ? Result.suc() : Result.fail();
     }
 }

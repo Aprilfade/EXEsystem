@@ -6,8 +6,7 @@ import com.ice.exebackend.common.Result;
 import com.ice.exebackend.entity.SysNotification;
 import com.ice.exebackend.service.SysNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.data.redis.core.RedisTemplate; // 1. 导入 RedisTemplate
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -19,13 +18,23 @@ public class SysNotificationController {
     @Autowired
     private SysNotificationService notificationService;
 
+    // 2. 注入 RedisTemplate
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
+    // 3. 定义与 Service 中一致的缓存键常量
+    private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
+
     @PostMapping
-    //@CacheEvict(value = "dashboardStats", allEntries = true) // 2. 添加注解，清除名为 "dashboardStats" 的所有缓存
     public Result createNotification(@RequestBody SysNotification notification) {
         if (notification.getIsPublished() != null && notification.getIsPublished()) {
             notification.setPublishTime(LocalDateTime.now());
         }
         boolean success = notificationService.save(notification);
+        if (success) {
+            // 4. 当成功创建一个新通知后，删除缓存
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+        }
         return success ? Result.suc() : Result.fail();
     }
 
@@ -43,22 +52,27 @@ public class SysNotificationController {
     }
 
     @PutMapping("/{id}")
-  //  @CacheEvict(value = "dashboardStats", allEntries = true) // 2. 添加注解，清除名为 "dashboardStats" 的所有缓存
     public Result updateNotification(@PathVariable Long id, @RequestBody SysNotification notification) {
         notification.setId(id);
-        // 如果状态从“未发布”变为“发布”，则记录当前时间为发布时间
         SysNotification oldNotification = notificationService.getById(id);
         if (oldNotification != null && !oldNotification.getIsPublished() && notification.getIsPublished()) {
             notification.setPublishTime(LocalDateTime.now());
         }
         boolean success = notificationService.updateById(notification);
+        if (success) {
+            // 4. 成功更新通知后，删除缓存
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+        }
         return success ? Result.suc() : Result.fail();
     }
 
     @DeleteMapping("/{id}")
-//@CacheEvict(value = "dashboardStats", allEntries = true) // 2. 添加注解，清除名为 "dashboardStats" 的所有缓存
     public Result deleteNotification(@PathVariable Long id) {
         boolean success = notificationService.removeById(id);
+        if (success) {
+            // 4. 成功删除通知后，删除缓存
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+        }
         return success ? Result.suc() : Result.fail();
     }
 }

@@ -7,13 +7,14 @@ import com.ice.exebackend.mapper.DashboardMapper;
 import com.ice.exebackend.service.DashboardService;
 import com.ice.exebackend.service.SysNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit; // 1. 导入 TimeUnit 用于设置过期时间
 import java.util.stream.Collectors;
 
 @Service
@@ -21,12 +22,60 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Autowired
     private DashboardMapper dashboardMapper;
+
     @Autowired
     private SysNotificationService notificationService;
 
+    // 2. 注入我们之前配置好的 RedisTemplate
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
+    // 3. 定义一个静态常量作为缓存的 Key，便于统一管理和引用
+    private static final String DASHBOARD_STATS_KEY_PREFIX = "dashboard:stats:";
+
     @Override
-    //@Cacheable(value = "dashboardStats", key = "'stats:' + (#month == null ? 'all' : #month)")
     public DashboardStatsDTO getDashboardStats(String month) {
+        // 4. 根据 month 参数动态生成唯一的缓存 Key
+        String cacheKey = DASHBOARD_STATS_KEY_PREFIX + (month == null ? "all" : month);
+
+        // 5. 首先，尝试从 Redis 中获取缓存数据
+        try {
+            DashboardStatsDTO cachedStats = (DashboardStatsDTO) redisTemplate.opsForValue().get(cacheKey);
+            if (cachedStats != null) {
+                // 如果缓存命中 (cachedStats 不为 null)，直接返回缓存的结果，不再查询数据库
+                return cachedStats;
+            }
+        } catch (Exception e) {
+            // 在缓存读取出错时记录日志，然后继续执行数据库查询，保证服务可用性
+            // logger.error("从Redis读取缓存失败", e);
+        }
+
+
+        // 6. 如果缓存中没有数据 (缓存未命中)，则执行从数据库查询的逻辑
+        DashboardStatsDTO statsFromDb = getStatsFromDatabase(month);
+
+        // 7. 将从数据库查询到的结果存入 Redis 缓存
+        try {
+            if (statsFromDb != null) {
+                // 设置缓存，并指定过期时间为 1 小时
+                redisTemplate.opsForValue().set(cacheKey, statsFromDb, 1, TimeUnit.HOURS);
+            }
+        } catch (Exception e) {
+            // 缓存写入失败不应影响主流程，记录日志即可
+            // logger.error("向Redis写入缓存失败", e);
+        }
+
+
+        // 8. 返回从数据库中获取的数据
+        return statsFromDb;
+    }
+
+    /**
+     * 将原始的数据库查询逻辑封装到一个私有方法中，使代码结构更清晰。
+     * @param month 月份参数
+     * @return 从数据库获取的统计数据
+     */
+    private DashboardStatsDTO getStatsFromDatabase(String month) {
         DashboardStatsDTO dto = new DashboardStatsDTO();
 
         // 1. 顶部卡片统计
