@@ -23,6 +23,8 @@ export interface SubjectPageParams {
     current: number;
     size: number;
     name?: string; // 【新增此行】
+    sortField?: string; // 【新增】排序字段
+    sortOrder?: string; // 【新增】排序顺序 (asc/desc)
 }
 
 /**

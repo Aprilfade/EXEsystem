@@ -29,7 +29,7 @@
     <el-card v-else-if="practiceState === 'practicing'" class="practice-card">
       <template #header>
         <div class="card-header-flex">
-          <h2>{{ currentSubject.name }} - 在线练习</h2>
+          <h2>{{ currentSubject?.name }} - 在线练习</h2>
           <el-button type="primary" link @click="resetPractice">退出练习</el-button>
         </div>
       </template>
@@ -39,12 +39,29 @@
           <p>{{ currentQuestion.content }}</p>
           <el-image v-if="currentQuestion.imageUrl" :src="currentQuestion.imageUrl" fit="contain" style="max-width: 300px; margin-top: 10px;"/>
         </div>
-        <div v-if="[1, 2].includes(currentQuestion.questionType)" class="options-container">
-          <el-radio-group v-if="currentQuestion.questionType === 1" v-model="userAnswers[currentQuestion.id]">
+        <div class="options-container">
+          <el-radio-group v-if="currentQuestion.questionType === 1 || currentQuestion.questionType === 2" v-model="userAnswers[currentQuestion.id]">
             <el-radio v-for="option in parsedOptions" :key="option.key" :label="option.key" border class="option-item">
               {{ option.key }}. {{ option.value }}
             </el-radio>
           </el-radio-group>
+          <el-input
+              v-else-if="currentQuestion.questionType === 3"
+              v-model="userAnswers[currentQuestion.id]"
+              placeholder="请输入答案"
+              size="large"
+          />
+          <el-radio-group v-else-if="currentQuestion.questionType === 4" v-model="userAnswers[currentQuestion.id]">
+            <el-radio label="T" border class="option-item">正确</el-radio>
+            <el-radio label="F" border class="option-item">错误</el-radio>
+          </el-radio-group>
+          <el-input
+              v-else-if="currentQuestion.questionType === 5"
+              v-model="userAnswers[currentQuestion.id]"
+              type="textarea"
+              :rows="5"
+              placeholder="请输入你的解答"
+          />
         </div>
         <div class="action-buttons">
           <el-button @click="prevQuestion" :disabled="currentQuestionIndex === 0">上一题</el-button>
@@ -62,34 +79,37 @@
           <el-button type="primary" @click="resetPractice">再来一次</el-button>
         </div>
       </template>
-      <div class="result-summary">
-        <el-progress type="circle" :percentage="correctPercentage" :width="120">
-          <template #default="{ percentage }">
-            <span class="percentage-value">{{ percentage }}%</span>
-            <span class="percentage-label">正确率</span>
-          </template>
-        </el-progress>
-        <div class="summary-text">
-          <h3>总题数: {{ practiceResult.totalQuestions }}</h3>
-          <h3>答对: {{ practiceResult.correctCount }}</h3>
-          <h3>答错: {{ practiceResult.totalQuestions - practiceResult.correctCount }}</h3>
-        </div>
-      </div>
-      <el-divider />
-      <div v-for="(result, index) in practiceResult.results" :key="result.question.id" class="result-item" :class="{ correct: result.isCorrect, wrong: !result.isCorrect }">
-        <div class="result-question-content">
-          <p><b>{{ index + 1 }}. {{ result.question.content }}</b></p>
-        </div>
-        <div class="result-answer-info">
-          <p>你的答案: <el-tag :type="result.isCorrect ? 'success' : 'danger'">{{ result.userAnswer || '未作答' }}</el-tag></p>
-          <p v-if="!result.isCorrect">正确答案: <el-tag type="success">{{ result.question.answer }}</el-tag></p>
-        </div>
-        <el-collapse-transition>
-          <div v-if="!result.isCorrect" class="result-explanation">
-            <b>解析：</b>{{ result.question.description || '暂无解析' }}
+      <div v-if="practiceResult">
+        <div class="result-summary">
+          <el-progress type="circle" :percentage="correctPercentage" :width="120">
+            <template #default="{ percentage }">
+              <span class="percentage-value">{{ percentage }}%</span>
+              <span class="percentage-label">正确率</span>
+            </template>
+          </el-progress>
+          <div class="summary-text">
+            <h3>总题数: {{ practiceResult.totalQuestions }}</h3>
+            <h3>答对: {{ practiceResult.correctCount }}</h3>
+            <h3>答错: {{ practiceResult.totalQuestions - practiceResult.correctCount }}</h3>
           </div>
-        </el-collapse-transition>
+        </div>
+        <el-divider />
+        <div v-for="(result, index) in practiceResult.results" :key="result.question.id" class="result-item" :class="{ correct: result.isCorrect, wrong: !result.isCorrect }">
+          <div class="result-question-content">
+            <p><b>{{ index + 1 }}. {{ result.question.content }}</b></p>
+          </div>
+          <div class="result-answer-info">
+            <p>你的答案: <el-tag :type="result.isCorrect ? 'success' : 'danger'">{{ result.userAnswer || '未作答' }}</el-tag></p>
+            <p v-if="!result.isCorrect">正确答案: <el-tag type="success">{{ result.question.answer }}</el-tag></p>
+          </div>
+          <el-collapse-transition>
+            <div v-if="!result.isCorrect" class="result-explanation">
+              <b>解析：</b>{{ result.question.description || '暂无解析' }}
+            </div>
+          </el-collapse-transition>
+        </div>
       </div>
+      <el-empty v-else description="正在加载练习结果..."></el-empty>
     </el-card>
 
   </div>
@@ -98,46 +118,57 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import request from '@/utils/request';
+// 【修复】从正确的路径导入类型
 import type { Subject } from '@/api/subject';
 import type { Question, QuestionOption } from '@/api/question';
+import type { ApiResult } from '@/api/user'; // 引入通用的 ApiResult 类型
 import { ElMessage } from 'element-plus';
 import { Collection, Reading } from '@element-plus/icons-vue';
 
-// 阶段控制: selectingGrade, selectingSubject, practicing, result
+// 【修复】为 practiceResult 提供更具体的类型
+interface PracticeResult {
+  totalQuestions: number;
+  correctCount: number;
+  results: Array<{
+    question: Question;
+    userAnswer: string;
+    isCorrect: boolean;
+  }>;
+}
+
 const practiceState = ref('selectingGrade');
 const currentGrade = ref<string | null>(null);
 const currentSubject = ref<Subject | null>(null);
-
-// 数据存储
 const grades = ref(['七年级', '八年级', '九年级', '高一', '高二', '高三']);
 const allSubjects = ref<Subject[]>([]);
 const questions = ref<Question[]>([]);
 const currentQuestionIndex = ref(0);
 const userAnswers = ref<Record<number, string>>({});
-const practiceResult = ref<any>(null);
+const practiceResult = ref<PracticeResult | null>(null); // 使用修复后的类型
 const isSubmitting = ref(false);
-
-// 计算属性
 const filteredSubjects = computed(() => {
   if (!currentGrade.value) return [];
   return allSubjects.value.filter(subject => subject.grade === currentGrade.value);
 });
-const currentQuestion = computed(() => questions.value[currentQuestionIndex.value] || {});
+
+const currentQuestion = computed<Partial<Question>>(() => questions.value[currentQuestionIndex.value] || {});
+
 const parsedOptions = computed((): QuestionOption[] => {
   if (currentQuestion.value && typeof currentQuestion.value.options === 'string') {
     try { return JSON.parse(currentQuestion.value.options); } catch (e) { return []; }
   }
   return [];
 });
+
 const correctPercentage = computed(() => {
   if (!practiceResult.value || practiceResult.value.totalQuestions === 0) return 0;
   return Math.round((practiceResult.value.correctCount / practiceResult.value.totalQuestions) * 100);
 });
 
-// 方法
 const loadAllSubjects = async () => {
   try {
-    const res = await request({ url: '/api/v1/student/subjects', method: 'get' });
+    // 【修复】为API返回结果添加明确的类型
+    const res: ApiResult<Subject[]> = await request({ url: '/api/v1/student/subjects', method: 'get' });
     if (res.code === 200) {
       allSubjects.value = res.data;
     }
@@ -145,17 +176,23 @@ const loadAllSubjects = async () => {
     ElMessage.error('获取科目列表失败');
   }
 };
-const selectGrade = (grade: string) => { currentGrade.value = grade; practiceState.value = 'selectingSubject'; };
-// 修改后的代码
+
+const selectGrade = (grade: string) => {
+  currentGrade.value = grade;
+  practiceState.value = 'selectingSubject';
+};
+
+// 【修复】为参数 subject 添加类型
 const startPractice = async (subject: Subject) => {
   currentSubject.value = subject;
   try {
-    const res = await request({
+    // 【修复】为API返回结果添加明确的类型
+    const res: ApiResult<Question[]> = await request({
       url: '/api/v1/student/practice-questions',
       method: 'get',
       params: {
         subjectId: subject.id,
-        grade: currentGrade.value // <-- 新增这一行
+        grade: currentGrade.value
       }
     });
     if (res.code === 200) {
@@ -166,14 +203,27 @@ const startPractice = async (subject: Subject) => {
     }
   } catch (e) { ElMessage.error('获取练习题失败'); }
 };
-const resetPractice = () => { practiceState.value = 'selectingGrade'; currentGrade.value = null; currentSubject.value = null; questions.value = []; };
-const nextQuestion = () => { if (currentQuestionIndex.value < questions.value.length - 1) currentQuestionIndex.value++; };
-const prevQuestion = () => { if (currentQuestionIndex.value > 0) currentQuestionIndex.value--; };
+
+const resetPractice = () => {
+  practiceState.value = 'selectingGrade';
+  currentGrade.value = null;
+  currentSubject.value = null;
+  questions.value = [];
+};
+
+const nextQuestion = () => {
+  if (currentQuestionIndex.value < questions.value.length - 1) currentQuestionIndex.value++;
+};
+
+const prevQuestion = () => {
+  if (currentQuestionIndex.value > 0) currentQuestionIndex.value--;
+};
 
 const submitPractice = async () => {
   isSubmitting.value = true;
   try {
-    const res = await request({
+    // 【修复】为API返回结果添加明确的类型
+    const res: ApiResult<PracticeResult> = await request({
       url: '/api/v1/student/submit-practice',
       method: 'post',
       data: { answers: userAnswers.value }
@@ -190,10 +240,11 @@ const submitPractice = async () => {
 };
 
 onMounted(loadAllSubjects);
+
 </script>
 
 <style scoped>
-/* ... 其他样式保持不变 ... */
+/* <style> 部分的代码无需改动，保持原样即可 */
 .practice-container { padding: 24px; }
 .selection-card { max-width: 800px; margin: 40px auto; }
 .card-header-flex { display: flex; justify-content: space-between; align-items: center; }
@@ -207,8 +258,6 @@ onMounted(loadAllSubjects);
 .options-container { display: flex; flex-direction: column; gap: 15px; }
 .option-item { width: 100%; margin: 0 !important; height: auto; padding: 15px; }
 .action-buttons { margin-top: 40px; text-align: center; }
-
-/* 新增的结果页样式 */
 .result-card { max-width: 900px; margin: auto; }
 .result-summary { display: flex; align-items: center; justify-content: center; gap: 40px; padding: 20px 0; }
 .percentage-value { display: block; font-size: 24px; font-weight: bold; }

@@ -63,18 +63,19 @@
         </div>
       </div>
 
-      <el-table v-if="viewMode === 'list'" :data="subjectList" v-loading="loading" style="width: 100%; margin-top: 20px;">
+      <el-table
+          v-if="viewMode === 'list'"
+          :data="subjectList"
+          v-loading="loading"
+          style="width: 100%; margin-top: 20px;"
+          @sort-change="handleSortChange" >
         <el-table-column prop="name" label="科目名称" />
-        <el-table-column prop="grade" label="年级" width="120" />
+        <el-table-column prop="grade" label="年级" width="120" sortable="custom" />
         <el-table-column prop="description" label="简介" />
-        <el-table-column prop="knowledgePointCount" label="关联知识点数" width="150" align="center" />
-        <el-table-column prop="questionCount" label="关联试题数" width="150" align="center" />
-        <el-table-column prop="createTime" label="创建时间" />
+        <el-table-column prop="knowledgePointCount" label="关联知识点数" width="150" align="center" sortable="custom" />
+        <el-table-column prop="questionCount" label="关联试题数" width="150" align="center" sortable="custom" />
+        <el-table-column prop="createTime" label="创建时间" sortable="custom" />
         <el-table-column label="操作" width="180" align="center">
-          <template #default="scope">
-            <el-button type="primary" link :icon="Edit" @click="handleUpdate(scope.row)">编辑</el-button>
-            <el-button type="danger" link :icon="Delete" @click="handleDelete(scope.row.id)">删除</el-button>
-          </template>
         </el-table-column>
       </el-table>
 
@@ -107,6 +108,7 @@ import { fetchSubjectList, deleteSubject } from '@/api/subject';
 import type { Subject, SubjectPageParams } from '@/api/subject';
 import { Plus, Edit, Delete, Grid, Menu, MoreFilled } from '@element-plus/icons-vue';
 import SubjectEditDialog from '@/components/subject/SubjectEditDialog.vue';
+import type { Sort } from 'element-plus'; // 【第三步】导入 Sort 类型
 // 【核心修改】移除了 SubjectDetailDialog 的导入
 
 const subjectList = ref<Subject[]>([]);
@@ -125,7 +127,9 @@ const viewMode = ref<'grid' | 'list'>('grid');
 const queryParams = reactive<SubjectPageParams>({
   current: 1,
   size: 10,
-  name: ''
+  name: '',
+  sortField: 'createTime', // 默认按创建时间排序
+  sortOrder: 'desc'      // 默认倒序
 });
 
 const getList = async () => {
@@ -173,9 +177,18 @@ const handleDelete = (id: number) => {
         getList();
       });
 };
-
-// 【核心修改】移除了 handleCardClick 函数
-// const handleCardClick = (subject: Subject) => { ... };
+// 【第五步】添加 handleSortChange 方法
+const handleSortChange = ({ prop, order }: Sort) => {
+  if (order) {
+    queryParams.sortField = prop;
+    queryParams.sortOrder = order === 'ascending' ? 'asc' : 'desc';
+  } else {
+    // 如果取消排序，则恢复默认排序
+    queryParams.sortField = 'createTime';
+    queryParams.sortOrder = 'desc';
+  }
+  getList(); // 调用 getList 重新获取数据
+};
 
 onMounted(getList);
 </script>

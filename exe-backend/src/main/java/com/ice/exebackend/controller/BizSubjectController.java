@@ -1,6 +1,8 @@
 package com.ice.exebackend.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+// 【关键修复】移除无效的 import 别名语法
+// import com.baomidou.mybatisplus.core.toolkit.StringUtils as MybatisStringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.SubjectStatsDTO;
@@ -11,7 +13,7 @@ import com.ice.exebackend.entity.BizStudent;
 import com.ice.exebackend.entity.BizSubject;
 import com.ice.exebackend.service.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate; // 1. 导入 RedisTemplate
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -39,21 +41,15 @@ public class BizSubjectController {
     @Autowired
     private BizPaperService paperService;
 
-    // 2. 注入 RedisTemplate
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-    // 3. 定义缓存键常量
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
-    /**
-     * 新增科目
-     */
     @PostMapping
     public Result createSubject(@RequestBody BizSubject subject) {
         boolean success = subjectService.save(subject);
         if (success) {
-            // 4. 操作成功后，清除缓存
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
         }
         return success ? Result.suc() : Result.fail();
@@ -62,43 +58,57 @@ public class BizSubjectController {
     @GetMapping
     public Result getSubjectList(@RequestParam(defaultValue = "1") int current,
                                  @RequestParam(defaultValue = "10") int size,
-                                 @RequestParam(required = false) String name) {
+                                 @RequestParam(required = false) String name,
+                                 @RequestParam(required = false) String sortField,
+                                 @RequestParam(required = false) String sortOrder) {
         Page<BizSubject> pageRequest = new Page<>(current, size);
         QueryWrapper<BizSubject> queryWrapper = new QueryWrapper<>();
         if (StringUtils.hasText(name)) {
             queryWrapper.like("name", name).or().like("description", name);
         }
         pageRequest.setOptimizeCountSql(false);
+
+        // 动态排序逻辑
+        if (StringUtils.hasText(sortField) && StringUtils.hasText(sortOrder)) {
+            // 【关键修复1】使用MyBatis-Plus自带的StringUtils的全限定名进行调用
+            String dbColumn = com.baomidou.mybatisplus.core.toolkit.StringUtils.camelToUnderline(sortField);
+
+            // 【关键修复2】白名单校验：只允许对数据库中真实存在的列进行排序
+            if ("grade".equals(dbColumn) || "create_time".equals(dbColumn)) {
+                if ("asc".equalsIgnoreCase(sortOrder)) {
+                    queryWrapper.orderByAsc(dbColumn);
+                } else {
+                    queryWrapper.orderByDesc(dbColumn);
+                }
+            } else {
+                // 如果传入了非法的排序列名，则使用默认排序，防止SQL注入和报错
+                queryWrapper.orderByDesc("create_time");
+            }
+        } else {
+            // 如果前端没有传递排序参数，则使用默认排序
+            queryWrapper.orderByDesc("create_time");
+        }
+
         Page<SubjectStatsDTO> statsPage = subjectService.getSubjectStatsPage(pageRequest, queryWrapper);
         return Result.suc(statsPage.getRecords(), statsPage.getTotal());
     }
 
-    /**
-     * 获取所有科目列表（不分页，用于下拉框）
-     */
     @GetMapping("/all")
     public Result getAllSubjects() {
         List<BizSubject> list = subjectService.list();
         return Result.suc(list);
     }
 
-    /**
-     * 更新科目信息
-     */
     @PutMapping("/{id}")
     public Result updateSubject(@PathVariable Long id, @RequestBody BizSubject subject) {
         subject.setId(id);
         boolean success = subjectService.updateById(subject);
         if (success) {
-            // 4. 操作成功后，清除缓存
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
         }
         return success ? Result.suc() : Result.fail();
     }
 
-    /**
-     * 删除科目 (已加入完整的安全删除检查)
-     */
     @DeleteMapping("/{id}")
     public Result deleteSubject(@PathVariable Long id) {
         long knowledgePointCount = knowledgePointService.count(new QueryWrapper<BizKnowledgePoint>().eq("subject_id", id));
@@ -119,24 +129,17 @@ public class BizSubjectController {
         }
         boolean success = subjectService.removeById(id);
         if (success) {
-            // 4. 操作成功后，清除缓存
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
         }
         return success ? Result.suc() : Result.fail();
     }
 
-    /**
-     * 【新增】根据科目ID获取其关联的试题列表 (已按年级智能筛选)
-     */
     @GetMapping("/{id}/questions")
     public Result getQuestionsForSubject(@PathVariable Long id) {
         List<BizQuestion> questions = subjectService.getQuestionsForSubject(id);
         return Result.suc(questions);
     }
 
-    /**
-     * 【新增】获取所有科目中不重复的年级列表
-     */
     @GetMapping("/grades")
     public Result getDistinctGrades() {
         QueryWrapper<BizSubject> queryWrapper = new QueryWrapper<>();
