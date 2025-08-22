@@ -11,7 +11,7 @@
         <el-col :span="12">
           <el-form-item label="所属科目" prop="subjectId">
             <el-select v-model="form.subjectId" placeholder="请选择科目" style="width: 100%;" @change="handleSubjectChange">
-              <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
+              <el-option v-for="sub in allSubjects" :key="sub.id" :label="`${sub.name} (${sub.grade})`" :value="sub.id" />
             </el-select>
           </el-form-item>
         </el-col>

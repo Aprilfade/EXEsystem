@@ -52,7 +52,7 @@
         <div class="header-right-panel">
           <el-input v-model="queryParams.content" placeholder="输入题干内容搜索" size="large" style="width: 240px;" @keyup.enter="handleQuery" clearable @clear="handleQuery"/>
           <el-select v-model="queryParams.subjectId" placeholder="按科目筛选" clearable @change="handleQuery" size="large" style="width: 140px;">
-            <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
+            <el-option v-for="sub in allSubjects" :key="sub.id" :label="`${sub.name} (${sub.grade})`" :value="sub.id" />
           </el-select>
           <el-select v-model="queryParams.grade" placeholder="按年级筛选" clearable @change="handleQuery" size="large" style="width: 140px;">
             <el-option label="一年级" value="一年级" />

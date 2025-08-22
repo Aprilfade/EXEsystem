@@ -16,7 +16,7 @@
       />
       <el-form-item label="新科目">
         <el-select v-model="form.subjectId" placeholder="选择一个新的科目" clearable style="width: 100%;">
-          <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
+          <el-option v-for="sub in allSubjects" :key="sub.id" :label="`${sub.name} (${sub.grade})`" :value="sub.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="新年级">
