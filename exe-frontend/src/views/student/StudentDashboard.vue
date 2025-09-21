@@ -95,10 +95,10 @@
             </div>
           </template>
           <el-timeline class="timeline">
-            <el-timeline-item timestamp="2025/08/14">完成了一次 "数学" 单元测试</el-timeline-item>
-            <el-timeline-item timestamp="2025/08/13">复习了 5 道错题</el-timeline-item>
-            <el-timeline-item timestamp="2025/08/11">进行了 "物理" 科目在线练习</el-timeline-item>
-            <el-timeline-item timestamp="2025/08/10">登录了学习系统</el-timeline-item>
+            <el-empty v-if="activities.length === 0" description="暂无学习动态" :image-size="60" />
+            <el-timeline-item v-else v-for="activity in activities" :key="activity.id" :timestamp="activity.createTime">
+              {{ activity.description }}
+            </el-timeline-item>
           </el-timeline>
         </el-card>
       </el-col>
@@ -114,6 +114,10 @@ import { Tickets, Select, CloseBold, Clock, EditPen, Memo, DataLine, Finished } 
 // 【新增】导入API函数和类型
 import { fetchStudentDashboardStats, type StudentDashboardStats } from '@/api/studentAuth';
 import { ElMessage } from 'element-plus';
+import request from '@/utils/request';
+import type { ApiResult } from '@/api/user';
+import type { BizLearningActivity } from '@/api/learningActivity'; // 假定你已创建此类型
+
 
 const studentAuth = useStudentAuthStore();
 const router = useRouter();
@@ -127,6 +131,8 @@ const stats = ref<StudentDashboardStats>({
   wrongRecordCount: 0,
   studyDurationHours: 0,
 });
+// 【新增】学习活动列表
+const activities = ref<BizLearningActivity[]>([]);
 
 const welcomeMessage = computed(() => {
   const hour = new Date().getHours();
@@ -153,6 +159,14 @@ onMounted(async () => {
     const res = await fetchStudentDashboardStats();
     if (res.code === 200) {
       stats.value = res.data;
+    }
+    // 【新增】获取学习活动日志
+    const activitiesRes: ApiResult<BizLearningActivity[]> = await request({
+      url: '/api/v1/student/learning-activities',
+      method: 'get'
+    });
+    if (activitiesRes.code === 200) {
+      activities.value = activitiesRes.data;
     }
   } catch (error) {
     console.error("获取仪表盘统计数据失败:", error);

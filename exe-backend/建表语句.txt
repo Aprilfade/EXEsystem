@@ -142,6 +142,7 @@ CREATE TABLE `biz_wrong_record` (
   `paper_id` bigint DEFAULT NULL COMMENT '可选, 关联试卷ID',
   `wrong_answer` text COLLATE utf8mb4_unicode_ci COMMENT '学生的错误答案',
   `wrong_reason` text COLLATE utf8mb4_unicode_ci COMMENT '错误原因分析',
+  `is_mastered` tinyint(1) DEFAULT '0' COMMENT '是否已掌握 (1:是, 0:否)',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   INDEX `idx_student_id` (`student_id`),
@@ -291,3 +292,17 @@ CREATE TABLE `sys_login_log` (
   `log_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '日志记录时间',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户登录日志表';
+
+
+-- ----------------------------
+-- 16. 【新增】学习活动日志表
+-- ----------------------------
+CREATE TABLE `biz_learning_activity` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `student_id` bigint NOT NULL COMMENT '学生ID',
+  `activity_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '活动类型 (例如: PRACTICE, EXAM)',
+  `description` text COLLATE utf8mb4_unicode_ci COMMENT '活动描述',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_student_id` (`student_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学习活动日志表';

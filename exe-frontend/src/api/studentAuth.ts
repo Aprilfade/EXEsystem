@@ -1,6 +1,7 @@
 import request from '@/utils/request';
 import type { ApiResult } from './user';
-import type { Student } from './student'; // 复用已有的 Student 类型
+import type { Student } from './student';
+import type {Question} from "./question.ts"; // 复用已有的 Student 类型
 
 // 登录请求参数
 interface StudentLoginCredentials {
@@ -56,5 +57,19 @@ export function fetchStudentDashboardStats(): Promise<ApiResult<StudentDashboard
     return request({
         url: '/api/v1/student/dashboard-stats',
         method: 'get'
+    });
+}
+/**
+ * 【修改】获取练习题
+ */
+export function fetchPracticeQuestions(params: {
+    subjectId: number;
+    grade: string;
+    mode?: string; // 【新增】可选的 mode 参数
+}): Promise<ApiResult<Question[]>> {
+    return request({
+        url: '/api/v1/student/practice-questions',
+        method: 'get',
+        params
     });
 }

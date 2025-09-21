@@ -26,10 +26,17 @@
       <el-empty v-if="filteredSubjects.length === 0" description="该年级下暂无科目"></el-empty>
     </el-card>
 
+
     <el-card v-else-if="practiceState === 'practicing'" class="practice-card">
       <template #header>
         <div class="card-header-flex">
           <h2>{{ currentSubject?.name }} - 在线练习</h2>
+          <div class="mode-selector">
+            <el-radio-group v-model="practiceMode" size="small">
+              <el-radio-button label="random">随机练习</el-radio-button>
+              <el-radio-button label="smart">智能练习</el-radio-button>
+            </el-radio-group>
+          </div>
           <el-button type="primary" link @click="resetPractice">退出练习</el-button>
         </div>
       </template>
@@ -124,6 +131,7 @@ import type { Question, QuestionOption } from '@/api/question';
 import type { ApiResult } from '@/api/user'; // 引入通用的 ApiResult 类型
 import { ElMessage } from 'element-plus';
 import { Collection, Reading } from '@element-plus/icons-vue';
+import { fetchPracticeQuestions } from '@/api/studentAuth'; // 确保你已修改此文件
 
 // 【修复】为 practiceResult 提供更具体的类型
 interface PracticeResult {
@@ -137,6 +145,7 @@ interface PracticeResult {
 }
 
 const practiceState = ref('selectingGrade');
+const practiceMode = ref('random'); // 【新增】出题模式，默认随机
 const currentGrade = ref<string | null>(null);
 const currentSubject = ref<Subject | null>(null);
 const grades = ref(['七年级', '八年级', '九年级', '高一', '高二', '高三']);
@@ -182,18 +191,14 @@ const selectGrade = (grade: string) => {
   practiceState.value = 'selectingSubject';
 };
 
-// 【修复】为参数 subject 添加类型
+// 【修改】startPractice 方法，添加 mode 参数
 const startPractice = async (subject: Subject) => {
   currentSubject.value = subject;
   try {
-    // 【修复】为API返回结果添加明确的类型
-    const res: ApiResult<Question[]> = await request({
-      url: '/api/v1/student/practice-questions',
-      method: 'get',
-      params: {
-        subjectId: subject.id,
-        grade: currentGrade.value
-      }
+    const res = await fetchPracticeQuestions({
+      subjectId: subject.id,
+      grade: currentGrade.value,
+      mode: practiceMode.value // 【核心修改】将模式传递给API
     });
     if (res.code === 200) {
       questions.value = res.data;
@@ -201,9 +206,10 @@ const startPractice = async (subject: Subject) => {
       userAnswers.value = {};
       practiceState.value = 'practicing';
     }
-  } catch (e) { ElMessage.error('获取练习题失败'); }
+  } catch (e) {
+    ElMessage.error('获取练习题失败');
+  }
 };
-
 const resetPractice = () => {
   practiceState.value = 'selectingGrade';
   currentGrade.value = null;
@@ -248,6 +254,7 @@ onMounted(loadAllSubjects);
 .practice-container { padding: 24px; }
 .selection-card { max-width: 800px; margin: 40px auto; }
 .card-header-flex { display: flex; justify-content: space-between; align-items: center; }
+.mode-selector { margin:0 20px ;}
 .selection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
 .grid-item { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; border: 1px solid #e4e7ed; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
 .grid-item:hover { border-color: #409EFF; color: #409EFF; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1); }

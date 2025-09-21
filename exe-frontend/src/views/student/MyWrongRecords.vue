@@ -10,6 +10,11 @@
         <el-table-column prop="paperName" label="来源试卷" />
         <el-table-column prop="wrongReason" label="错误原因" />
         <el-table-column prop="createTime" label="记录时间" />
+        <el-table-column label="操作" width="180">
+          <template #default="scope">
+            <el-button link type="primary" @click="handleReview(scope.row)">重新练习</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <el-pagination
@@ -23,16 +28,54 @@
           @current-change="getMyRecords"
       />
     </el-card>
+    <el-dialog v-model="isReviewDialogVisible" title="错题解析" width="700px">
+      <div v-if="reviewQuestion">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="题干">
+            <div v-html="reviewQuestion.content"></div>
+            <el-image v-if="reviewQuestion.imageUrl" :src="reviewQuestion.imageUrl" style="max-width: 200px;"/>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="reviewQuestion.options" label="选项">
+            <p v-for="option in JSON.parse(reviewQuestion.options as string)" :key="option.key">
+              {{ option.key }}. {{ option.value }}
+            </p>
+          </el-descriptions-item>
+          <el-descriptions-item label="我的答案">
+            <el-tag type="danger">{{ currentWrongRecord?.wrongAnswer || '未作答' }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="正确答案">
+            <el-tag type="success">{{ reviewQuestion.answer }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="解析">
+            <div v-html="reviewQuestion.description"></div>
+            <el-image v-if="reviewQuestion.answerImageUrl" :src="reviewQuestion.answerImageUrl" style="max-width: 200px;"/>
+          </el-descriptions-item>
+          <el-descriptions-item label="错误原因分析">
+            {{ currentWrongRecord?.wrongReason }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+
+      <template #footer>
+        <div v-if="reviewQuestion">
+          <el-button type="success" @click="handleMarkAsMastered">标记为已掌握</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 // 【修改】导入 reactive
 import { ref, onMounted, reactive } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 // 【修改】导入类型 WrongRecordPageParams
 import type { WrongRecordVO, WrongRecordPageParams } from '@/api/wrongRecord';
 import request from '@/utils/request';
+import { fetchWrongRecordDetail, markWrongRecordAsMastered } from '@/api/wrongRecord';
+import type { Question } from '@/api/question';
+
+
 
 const wrongRecords = ref<WrongRecordVO[]>([]);
 const loading = ref(true);
@@ -42,6 +85,11 @@ const queryParams = reactive<WrongRecordPageParams>({
   current: 1,
   size: 10,
 });
+// 【新增】错题重练相关变量
+const isReviewDialogVisible = ref(false);
+const reviewQuestion = ref<Question | null>(null);
+const currentWrongRecord = ref<WrongRecordVO | null>(null);
+
 
 // 【修改】更新 getMyRecords 方法以支持分页
 const getMyRecords = async () => {
@@ -64,7 +112,29 @@ const getMyRecords = async () => {
     loading.value = false;
   }
 };
+// 【新增】处理重新练习按钮
+const handleReview = async (record: WrongRecordVO) => {
+  if (!record.id) return;
+  try {
+    const res = await fetchWrongRecordDetail(record.id);
+    if (res.code === 200) {
+      reviewQuestion.value = res.data;
+      currentWrongRecord.value = record;
+      isReviewDialogVisible.value = true;
+    }
+  } catch (error) {
+    ElMessage.error('加载题目详情失败');
+  }
+};
 
+// 【新增】处理标记为已掌握按钮
+const handleMarkAsMastered = async () => {
+  if (!currentWrongRecord.value || !currentWrongRecord.value.id) return;
+  await markWrongRecordAsMastered(currentWrongRecord.value.id);
+  ElMessage.success('已标记为已掌握，该记录将不再显示');
+  isReviewDialogVisible.value = false;
+  await getMyRecords(); // 重新加载列表
+};
 onMounted(getMyRecords);
 </script>
 

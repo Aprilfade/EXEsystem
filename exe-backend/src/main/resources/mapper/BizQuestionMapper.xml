@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ice.exebackend.mapper.BizQuestionMapper">
+
+    <select id="selectWrongKnowledgePointIds" resultType="java.lang.Long">
+        SELECT
+            qkp.knowledge_point_id
+        FROM
+            biz_wrong_record wr
+                JOIN
+            biz_question_knowledge_point qkp ON wr.question_id = qkp.question_id
+                JOIN
+            biz_question q ON q.id = wr.question_id
+        WHERE
+            wr.student_id = #{studentId} AND q.subject_id = #{subjectId}
+        GROUP BY
+            qkp.knowledge_point_id
+        ORDER BY
+            COUNT(wr.id) DESC
+    </select>
+
+    <select id="selectQuestionsByKnowledgePoints" resultType="java.lang.Long">
+        SELECT DISTINCT
+        qkp.question_id
+        FROM
+        biz_question_knowledge_point qkp
+        WHERE
+        qkp.knowledge_point_id IN
+        <foreach item="item" index="index" collection="kpIds" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND qkp.question_id NOT IN (
+        SELECT question_id FROM biz_wrong_record WHERE student_id = #{studentId}
+        )
+        ORDER BY
+        RAND()
+        LIMIT #{limit}
+    </select>
+</mapper>

@@ -128,3 +128,22 @@ export function fetchStatsByPaper(paperId: number): Promise<ApiResult<PaperStats
         params: { paperId }
     });
 }
+/**
+ * 【新增】获取单个错题的详细信息
+ */
+export function fetchWrongRecordDetail(id: number): Promise<ApiResult<Question>> {
+    return request({
+        url: `/api/v1/student/wrong-records/detail/${id}`,
+        method: 'get'
+    });
+}
+
+/**
+ * 【新增】标记错题为已掌握
+ */
+export function markWrongRecordAsMastered(id: number): Promise<ApiResult<null>> {
+    return request({
+        url: `/api/v1/student/wrong-records/${id}/mastered`,
+        method: 'post'
+    });
+}

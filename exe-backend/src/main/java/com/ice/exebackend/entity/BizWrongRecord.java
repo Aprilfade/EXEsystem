@@ -18,6 +18,7 @@ public class BizWrongRecord {
     private Long paperId;
     private String wrongAnswer;
     private String wrongReason;
+    private Integer isMastered; // 【新增】字段，类型改为Integer
     private LocalDateTime createTime;
 
     public Long getId(){
@@ -55,6 +56,12 @@ public class BizWrongRecord {
     }
     public void setWrongReason(String wrongReason){
         this.wrongReason = wrongReason;
+    }
+    public Integer getIsMastered() {
+        return isMastered;
+    }
+    public void setIsMastered(Integer isMastered) {
+        this.isMastered = isMastered;
     }
     public LocalDateTime getCreateTime(){
         return createTime;
