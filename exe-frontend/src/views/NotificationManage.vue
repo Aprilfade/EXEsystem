@@ -13,8 +13,14 @@
         <el-table-column prop="title" label="标题" show-overflow-tooltip />
         <el-table-column label="状态" width="120" align="center">
           <template #default="scope">
-            <el-tag :type="scope.row.isPublished ? 'success' : 'info'">
-              {{ scope.row.isPublished ? '已发布' : '草稿' }}
+            <el-tag v-if="scope.row.isPublished" type="success">
+              已发布
+            </el-tag>
+            <el-tag v-else-if="!scope.row.isPublished && scope.row.publishTime" type="warning">
+              定时发布
+            </el-tag>
+            <el-tag v-else type="info">
+              草稿
             </el-tag>
           </template>
         </el-table-column>

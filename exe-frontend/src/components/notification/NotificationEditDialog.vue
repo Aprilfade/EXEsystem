@@ -16,6 +16,17 @@
       <el-form-item label="立即发布" prop="isPublished">
         <el-switch v-model="form.isPublished" />
       </el-form-item>
+      <el-form-item v-if="!form.isPublished" label="定时发布" prop="publishTime">
+        <el-date-picker
+            v-model="form.publishTime"
+            type="datetime"
+            placeholder="选择发布时间 (留空则为草稿)"
+            format="YYYY-MM-DD HH:mm:ss"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            style="width: 100%;"
+            clearable
+        />
+      </el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="handleClose">取 消</el-button>
@@ -50,7 +61,8 @@ watch(() => props.visible, (isVisible) => {
         form.value = res.data;
       });
     } else {
-      form.value = { title: '', content: '', isPublished: false };
+      // 【修改】初始化时添加 publishTime 字段
+      form.value = { title: '', content: '', isPublished: false, publishTime: undefined };
     }
   }
 });
@@ -68,6 +80,10 @@ const submitForm = async () => {
   if (!formRef.value) return;
   await formRef.value.validate(async (valid) => {
     if (valid) {
+      // 【新增】如果“立即发布”为 true，则清空“定时发布”时间
+      if (form.value?.isPublished) {
+        form.value.publishTime = undefined;
+      }
       if (form.value?.id) {
         await updateNotification(form.value.id, form.value);
         ElMessage.success('更新成功');

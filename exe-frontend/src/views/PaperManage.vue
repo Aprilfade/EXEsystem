@@ -284,6 +284,12 @@ onMounted(() => {
   background-color: #f7f9fc;
   display: flex;
   flex-direction: column;
+  transition: all 0.3s;
+}
+.paper-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--brand-color); /* 使用 style.css 中定义的品牌色 */
 }
 .card-header {
   display: flex;

@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit; // 1. 导入 TimeUnit 用于设置过期时间
 import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 
 @Service
 public class DashboardServiceImpl implements DashboardService {
@@ -131,7 +132,15 @@ public class DashboardServiceImpl implements DashboardService {
 
         // 6. 系统通知
         List<SysNotification> notifications = notificationService.list(
-                new QueryWrapper<SysNotification>().eq("is_published", true).orderByDesc("publish_time").last("LIMIT 3")
+                new QueryWrapper<SysNotification>()
+                        .and(wrapper -> wrapper
+                                // 条件1: 已经是 "立即发布" 状态的
+                                .eq("is_published", true)
+                                // 条件2: 或者是 "定时发布" 且时间已到或已过的
+                                .or(i -> i.isNotNull("publish_time")
+                                        .le("publish_time", LocalDateTime.now())))
+                        .orderByDesc("publish_time") // 按发布时间倒序
+                        .last("LIMIT 3") // 只取最新的3条
         );
         dto.setNotifications(notifications.stream().map(n -> {
             DashboardStatsDTO.Notification notificationDto = new DashboardStatsDTO.Notification();

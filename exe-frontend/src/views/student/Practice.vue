@@ -41,6 +41,17 @@
         </div>
       </template>
       <div v-if="questions.length > 0">
+        <div class="question-summary">
+          <el-tag
+              v-for="item in questionTypeCounts"
+              :key="item.type"
+              type="info"
+              effect="plain"
+              size="small"
+          >
+            {{ item.name }}: {{ item.count }} 题
+          </el-tag>
+        </div>
         <div class="question-progress">题目 {{ currentQuestionIndex + 1 }} / {{ questions.length }}</div>
         <div class="question-content">
           <p>{{ currentQuestion.content }}</p>
@@ -143,6 +154,37 @@ interface PracticeResult {
     isCorrect: boolean;
   }>;
 }
+
+// 【新增】题目类型映射表
+const questionTypeMap: { [key: number]: string } = {
+  1: '单选题',
+  2: '多选题',
+  3: '填空题',
+  4: '判断题',
+  5: '主观题',
+};
+
+// 【新增】计算题目类型统计
+const questionTypeCounts = computed(() => {
+  // 创建一个 Map 来存储计数
+  const counts = new Map<number, number>();
+
+  // 遍历所有题目
+  for (const q of questions.value) {
+    // 对应题型的计数+1
+    counts.set(q.questionType, (counts.get(q.questionType) || 0) + 1);
+  }
+
+  // 将 Map 转换成一个排序后的数组，方便模板渲染
+  return Array.from(counts.entries())
+      .map(([type, count]) => ({
+        type,
+        name: questionTypeMap[type] || '未知题型', // 转换题型名称
+        count
+      }))
+      .sort((a, b) => a.type - b.type); // 按题型ID (1, 2, 3...) 排序
+});
+
 
 const practiceState = ref('selectingGrade');
 const practiceMode = ref('random'); // 【新增】出题模式，默认随机
@@ -275,4 +317,6 @@ onMounted(loadAllSubjects);
 .result-item.wrong { border-left: 5px solid #F56C6C; }
 .result-answer-info { display: flex; gap: 20px; margin: 10px 0; }
 .result-explanation { background-color: #f5f7fa; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 0.9rem; color: #606266; }
+.question-summary {padding: 10px 15px;background-color: #f5f7fa; /* 一个浅灰色背景 */border-radius: 4px;margin-bottom: 20px; /* 与下方的进度条隔开 */display: flex;flex-wrap: wrap; /* 自动换行 */gap: 8px; /* 标签之间的间距 */}
+
 </style>

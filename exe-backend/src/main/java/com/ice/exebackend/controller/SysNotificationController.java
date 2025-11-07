@@ -54,10 +54,30 @@ public class SysNotificationController {
     @PutMapping("/{id}")
     public Result updateNotification(@PathVariable Long id, @RequestBody SysNotification notification) {
         notification.setId(id);
+
+        // 【修改】获取旧数据，用于判断状态变更
         SysNotification oldNotification = notificationService.getById(id);
-        if (oldNotification != null && !oldNotification.getIsPublished() && notification.getIsPublished()) {
+
+        // 场景1：从 "草稿" 或 "定时发布" 变为 "立即发布"
+        if (oldNotification != null &&
+                (oldNotification.getIsPublished() == null || !oldNotification.getIsPublished()) &&
+                (notification.getIsPublished() != null && notification.getIsPublished())) {
+
             notification.setPublishTime(LocalDateTime.now());
         }
+        // 场景2：从 "立即发布" 改为 "草稿" (清除定时时间)
+        else if (oldNotification != null &&
+                oldNotification.getIsPublished() &&
+                (notification.getIsPublished() != null && !notification.getIsPublished()) &&
+                notification.getPublishTime() == null) { // 并且前端没有指定新的定时时间
+
+            notification.setPublishTime(null);
+        }
+        // 场景3：设置为 "草稿" (isPublished=false, publishTime=null)
+        // 场景4：设置为 "定时发布" (isPublished=false, publishTime=future)
+        // 场景5：从 "立即发布" 改为 "定时发布"
+        // 这三种情况，我们都信任前端传来的 notification 对象的 (isPublished 和 publishTime) 值，无需额外处理。
+
         boolean success = notificationService.updateById(notification);
         if (success) {
             // 4. 成功更新通知后，删除缓存
