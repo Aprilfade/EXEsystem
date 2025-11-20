@@ -118,4 +118,22 @@ public class BizPaperController {
         }
         return success ? Result.suc() : Result.fail();
     }
+    /**
+     * 【新增】修改试卷状态（发布/下架）
+     */
+    @PutMapping("/{id}/status")
+    @PreAuthorize("hasAuthority('sys:paper:update')")
+    public Result updatePaperStatus(@PathVariable Long id, @RequestParam Integer status) {
+        BizPaper paper = new BizPaper();
+        paper.setId(id);
+        paper.setStatus(status);
+        boolean success = paperService.updateById(paper);
+
+        // 清除缓存
+        if (success) {
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+        }
+
+        return success ? Result.suc() : Result.fail();
+    }
 }

@@ -7,14 +7,12 @@ import com.ice.exebackend.dto.PracticeResultDTO;
 import com.ice.exebackend.dto.PracticeSubmissionDTO;
 import com.ice.exebackend.dto.StudentDashboardStatsDTO;
 import com.ice.exebackend.dto.WrongRecordVO;
-import com.ice.exebackend.entity.BizQuestion;
-import com.ice.exebackend.entity.BizStudent;
-import com.ice.exebackend.entity.BizSubject;
-import com.ice.exebackend.entity.BizWrongRecord;
+import com.ice.exebackend.entity.*;
 import com.ice.exebackend.service.BizQuestionService;
 import com.ice.exebackend.service.BizStudentService;
 import com.ice.exebackend.service.BizSubjectService;
 import com.ice.exebackend.service.BizWrongRecordService;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -22,7 +20,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.ice.exebackend.mapper.BizQuestionMapper; // 【新增】导入 Mapper
-import com.ice.exebackend.entity.BizLearningActivity; // 【新增】
 import com.ice.exebackend.service.BizLearningActivityService; // 【新增】
 import java.time.LocalDateTime; // 【新增】
 
@@ -60,6 +57,9 @@ public class StudentDataController {
 
     @Autowired
     private BizLearningActivityService learningActivityService; //
+
+    @Autowired
+    private com.ice.exebackend.service.BizPaperService paperService;
 
     @Value("${file.upload-dir}")
     private String uploadDir;
@@ -323,6 +323,225 @@ public class StudentDataController {
                 .last("LIMIT 5") // 只取最新的5条
                 .list();
         return Result.suc(activities);
+    }
+    // --- 模拟考试功能模块 ---
+
+    /**
+     * 1. 获取学生所属年级的试卷列表
+     */
+    @GetMapping("/papers")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result getStudentPapers(
+            @RequestParam(required = false) Long subjectId,
+            @RequestParam(defaultValue = "1") int current,
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication
+    ) {
+        String studentNo = authentication.getName();
+        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
+        if (student == null) return Result.fail("学生信息不存在");
+
+        Page<BizPaper> page = new Page<>(current, size);
+        QueryWrapper<BizPaper> queryWrapper = new QueryWrapper<>();
+        // 1. 【新增】只查询已发布的试卷 (status = 1)
+        queryWrapper.eq("status", 1);
+        // 筛选当前学生年级的试卷
+        if (StringUtils.hasText(student.getGrade())) {
+            queryWrapper.eq("grade", student.getGrade());
+        }
+        if (subjectId != null) {
+            queryWrapper.eq("subject_id", subjectId);
+        }
+        // 只查询手动组卷的试卷(paper_type=1)或图片试卷(paper_type=2)
+        // 这里假设模拟考主要针对手动组卷，如果支持图片试卷需前端配合
+        queryWrapper.orderByDesc("create_time");
+
+        studentService.page(new Page<>(), new QueryWrapper<>()); // dummy call to avoid import unused warning if necessary
+        // 使用 paperService 查询
+        // 注意：这里需要注入 BizPaperService，请确保类中已注入
+        // 临时解决方案：直接使用 service 层或 mapper 查，假设 PaperService 已注入到 Controller (如果没有请添加)
+        // 修正：StudentDataController 中没有注入 BizPaperService，我们需要先注入它。
+        // 请在类头部添加: @Autowired private com.ice.exebackend.service.BizPaperService paperService;
+        // 这里我假设你已经加了，或者我直接用 mapper 查也行，但最好用 service。
+
+        // 由于上下文限制，我直接在这里模拟调用，请确保你在类中注入了 paperService
+        // 假设类中没有，我用反射或假设你添加了。*请在类定义处添加 @Autowired private BizPaperService paperService;* // 下面代码基于已注入 paperService 编写
+
+        return Result.suc(paperService.page(page, queryWrapper));
+    }
+
+    /**
+     * 2. 获取考试试卷详情 (核心：不返回答案和解析)
+     */
+    @GetMapping("/exam/{paperId}")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result getExamPaperDetail(@PathVariable Long paperId) {
+        // 1. 获取试卷完整结构
+        com.ice.exebackend.dto.PaperDTO paperDTO = paperService.getPaperWithQuestionsById(paperId);
+        if (paperDTO == null) return Result.fail("试卷不存在");
+
+        // 2. 填充题目详细信息 (因为 PaperDTO 里的 questionDetail 默认可能是空的)
+        if (paperDTO.getGroups() != null) {
+            // 收集所有题目ID
+            List<Long> allQIds = paperDTO.getGroups().stream()
+                    .flatMap(g -> g.getQuestions().stream())
+                    .map(com.ice.exebackend.entity.BizPaperQuestion::getQuestionId)
+                    .collect(Collectors.toList());
+
+            if (!allQIds.isEmpty()) {
+                Map<Long, BizQuestion> qMap = questionService.listByIds(allQIds).stream()
+                        .collect(Collectors.toMap(BizQuestion::getId, q -> q));
+
+                // 3. 遍历并填充，同时擦除敏感字段 (答案)
+                for (com.ice.exebackend.dto.PaperDTO.PaperGroupDTO group : paperDTO.getGroups()) {
+                    for (com.ice.exebackend.entity.BizPaperQuestion pq : group.getQuestions()) {
+                        BizQuestion fullQ = qMap.get(pq.getQuestionId());
+                        if (fullQ != null) {
+                            // 克隆对象或新建对象以避免修改缓存中的原对象
+                            BizQuestion safeQ = new BizQuestion();
+                            BeanUtils.copyProperties(fullQ, safeQ);
+                            // !!! 关键：清空答案和解析 !!!
+                            safeQ.setAnswer(null);
+                            safeQ.setDescription(null);
+                            safeQ.setAnswerImageUrl(null);
+
+                            // 动态扩充 BizPaperQuestion 类太麻烦，我们可以封装一个 Map 返回
+                            // 或者利用 MybatisPlus 的机制。
+                            // 最简单的方案：前端获取 PaperDTO 后，题目详情其实不在 BizPaperQuestion 实体里。
+                            // 我们需要把处理后的 questions 列表单独返回，或者前端根据 ID 再去查 (不推荐)。
+                            // 这里我们采用：修改返回结构，将题目详情 Map 返回给前端
+                        }
+                    }
+                }
+                // 修正策略：为了简单起见，我们直接返回一个包含 PaperDTO 和 QuestionMap 的对象
+                // 但为了安全，我们必须在后端构建一个完全脱敏的数据结构。
+
+                // 构建脱敏后的题目列表 Map<Long, Question>
+                Map<Long, BizQuestion> safeQuestionMap = qMap.values().stream().map(q -> {
+                    BizQuestion safeQ = new BizQuestion();
+                    BeanUtils.copyProperties(q, safeQ);
+                    safeQ.setAnswer(null);
+                    safeQ.setDescription(null);
+                    safeQ.setAnswerImageUrl(null);
+                    return safeQ;
+                }).collect(Collectors.toMap(BizQuestion::getId, q -> q));
+
+                return Result.suc(Map.of("paper", paperDTO, "questions", safeQuestionMap));
+            }
+        }
+        return Result.suc(Map.of("paper", paperDTO));
+    }
+
+    /**
+     * 3. 提交试卷
+     */
+    @PostMapping("/exam/submit")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result submitExam(@RequestBody PracticeSubmissionDTO submission,
+                             @RequestParam Long paperId,
+                             Authentication authentication) {
+        String studentNo = authentication.getName();
+        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
+
+        com.ice.exebackend.dto.PaperDTO paper = paperService.getPaperWithQuestionsById(paperId);
+        if (paper == null) return Result.fail("试卷不存在");
+
+        // 计算分数
+        int totalScore = 0;
+        int studentScore = 0;
+        List<PracticeResultDTO.AnswerResult> results = new ArrayList<>();
+
+        // 获取所有题目真实信息用于比对
+        List<Long> allQIds = new ArrayList<>(submission.getAnswers().keySet());
+        // 也要包含试卷里有但学生没做的题
+        if (paper.getGroups() != null) {
+            paper.getGroups().forEach(g -> g.getQuestions().forEach(pq -> allQIds.add(pq.getQuestionId())));
+        }
+        List<BizQuestion> dbQuestions = questionService.listByIds(allQIds);
+        Map<Long, BizQuestion> dbQMap = dbQuestions.stream().collect(Collectors.toMap(BizQuestion::getId, q -> q));
+
+        // 遍历试卷结构来计分（确保按照试卷的分值设定）
+        if (paper.getGroups() != null) {
+            for (com.ice.exebackend.dto.PaperDTO.PaperGroupDTO group : paper.getGroups()) {
+                for (com.ice.exebackend.entity.BizPaperQuestion pq : group.getQuestions()) {
+                    BizQuestion q = dbQMap.get(pq.getQuestionId());
+                    if (q == null) continue;
+
+                    totalScore += pq.getScore(); // 累加卷面总分
+                    String userAns = submission.getAnswers().get(pq.getQuestionId());
+
+                    boolean isCorrect = false;
+                    // 简易判题逻辑：忽略大小写和首尾空格
+                    if (userAns != null && q.getAnswer() != null) {
+                        // 对于多选题（逗号分隔），需要排序后比较
+                        if (q.getQuestionType() == 2) {
+                            // 简单处理：都转为数组排序再转字符串比较
+                            String sortedUser = sortString(userAns);
+                            String sortedDb = sortString(q.getAnswer());
+                            isCorrect = sortedUser.equalsIgnoreCase(sortedDb);
+                        } else {
+                            isCorrect = userAns.trim().equalsIgnoreCase(q.getAnswer().trim());
+                        }
+                    }
+
+                    if (isCorrect) {
+                        studentScore += pq.getScore();
+                    } else {
+                        // 记录错题
+                        BizWrongRecord wr = new BizWrongRecord();
+                        wr.setStudentId(student.getId());
+                        wr.setQuestionId(q.getId());
+                        wr.setPaperId(paperId);
+                        wr.setWrongAnswer(userAns);
+                        wr.setWrongReason("模拟考试错误");
+                        // 避免重复插入同一题同一试卷的错题
+                        if (wrongRecordService.lambdaQuery()
+                                .eq(BizWrongRecord::getStudentId, student.getId())
+                                .eq(BizWrongRecord::getPaperId, paperId)
+                                .eq(BizWrongRecord::getQuestionId, q.getId())
+                                .count() == 0) {
+                            wrongRecordService.save(wr);
+                        }
+                    }
+
+                    // 构建返回结果详情
+                    PracticeResultDTO.AnswerResult res = new PracticeResultDTO.AnswerResult();
+                    res.setQuestion(q);
+                    res.setUserAnswer(userAns);
+                    res.setCorrect(isCorrect);
+                    results.add(res);
+                }
+            }
+        }
+
+        // 记录学习活动
+        BizLearningActivity activity = new BizLearningActivity();
+        activity.setStudentId(student.getId());
+        activity.setActivityType("EXAM");
+        activity.setDescription("参加了模拟考试《" + paper.getName() + "》，得分：" + studentScore + "/" + totalScore);
+        activity.setCreateTime(LocalDateTime.now());
+        learningActivityService.save(activity);
+
+        PracticeResultDTO resultDTO = new PracticeResultDTO();
+        resultDTO.setTotalQuestions(results.size()); // 这里复用字段表示得分
+        resultDTO.setCorrectCount(studentScore); // 这里复用字段表示得分
+        // 稍微hack一下，用 ResultDTO 返回分数信息
+        // 建议：ResultDTO 可以加个 score 字段，这里暂时用 msg 返回或者前端计算
+
+        return Result.suc(Map.of(
+                "score", studentScore,
+                "totalScore", totalScore,
+                "details", results
+        ));
+    }
+
+    // 辅助方法：对逗号分隔的答案进行排序 (A,B -> A,B;  B,A -> A,B)
+    private String sortString(String input) {
+        if (!StringUtils.hasText(input)) return "";
+        return java.util.Arrays.stream(input.split(","))
+                .map(String::trim)
+                .sorted()
+                .collect(Collectors.joining(","));
     }
 
 }

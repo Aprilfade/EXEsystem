@@ -71,7 +71,16 @@ const routes: Array<RouteRecordRaw> = [
             {
                 path: 'exams',
                 name: 'StudentExams',
-                component: { template: '<div style="padding: 40px; text-align: center;"><h1>模拟考试功能开发中...</h1></div>' }
+                // 修改为指向新的试卷列表组件
+                component: () => import('@/views/student/StudentExams.vue'),
+                meta: { title: '模拟考试' }
+            },
+            // 新增 考试答题页面路由
+            {
+                path: 'exam/:paperId',
+                name: 'StudentExamTaking',
+                component: () => import('@/views/student/ExamTaking.vue'),
+                meta: { title: '正在考试' }
             },
         ]
     }

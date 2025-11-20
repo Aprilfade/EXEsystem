@@ -21,8 +21,16 @@ public class BizPaper {
     private Integer paperType; // 【新增】 1-手动选题, 2-图片拼接
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
+    private Integer status; // 【新增】状态字段
 
 
+    // 【新增】添加 Getter 和 Setter
+    public Integer getStatus() {
+        return status;
+    }
+    public void setStatus(Integer status) {
+        this.status = status;
+    }
     // 【新增】为 grade 字段添加 Getter 和 Setter
     public String getGrade() {
         return grade;

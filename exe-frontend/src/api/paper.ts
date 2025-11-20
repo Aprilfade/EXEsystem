@@ -26,6 +26,7 @@ export interface Paper {
     questions?: PaperQuestion[];
     paperImages?: PaperImage[]; // 【新增】
     groups?: PaperGroup[]; // 【修改】
+    status?: number; // 【新增】0-草稿, 1-已发布
 }
 
 export interface PaperPageParams {
@@ -102,5 +103,13 @@ export function downloadPaper(id: number, includeAnswers: boolean): Promise<any>
         method: 'get',
         params: { includeAnswers },
         responseType: 'blob' // 关键：告诉axios期望接收一个二进制对象
+    });
+}
+// 2. 【新增】更新试卷状态 API
+export function updatePaperStatus(id: number, status: number): Promise<ApiResult<null>> {
+    return request({
+        url: `/api/v1/papers/${id}/status`,
+        method: 'put',
+        params: { status }
     });
 }

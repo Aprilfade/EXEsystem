@@ -93,12 +93,22 @@
         </el-table-column>
         <el-table-column prop="grade" label="年级" width="120" /> <el-table-column prop="totalScore" label="总分" width="100" />
         <el-table-column prop="totalScore" label="总分" width="100" />
-        <el-table-column label="操作" width="280" align="center">
+        <el-table-column label="状态" width="100" align="center">
+          <template #default="scope">
+            <el-tag :type="scope.row.status === 1 ? 'success' : 'info'">
+              {{ scope.row.status === 1 ? '已发布' : '草稿' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="350" align="center">
           <template #default="scope">
             <el-button type="primary" link :icon="Edit" @click="handleUpdate(scope.row.id)">编辑</el-button>
             <el-button type="success" link :icon="Download" @click="handleExport(scope.row.id, false)">导出</el-button>
             <el-button type="warning" link :icon="Download" @click="handleExport(scope.row.id, true)">导出(含答案)</el-button>
             <el-button type="danger" link :icon="Delete" @click="handleDelete(scope.row.id)">删除</el-button>
+            <el-button v-if="scope.row.status !== 1" type="success" link @click="handleStatusChange(scope.row, 1)">发布</el-button>
+            <el-button v-else type="warning" link @click="handleStatusChange(scope.row, 0)">下架</el-button>
+            <el-divider direction="vertical" />
           </template>
         </el-table-column>
       </el-table>
@@ -129,7 +139,7 @@
 <script lang="ts" setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { fetchPaperList, deletePaper, downloadPaper } from '@/api/paper';
+import { fetchPaperList, deletePaper, downloadPaper, updatePaperStatus } from '@/api/paper';
 import type { Paper, PaperPageParams } from '@/api/paper';
 import { fetchAllSubjects, type Subject } from '@/api/subject';
 import { Plus, Edit, Delete, Grid, Menu, MoreFilled, Download } from '@element-plus/icons-vue';
@@ -252,6 +262,23 @@ const handleExport = async (id: number, includeAnswers: boolean) => {
   } catch (error) {
     console.error('文件导出失败:', error);
     ElMessage.error('文件导出失败，请稍后重试。');
+  }
+};
+// 2. 【新增】处理状态变更
+const handleStatusChange = async (row: Paper, newStatus: number) => {
+  const actionName = newStatus === 1 ? '发布' : '下架';
+  try {
+    await ElMessageBox.confirm(`确定要${actionName}试卷“${row.name}”吗？发布后学生即可查看。`, '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: newStatus === 1 ? 'success' : 'warning'
+    });
+
+    await updatePaperStatus(row.id, newStatus);
+    ElMessage.success(`${actionName}成功`);
+    getList(); // 刷新列表
+  } catch (e) {
+    // 取消或失败
   }
 };
 
