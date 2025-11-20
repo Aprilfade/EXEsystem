@@ -5,6 +5,7 @@
       width="80%"
       @close="handleClose"
       :close-on-click-modal="false"
+      custom-class="resizable-paper-dialog"
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
       <el-row :gutter="20">
@@ -16,19 +17,13 @@
         <el-col :span="8">
           <el-form-item label="所属科目" prop="subjectId">
             <el-select v-model="form.subjectId" placeholder="请选择科目" style="width: 100%;">
-              <el-option v-for="sub in allSubjects" :key="sub.id" :label="`${sub.name} (${sub.grade})`" :value="sub.id" />
+              <el-option v-for="sub in subjects" :key="sub.id" :label="`${sub.name} (${sub.grade})`" :value="sub.id" />
             </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="8">
           <el-form-item label="所属年级" prop="grade">
             <el-select v-model="form.grade" placeholder="请选择年级" style="width: 100%;">
-              <el-option label="一年级" value="一年级" />
-              <el-option label="二年级" value="二年级" />
-              <el-option label="三年级" value="三年级" />
-              <el-option label="四年级" value="四年级" />
-              <el-option label="五年级" value="五年级" />
-              <el-option label="六年级" value="六年级" />
               <el-option label="七年级" value="七年级" />
               <el-option label="八年级" value="八年级" />
               <el-option label="九年级" value="九年级" />
