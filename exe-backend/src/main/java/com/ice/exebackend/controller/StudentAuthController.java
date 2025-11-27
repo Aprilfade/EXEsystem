@@ -39,10 +39,11 @@ public class StudentAuthController {
         if (student == null || student.getPassword() == null || !passwordEncoder.matches(password, student.getPassword())) {
             return Result.fail("学号或密码错误");
         }
+// 【新增】简单的每日登录加分逻辑 (这里未做每日限制，生产环境建议配合 Redis 做每日一次限制)
+        student.setPoints(student.getPoints() == null ? 1 : student.getPoints() + 1);
+        studentService.updateById(student);
 
-        // 登录成功, 为该学号生成Token
         String token = jwtUtil.generateTokenForStudent(student.getStudentNo());
-
         return Result.suc(Map.of("token", token));
     }
 

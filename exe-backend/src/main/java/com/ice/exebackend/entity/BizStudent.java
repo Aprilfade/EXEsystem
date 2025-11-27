@@ -40,6 +40,13 @@ public class BizStudent {
 
     private LocalDateTime updateTime;
 
+    // 【新增】积分字段
+    private Integer points;
+
+    // 手动添加 Getter/Setter
+    public Integer getPoints() { return points; }
+    public void setPoints(Integer points) { this.points = points; }
+
     // 【新增】为新字段添加 Getter 和 Setter
     public String getPassword() {
         return password;

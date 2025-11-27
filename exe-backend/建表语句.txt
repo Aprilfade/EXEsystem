@@ -323,3 +323,5 @@ CREATE TABLE `biz_exam_result` (
   INDEX `idx_student_paper` (`student_id`, `paper_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='考试成绩记录表';
 ALTER TABLE `biz_exam_result` ADD COLUMN `violation_count` INT DEFAULT 0 COMMENT '违规/切屏次数';
+
+ALTER TABLE `biz_student` ADD COLUMN `points` INT DEFAULT 0 COMMENT '学习积分';

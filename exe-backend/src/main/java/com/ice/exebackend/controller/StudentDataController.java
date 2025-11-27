@@ -29,6 +29,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.time.format.DateTimeFormatter;
+import java.util.stream.Collectors;
 
 
 
@@ -275,7 +277,8 @@ public class StudentDataController {
         log.setDescription("完成了在线练习，共" + questionIds.size() + "道题");
         log.setCreateTime(LocalDateTime.now());
         learningActivityService.save(log);
-
+        student.setPoints((student.getPoints() == null ? 0 : student.getPoints()) + 5);
+        studentService.updateById(student);
 
         resultDTO.setTotalQuestions(questionIds.size());
         resultDTO.setCorrectCount(correctCount);
@@ -559,6 +562,8 @@ public class StudentDataController {
         activity.setDescription("参加了模拟考试《" + paper.getName() + "》，得分：" + studentScore + "/" + totalScore);
         activity.setCreateTime(LocalDateTime.now());
         learningActivityService.save(activity);
+        student.setPoints((student.getPoints() == null ? 0 : student.getPoints()) + 10);
+        studentService.updateById(student);
 
         PracticeResultDTO resultDTO = new PracticeResultDTO();
         resultDTO.setTotalQuestions(results.size()); // 这里复用字段表示得分
@@ -640,6 +645,47 @@ public class StudentDataController {
                 .map(String::trim)
                 .sorted()
                 .collect(Collectors.joining(","));
+    }
+    /**
+     * 【新增】获取学习热力图数据
+     * 返回格式: {"2025-01-01": 5, "2025-01-02": 1}
+     */
+    @GetMapping("/dashboard/activity-heatmap")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result getActivityHeatmap(Authentication authentication) {
+        String studentNo = authentication.getName();
+        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
+
+        if (student == null) return Result.fail("用户不存在");
+
+        // 查询过去一年的活动记录
+        // 注意：这里为了代码简单使用了 Java Stream 分组，数据量极大时建议改用 Mapper 的 Group By SQL
+        List<BizLearningActivity> activities = learningActivityService.lambdaQuery()
+                .eq(BizLearningActivity::getStudentId, student.getId())
+                .ge(BizLearningActivity::getCreateTime, LocalDateTime.now().minusYears(1)) // 只查最近一年
+                .list();
+
+        // 按日期分组统计次数
+        Map<String, Long> heatmapData = activities.stream()
+                .collect(Collectors.groupingBy(
+                        a -> a.getCreateTime().format(DateTimeFormatter.ISO_LOCAL_DATE), // 格式化为 YYYY-MM-DD
+                        Collectors.counting()
+                ));
+
+        return Result.suc(heatmapData);
+    }
+    /**
+     * 【新增】获取积分排行榜 (前10名)
+     */
+    @GetMapping("/dashboard/leaderboard")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result getLeaderboard() {
+        List<BizStudent> topStudents = studentService.lambdaQuery()
+                .select(BizStudent::getName, BizStudent::getAvatar, BizStudent::getPoints, BizStudent::getGrade)
+                .orderByDesc(BizStudent::getPoints)
+                .last("LIMIT 10")
+                .list();
+        return Result.suc(topStudents);
     }
 
 }
