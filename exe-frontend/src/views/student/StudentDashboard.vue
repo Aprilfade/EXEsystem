@@ -104,24 +104,44 @@
             </div>
           </template>
           <div class="quick-access-grid">
-            <div class="access-item" @click="navigateTo('/student/practice')">
-              <el-icon><EditPen /></el-icon>
-              <span>开始练习</span>
+            <div class="access-item item-blue" @click="navigateTo('/student/practice')">
+              <div class="icon-wrapper">
+                <el-icon><EditPen /></el-icon>
+              </div>
+              <span class="title">开始练习</span>
+              <span class="desc">随机刷题 / 智能推题</span>
             </div>
-            <div class="access-item" @click="navigateTo('/student/wrong-records')">
-              <el-icon><Memo /></el-icon>
-              <span>我的错题本</span>
+
+            <div class="access-item item-red" @click="navigateTo('/student/wrong-records')">
+              <div class="icon-wrapper">
+                <el-icon><Memo /></el-icon>
+              </div>
+              <span class="title">我的错题本</span>
+              <span class="desc">温故知新 / 举一反三</span>
             </div>
-            <div class="access-item" @click="navigateTo('/student/exams')">
-              <el-icon><DataLine /></el-icon>
-              <span>参加模拟考</span>
+
+            <div class="access-item item-purple" @click="navigateTo('/student/exams')">
+              <div class="icon-wrapper">
+                <el-icon><DataLine /></el-icon>
+              </div>
+              <span class="title">模拟考试</span>
+              <span class="desc">全真模拟 / 实战演练</span>
             </div>
-            <div class="access-item" @click="navigateTo('/student/history')">
-              <el-icon><Finished /></el-icon>
-              <span>历史记录</span>
+
+            <div class="access-item item-orange" @click="navigateTo('/student/history')">
+              <div class="icon-wrapper">
+                <el-icon><Finished /></el-icon>
+              </div>
+              <span class="title">考试记录</span>
+              <span class="desc">查看过往成绩详情</span>
             </div>
-            <div class="access-item" @click="navigateTo('/student/favorites')">
-              <el-icon><Star /></el-icon> <span>我的收藏</span>
+
+            <div class="access-item item-green" @click="navigateTo('/student/favorites')">
+              <div class="icon-wrapper">
+                <el-icon><Star /></el-icon>
+              </div>
+              <span class="title">我的收藏</span>
+              <span class="desc">重点难题一键回顾</span>
             </div>
           </div>
         </el-card>
@@ -149,7 +169,8 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStudentAuthStore } from '@/stores/studentAuth';
-import { Tickets, Select, CloseBold, Clock, EditPen, Memo, DataLine, Finished } from '@element-plus/icons-vue';
+// 【修复】添加 Star 图标导入
+import { Tickets, Select, CloseBold, Clock, EditPen, Memo, DataLine, Finished, Star } from '@element-plus/icons-vue';
 import { fetchStudentDashboardStats, type StudentDashboardStats } from '@/api/studentAuth';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
@@ -294,9 +315,6 @@ onMounted(async () => {
 .stat-text .label { font-size: 14px; color: #909399; margin-bottom: 4px; }
 .stat-text .value { font-size: 24px; font-weight: bold; }
 .card-header { font-size: 1rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-.quick-access-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; height: 120px; }
-.access-item { display: flex; flex-direction: column; justify-content: center; align-items: center; border: 1px solid #e4e7ed; border-radius: 8px; cursor: pointer; transition: all 0.2s ease-in-out; }
-.access-item:hover { border-color: #409EFF; color: #409EFF; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-4px); }
 .access-item .el-icon { font-size: 32px; margin-bottom: 8px; }
 .timeline { padding-left: 5px; height: 120px; }
 .leaderboard-list { display: flex; flex-direction: column; gap: 12px; }
@@ -309,4 +327,78 @@ onMounted(async () => {
 .rank-info .name { font-size: 14px; font-weight: 600; }
 .rank-info .grade { font-size: 12px; color: #999; }
 .rank-score { font-weight: bold; color: #f56c6c; }
+/* --- 快捷入口样式优化 --- */
+.quick-access-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* 改为5列，容纳所有入口 */
+  gap: 20px;
+  margin-top: 10px;
+}
+
+.access-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #f0f2f5;
+  border-radius: 12px;
+  padding: 24px 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.access-item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+  border-color: transparent;
+}
+
+/* 图标容器 */
+.icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  font-size: 28px;
+  transition: all 0.3s;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.desc {
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 各个卡片的配色方案 */
+/* 蓝色 */
+.item-blue .icon-wrapper { background: #e8f3ff; color: #409eff; }
+.item-blue:hover .icon-wrapper { background: #409eff; color: #fff; }
+
+/* 红色 */
+.item-red .icon-wrapper { background: #fde2e2; color: #f56c6c; }
+.item-red:hover .icon-wrapper { background: #f56c6c; color: #fff; }
+
+/* 紫色 */
+.item-purple .icon-wrapper { background: #f3e5f5; color: #9c27b0; }
+.item-purple:hover .icon-wrapper { background: #9c27b0; color: #fff; }
+
+/* 橙色 */
+.item-orange .icon-wrapper { background: #fdf6ec; color: #e6a23c; }
+.item-orange:hover .icon-wrapper { background: #e6a23c; color: #fff; }
+
+/* 绿色 */
+.item-green .icon-wrapper { background: #e1f3d8; color: #67c23a; }
+.item-green:hover .icon-wrapper { background: #67c23a; color: #fff; }
 </style>

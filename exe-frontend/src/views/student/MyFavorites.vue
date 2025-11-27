@@ -6,7 +6,11 @@
       </template>
       <el-table :data="favoritesList" v-loading="loading" style="width: 100%">
         <el-table-column type="index" label="序号" width="80" align="center" />
-        <el-table-column prop="content" label="题干" show-overflow-tooltip min-width="300" />
+        <el-table-column label="题干" min-width="300" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ stripHtml(row.content) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="questionType" label="题型" width="100" align="center">
           <template #default="{ row }">
             <el-tag>{{ getQuestionType(row.questionType) }}</el-tag>
@@ -74,7 +78,13 @@ const getList = async () => {
     loading.value = false;
   }
 };
-
+// 【新增】去除HTML标签的辅助函数，仅用于列表展示
+const stripHtml = (html: string) => {
+  if (!html) return '';
+  const tmp = document.createElement('DIV');
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || '';
+};
 const viewDetail = (row: any) => {
   currentQuestion.value = row;
   detailVisible.value = true;

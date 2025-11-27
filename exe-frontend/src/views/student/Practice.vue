@@ -144,7 +144,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+// 【修复】添加 watch 到导入列表中
+import { ref, onMounted, computed, watch } from 'vue';
 import request from '@/utils/request';
 // 【修复】从正确的路径导入类型
 import type { Subject } from '@/api/subject';
@@ -323,16 +324,14 @@ const checkFavStatus = async () => {
   } catch(e) {}
 };
 
-// 5. 在切换题目时调用检查
-// 找到 nextQuestion 和 prevQuestion 方法，在末尾添加: checkFavStatus();
-// 找到 startPractice 方法，在成功获取题目后添加: checkFavStatus();
-// 也可以直接监听 currentQuestionIndex
-watch(currentQuestionIndex, () => {
-  checkFavStatus();
-});
+// 5. 定义监听器：当题目发生变化时（无论是切换还是初次加载），检查收藏状态
+watch(() => currentQuestion.value, (newVal) => {
+  if (newVal && newVal.id) {
+    checkFavStatus();
+  }
+}, { immediate: true });
 
 onMounted(loadAllSubjects);
-
 </script>
 
 <style scoped>
