@@ -122,28 +122,34 @@
         </div>
       </el-upload>
 
-      <div
+      <draggable
+          v-model="form.paperImages"
+          item-key="imageUrl"
           class="image-list-container"
-          @dragover.prevent
-          @drop="onDrop"
+          animation="300"
+          ghost-class="ghost"
+          @end="handleImageSort"
       >
-        <div
-            v-for="(image, index) in form.paperImages"
-            :key="image.imageUrl"
-            class="image-item"
-            draggable="true"
-            @dragstart="onDragStart(index)"
-            @dragend="onDragEnd"
-            :class="{ 'dragging': draggingIndex === index }"
-        >
-          <img :src="image.imageUrl" class="preview-image" />
-          <div class="image-actions">
-            <el-button type="danger" :icon="Delete" circle @click="removeImage(index)"></el-button>
+        <template #item="{ element: image, index }">
+          <div class="image-item">
+            <el-image
+                :src="image.imageUrl"
+                class="preview-image"
+                fit="cover"
+                :preview-src-list="form.paperImages?.map(i => i.imageUrl)"
+                :initial-index="index"
+                preview-teleported
+            />
+            <div class="image-actions">
+              <el-button type="danger" :icon="Delete" circle @click="removeImage(index)"></el-button>
+            </div>
+            <div class="image-index">第 {{ index + 1 }} 页</div>
           </div>
-        </div>
-        <div v-if="!form.paperImages || form.paperImages.length === 0" class="empty-placeholder">
-          暂无图片，请从上方上传
-        </div>
+        </template>
+      </draggable>
+
+      <div v-if="!form.paperImages || form.paperImages.length === 0" class="empty-placeholder">
+        暂无图片，请从上方上传
       </div>
     </div>
 
@@ -163,6 +169,8 @@ import { createPaper, updatePaper, fetchPaperById } from '@/api/paper';
 import type { Paper, PaperQuestion, PaperGroup, PaperImage } from '@/api/paper'; // 确保 PaperGroup 已导入
 import { MagicStick } from '@element-plus/icons-vue'; // 引入图标
 import { generateSmartPaper, type SmartPaperReq } from '@/api/paper'; // 引入API
+import draggable from 'vuedraggable';
+
 import type { Subject } from '@/api/subject';
 import PaperQuestionManager from './PaperQuestionManager.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -210,7 +218,14 @@ const handleImageSuccess: UploadProps['onSuccess'] = (response, uploadFile, uplo
     fileList.value = uploadFiles;
   }
 }
-
+// 3. 新增排序处理函数 (其实 draggable 会自动更新数组，这里主要是为了确保 sortOrder 字段正确)
+const handleImageSort = () => {
+  if (form.value.paperImages) {
+    form.value.paperImages.forEach((img, idx) => {
+      img.sortOrder = idx;
+    });
+  }
+};
 
 const handleImageRemove: UploadProps['onRemove'] = (uploadFile, uploadFiles) => {
   if (form.value.paperImages) {
@@ -270,38 +285,7 @@ const submitForm = async () => {
     }
   });
 };
-// 【新增】用于处理拖拽状态的 ref
-const draggingIndex = ref<number | null>(null);
 
-// 【新增】拖拽开始事件
-const onDragStart = (index: number) => {
-  draggingIndex.value = index;
-};
-
-// 【新增】拖拽结束事件，用于清除样式
-const onDragEnd = () => {
-  draggingIndex.value = null;
-};
-
-// 【新增】放置事件，核心排序逻辑
-const onDrop = (event: DragEvent) => {
-  event.preventDefault();
-  if (draggingIndex.value === null) return;
-
-  const targetElement = (event.target as HTMLElement).closest('.image-item');
-  if (!targetElement) return;
-
-  const allItems = Array.from(targetElement.parentElement?.children || []);
-  const dropIndex = allItems.indexOf(targetElement);
-
-  if (dropIndex === -1) return;
-
-  // 移动数组元素
-  const draggedItem = form.value.paperImages!.splice(draggingIndex.value, 1)[0];
-  form.value.paperImages!.splice(dropIndex, 0, draggedItem);
-
-  onDragEnd(); // 清理状态
-};
 
 // 【新增】一个更健壮的移除图片方法
 const removeImage = (index: number) => {
@@ -421,60 +405,69 @@ watch(() => form.value.paperType, (newType) => {
 </script>
 
 <style scoped>
+/* 优化图片列表样式 */
 .image-list-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 15px;
+  padding: 10px;
   border: 1px dashed #dcdfe6;
   border-radius: 6px;
-  padding: 10px;
   min-height: 150px;
+  background-color: #fcfcfc;
 }
 
 .image-item {
   position: relative;
-  width: 148px;
-  height: 148px;
-  border: 1px solid #c0ccda;
-  border-radius: 6px;
+  width: 160px;
+  height: 220px; /* 模拟A4纸比例 */
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
   overflow: hidden;
-  cursor: grab;
-  transition: transform 0.2s;
+  background: #fff;
+  transition: all 0.3s;
+  cursor: move;
 }
 
-.image-item.dragging {
-  opacity: 0.5;
-  transform: scale(0.95);
+.image-item:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
 }
 
 .preview-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  display: block;
 }
 
+/* 拖拽时的占位样式 */
+.ghost {
+  opacity: 0.5;
+  background: #ecf5ff;
+  border: 2px dashed #409eff;
+}
+
+.image-index {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 12px;
+  text-align: center;
+  padding: 4px 0;
+}
+
+/* 修改操作按钮位置，避免遮挡 */
 .image-actions {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: rgba(0, 0, 0, 0.5);
+  top: 5px;
+  right: 5px;
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: opacity 0.2s;
 }
-
 .image-item:hover .image-actions {
   opacity: 1;
-}
-
-.empty-placeholder {
-  width: 100%;
-  text-align: center;
-  color: #a8abb2;
-  align-self: center;
 }
 </style>

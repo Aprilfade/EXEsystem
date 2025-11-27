@@ -26,6 +26,10 @@ import org.springframework.util.CollectionUtils;
 import com.ice.exebackend.service.BizPaperQuestionService; // 新增导入
 import com.ice.exebackend.dto.SmartPaperReq;
 import org.springframework.util.StringUtils;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
 
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -263,15 +267,17 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
         }
     }
 
+    // 替换原有的 exportImagePaperToWord 方法
     private XWPFDocument exportImagePaperToWord(PaperDTO paperDTO) {
-        // ... 此部分代码不变 ...
         XWPFDocument document = new XWPFDocument();
+        // 标题部分
         XWPFParagraph titleParagraph = document.createParagraph();
         titleParagraph.setAlignment(ParagraphAlignment.CENTER);
         XWPFRun titleRun = titleParagraph.createRun();
         titleRun.setText(paperDTO.getName());
         titleRun.setBold(true);
         titleRun.setFontSize(22);
+        titleRun.addBreak(); // 空一行
 
         if (CollectionUtils.isEmpty(paperDTO.getPaperImages())) {
             return document;
@@ -279,40 +285,66 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
 
         for (BizPaperImage paperImage : paperDTO.getPaperImages()) {
             try {
+                // 1. 获取本地文件路径
                 String fileName = paperImage.getImageUrl().substring(paperImage.getImageUrl().lastIndexOf("/") + 1);
                 Path imagePath = Paths.get(uploadDir, fileName);
 
                 if (Files.exists(imagePath)) {
-                    try (InputStream is = new FileInputStream(imagePath.toFile())) {
+                    // 2. 读取图片到内存以获取尺寸 (关键优化步骤)
+                    byte[] imageBytes = Files.readAllBytes(imagePath);
+                    try (ByteArrayInputStream bais = new ByteArrayInputStream(imageBytes)) {
+                        BufferedImage img = ImageIO.read(bais);
+                        if (img == null) continue;
+
+                        int originalWidth = img.getWidth();
+                        int originalHeight = img.getHeight();
+
+                        // 3. 计算自适应尺寸 (假设A4纸可用宽度约为 450 points)
+                        int maxWidth = 450;
+                        int targetWidth;
+                        int targetHeight;
+
+                        if (originalWidth > maxWidth) {
+                            targetWidth = maxWidth;
+                            // 保持宽高比: h = w * (originalH / originalW)
+                            targetHeight = (int) (maxWidth * ((double) originalHeight / originalWidth));
+                        } else {
+                            targetWidth = originalWidth;
+                            targetHeight = originalHeight;
+                        }
+
+                        // 4. 插入图片
                         XWPFParagraph p = document.createParagraph();
                         p.setAlignment(ParagraphAlignment.CENTER);
                         XWPFRun run = p.createRun();
 
-                        int format;
-                        if (fileName.toLowerCase().endsWith(".emf")) {
-                            format = XWPFDocument.PICTURE_TYPE_EMF;
-                        } else if (fileName.toLowerCase().endsWith(".wmf")) {
-                            format = XWPFDocument.PICTURE_TYPE_WMF;
-                        } else if (fileName.toLowerCase().endsWith(".pict")) {
-                            format = XWPFDocument.PICTURE_TYPE_PICT;
-                        } else if (fileName.toLowerCase().endsWith(".jpeg") || fileName.toLowerCase().endsWith(".jpg")) {
-                            format = XWPFDocument.PICTURE_TYPE_JPEG;
-                        } else if (fileName.toLowerCase().endsWith(".png")) {
-                            format = XWPFDocument.PICTURE_TYPE_PNG;
-                        } else {
-                            System.err.println("Unsupported image format: " + fileName);
-                            continue;
-                        }
+                        int format = getPictureType(fileName);
+                        if (format == 0) continue; // 不支持的格式跳过
 
-                        run.addPicture(is, format, fileName, Units.toEMU(450), Units.toEMU(600));
-                        run.addBreak(BreakType.PAGE);
+                        // 使用 ByteArrayInputStream 再次读取数据流供 POI 使用
+                        try (ByteArrayInputStream imageStream = new ByteArrayInputStream(imageBytes)) {
+                            run.addPicture(imageStream, format, fileName, Units.toEMU(targetWidth), Units.toEMU(targetHeight));
+                        }
+                        run.addBreak(BreakType.PAGE); // 每张图一页
                     }
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                e.printStackTrace(); // 建议记录 logger.error
             }
         }
         return document;
+    }
+
+    // 辅助方法：获取图片格式代码
+    private int getPictureType(String fileName) {
+        String lowerName = fileName.toLowerCase();
+        if (lowerName.endsWith(".emf")) return XWPFDocument.PICTURE_TYPE_EMF;
+        if (lowerName.endsWith(".wmf")) return XWPFDocument.PICTURE_TYPE_WMF;
+        if (lowerName.endsWith(".pict")) return XWPFDocument.PICTURE_TYPE_PICT;
+        if (lowerName.endsWith(".jpeg") || lowerName.endsWith(".jpg")) return XWPFDocument.PICTURE_TYPE_JPEG;
+        if (lowerName.endsWith(".png")) return XWPFDocument.PICTURE_TYPE_PNG;
+        if (lowerName.endsWith(".gif")) return XWPFDocument.PICTURE_TYPE_GIF;
+        return 0;
     }
 
     // 【修复】Word导出逻辑，适配分组

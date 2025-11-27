@@ -75,17 +75,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'; // 【修改】导入 computed
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import ProfileEditDialog from '@/components/user/ProfileEditDialog.vue';
-// 【修改】在这里导入 Lock 时使用别名 LockIcon，并新增 Fold 和 Expand
 import {
   Management, House, Collection, Reading, Tickets, DocumentCopy, Avatar, CircleClose, DataLine,
-  User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting, Fold, Expand, Document // <-- 新增 Document
+  User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting, Fold, Expand, Document, Medal // 【修改】新增 Medal 图标
 } from '@element-plus/icons-vue';
 
-// 【新增】用于控制侧边栏折叠的响应式变量
 const isCollapsed = ref(false);
 
 const authStore = useAuthStore();
@@ -99,6 +97,7 @@ const allMenus = [
   { path: '/questions', name: '题库管理', permission: 'sys:question:list', icon: Tickets },
   { path: '/papers', name: '试卷管理', permission: 'sys:paper:list', icon: DocumentCopy },
   { path: '/students', name: '学生管理', permission: 'sys:student:list', icon: Avatar },
+  { path: '/score-manage', name: '成绩管理', permission: 'sys:stats:list', icon: Medal }, // 【修改】新增成绩管理菜单
   {
     path: '/error-management', name: '错题管理', permission: 'sys:wrong:list', icon: CircleClose,
     children: [
@@ -138,10 +137,9 @@ const handleCommand = (command: string) => {
 </script>
 
 <style scoped>
-/* ... style 部分不变 ... */
 .main-layout { height: 100vh; background-color: var(--bg-color); }
-.aside { background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
-.logo-area { display: flex; align-items: center; padding: 20px; gap: 12px; }
+.aside { background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; transition: width 0.3s ease; }
+.logo-area { display: flex; align-items: center; padding: 20px; gap: 12px; transition: padding 0.3s ease; }
 .logo-area h1 { font-size: 20px; font-weight: 600; color: var(--text-color-primary); }
 .main-menu { flex-grow: 1; border-right: none; }
 .main-menu .el-menu-item.is-active { background-color: #ecf5ff; color: var(--brand-color); }
@@ -158,18 +156,8 @@ const handleCommand = (command: string) => {
 .el-menu-item .el-icon {
   margin-right: 5px;
 }
-/* ... 原有样式保持不变 ... */
 
-/* --- 在这里追加下面的新样式 --- */
-.aside {
-  transition: width 0.3s ease; /* 【新增】为侧边栏宽度变化添加平滑过渡 */
-}
-
-.logo-area {
-  transition: padding 0.3s ease; /* 【新增】为 logo 区域的内边距添加过渡效果 */
-}
-
-/* 【新增】当折叠时，调整 logo 区域的样式，使其居中 */
+/* 侧边栏折叠样式 */
 .el-aside.is-collapse .logo-area {
   padding: 20px 0;
   justify-content: center;
@@ -178,14 +166,8 @@ const handleCommand = (command: string) => {
   padding: 20px;
 }
 
-
 .collapse-btn {
   cursor: pointer;
   color: var(--text-color-regular);
-}
-
-.main-menu {
-  /* 【新增】解决折叠时文字不消失的bug */
-  border-right: none;
 }
 </style>

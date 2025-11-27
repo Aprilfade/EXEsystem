@@ -45,74 +45,121 @@
 
       <div class="exam-body" v-if="paper">
         <div class="question-area">
-          <div v-for="group in paper.groups" :key="group.id" class="group-section">
-            <div class="group-title">{{ group.name }}</div>
-            <div v-for="(pq, index) in group.questions" :key="pq.id" :id="'q-' + pq.questionId" class="question-box">
-              <div class="q-header">
-                <span class="q-no">{{ index + 1 }}</span>
-                <span class="q-score">({{ pq.score }}分)</span>
-              </div>
-              <div class="q-content">
-                <div v-html="getQuestion(pq.questionId)?.content"></div>
-                <el-image
-                    v-if="getQuestion(pq.questionId)?.imageUrl"
-                    :src="getQuestion(pq.questionId)?.imageUrl"
-                    style="max-width: 300px; margin-top:10px"
-                    :preview-src-list="[getQuestion(pq.questionId)?.imageUrl]"
-                />
-              </div>
 
-              <div class="q-options">
-                <template v-if="[1, 2].includes(getQuestion(pq.questionId)?.questionType)">
-                  <div
-                      v-for="opt in parseOptions(getQuestion(pq.questionId)?.options)"
-                      :key="opt.key"
-                      class="option-row"
-                      @click="handleOptionClick(pq.questionId, opt.key, getQuestion(pq.questionId)?.questionType)"
-                      :class="{ selected: isOptionSelected(pq.questionId, opt.key) }"
-                  >
-                    <span class="opt-key">{{ opt.key }}</span>
-                    <span class="opt-val">{{ opt.value }}</span>
-                  </div>
-                </template>
-
-                <template v-else-if="[3, 5].includes(getQuestion(pq.questionId)?.questionType)">
-                  <el-input
-                      v-model="answers[pq.questionId]"
-                      type="textarea"
-                      :rows="3"
-                      placeholder="请输入答案"
+          <template v-if="!paper.paperType || paper.paperType === 1">
+            <div v-for="group in paper.groups" :key="group.id" class="group-section">
+              <div class="group-title">{{ group.name }}</div>
+              <div v-for="(pq, index) in group.questions" :key="pq.id" :id="'q-' + pq.questionId" class="question-box">
+                <div class="q-header">
+                  <span class="q-no">{{ index + 1 }}</span>
+                  <span class="q-score">({{ pq.score }}分)</span>
+                </div>
+                <div class="q-content">
+                  <div v-html="getQuestion(pq.questionId)?.content"></div>
+                  <el-image
+                      v-if="getQuestion(pq.questionId)?.imageUrl"
+                      :src="getQuestion(pq.questionId)?.imageUrl"
+                      style="max-width: 300px; margin-top:10px"
+                      :preview-src-list="[getQuestion(pq.questionId)?.imageUrl]"
                   />
-                </template>
+                </div>
 
-                <template v-else-if="getQuestion(pq.questionId)?.questionType === 4">
-                  <el-radio-group v-model="answers[pq.questionId]">
-                    <el-radio label="T" border>正确</el-radio>
-                    <el-radio label="F" border>错误</el-radio>
-                  </el-radio-group>
-                </template>
+                <div class="q-options">
+                  <template v-if="[1, 2].includes(getQuestion(pq.questionId)?.questionType)">
+                    <div
+                        v-for="opt in parseOptions(getQuestion(pq.questionId)?.options)"
+                        :key="opt.key"
+                        class="option-row"
+                        @click="handleOptionClick(pq.questionId, opt.key, getQuestion(pq.questionId)?.questionType)"
+                        :class="{ selected: isOptionSelected(pq.questionId, opt.key) }"
+                    >
+                      <span class="opt-key">{{ opt.key }}</span>
+                      <span class="opt-val">{{ opt.value }}</span>
+                    </div>
+                  </template>
+
+                  <template v-else-if="[3, 5].includes(getQuestion(pq.questionId)?.questionType)">
+                    <el-input
+                        v-model="answers[pq.questionId]"
+                        type="textarea"
+                        :rows="3"
+                        placeholder="请输入答案"
+                    />
+                  </template>
+
+                  <template v-else-if="getQuestion(pq.questionId)?.questionType === 4">
+                    <el-radio-group v-model="answers[pq.questionId]">
+                      <el-radio label="T" border>正确</el-radio>
+                      <el-radio label="F" border>错误</el-radio>
+                    </el-radio-group>
+                  </template>
+                </div>
               </div>
             </div>
-          </div>
+          </template>
+
+          <template v-else-if="paper.paperType === 2">
+            <div class="paper-images-container">
+              <div v-for="(img, idx) in paper.paperImages" :key="img.id || idx" class="paper-image-item">
+                <el-image
+                    :src="img.imageUrl"
+                    fit="contain"
+                    :preview-src-list="paper.paperImages.map((i:any) => i.imageUrl)"
+                    :initial-index="idx"
+                    style="width: 100%; border: 1px solid #eee; margin-bottom: 20px; border-radius: 4px;"
+                >
+                  <template #placeholder>
+                    <div class="image-slot">加载中...</div>
+                  </template>
+                </el-image>
+              </div>
+              <el-empty v-if="!paper.paperImages || paper.paperImages.length === 0" description="试卷暂无内容，请联系管理员" />
+            </div>
+          </template>
+
         </div>
 
         <div class="answer-card">
           <div class="card-title">答题卡</div>
           <div class="card-content">
-            <div v-for="group in paper.groups" :key="group.id" class="card-group">
-              <div class="cg-name">{{ group.name }}</div>
-              <div class="cg-grid">
-                <div
-                    v-for="(pq, index) in group.questions"
-                    :key="pq.id"
-                    class="card-item"
-                    :class="{ answered: !!answers[pq.questionId] }"
-                    @click="scrollToQuestion('q-' + pq.questionId)"
-                >
-                  {{ index + 1 }}
+
+            <template v-if="!paper.paperType || paper.paperType === 1">
+              <div v-for="group in paper.groups" :key="group.id" class="card-group">
+                <div class="cg-name">{{ group.name }}</div>
+                <div class="cg-grid">
+                  <div
+                      v-for="(pq, index) in group.questions"
+                      :key="pq.id"
+                      class="card-item"
+                      :class="{ answered: !!answers[pq.questionId] }"
+                      @click="scrollToQuestion('q-' + pq.questionId)"
+                  >
+                    {{ index + 1 }}
+                  </div>
                 </div>
               </div>
-            </div>
+            </template>
+
+            <template v-else-if="paper.paperType === 2">
+              <div class="card-group">
+                <div class="cg-name">请在下方录入答案</div>
+                <div class="generic-answer-list">
+                  <div v-for="i in 20" :key="i" class="generic-answer-item">
+                    <span class="ga-index">{{ i }}.</span>
+                    <el-input
+                        v-model="answers[i]"
+                        size="small"
+                        placeholder="答案"
+                        style="width: 100%;"
+                    />
+                  </div>
+                  <div class="generic-tip">
+                    (系统提供20个通用答题位，请按需填写)
+                  </div>
+                </div>
+              </div>
+            </template>
+
           </div>
         </div>
       </div>
@@ -129,11 +176,14 @@
         <div class="result-detail">
           <p>试卷总分：{{ examResult?.totalScore }}</p>
           <p>本次得分：{{ examResult?.score }}</p>
+          <p v-if="paper?.paperType === 2" style="color: #909399; font-size: 12px; margin-top: 5px;">
+            (图片试卷暂不支持自动判分，请等待老师批阅)
+          </p>
         </div>
       </div>
       <template #footer>
         <el-button type="primary" @click="$router.push('/student/exams')">返回列表</el-button>
-        <el-button @click="$router.push('/student/wrong-records')">查看错题</el-button>
+        <el-button @click="$router.push('/student/history')">查看记录</el-button>
       </template>
     </el-dialog>
   </div>
@@ -145,7 +195,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { fetchExamPaperDetail, submitExamPaper } from '@/api/studentAuth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Timer, Monitor, View, WarningFilled, Lock } from '@element-plus/icons-vue';
-// 修复点：添加了 request 导入
 import request from '@/utils/request';
 
 const route = useRoute();
@@ -155,7 +204,7 @@ const paperId = parseInt(route.params.paperId as string);
 const loading = ref(true);
 const paper = ref<any>(null);
 const questionsMap = ref<Record<number, any>>({});
-const answers = reactive<Record<number, string>>({});
+const answers = reactive<Record<string, string>>({}); // 修改key类型为string以兼容数字索引
 const resultVisible = ref(false);
 const examResult = ref<any>(null);
 
@@ -177,7 +226,7 @@ const formattedTime = computed(() => {
 });
 
 const scorePercentage = computed(() => {
-  if(!examResult.value) return 0;
+  if(!examResult.value || !examResult.value.totalScore) return 0;
   return Math.round((examResult.value.score / examResult.value.totalScore) * 100);
 });
 
@@ -276,7 +325,6 @@ const handleViolation = (reason: string) => {
   violationCount.value++;
 
   if (violationCount.value >= MAX_VIOLATIONS) {
-
     ElMessageBox.alert(`严重警告：您已累计违规 ${violationCount.value} 次（${reason}），系统将强制交卷！`, '考试终止', {
       confirmButtonText: '确定',
       type: 'error',
@@ -346,6 +394,10 @@ const handleSubmit = (force = false) => {
           document.exitFullscreen();
         }
       }
+    } catch (err) {
+      console.error(err);
+      // 如果是403，通常是后端处理图片试卷的判题逻辑抛异常被拦截了
+      ElMessage.error('交卷失败，请重试或联系管理员');
     } finally {
       loading.value = false;
     }
@@ -517,6 +569,7 @@ onUnmounted(() => {
   border-radius: 8px;
   padding: 30px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+  min-width: 0; /* 防止flex子项溢出 */
 }
 
 .group-title {
@@ -574,6 +627,43 @@ onUnmounted(() => {
   font-size: 14px;
 }
 .card-item.answered { background-color: #409eff; color: #fff; border-color: #409eff; }
+
+/* 图片试卷相关样式 */
+.paper-images-container {
+  text-align: center;
+}
+.image-slot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 300px;
+  background: #f5f7fa;
+  color: #909399;
+}
+.generic-answer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.generic-answer-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ga-index {
+  font-weight: bold;
+  font-size: 14px;
+  color: #606266;
+  width: 30px;
+  text-align: right;
+}
+.generic-tip {
+  margin-top: 15px;
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
+}
 
 .result-content { text-align: center; }
 .score-text { font-size: 48px; font-weight: bold; }

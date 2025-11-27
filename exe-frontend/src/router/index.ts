@@ -32,6 +32,7 @@ const routes: Array<RouteRecordRaw> = [
             { path: 'questions', name: 'QuestionManagement', component: () => import('@/views/QuestionManage.vue'), meta: { permission: 'sys:question:list', title: '题库管理' } },
             { path: 'papers', name: 'PaperManagement', component: () => import('@/views/PaperManage.vue'), meta: { permission: 'sys:paper:list', title: '试卷管理' } },
             { path: 'students', name: 'StudentManagement', component: () => import('@/views/StudentManage.vue'), meta: { permission: 'sys:student:list', title: '学生管理' } },
+            { path: 'score-manage', name: 'ScoreManage', component: () => import('@/views/ScoreManage.vue'), meta: { permission: 'sys:stats:list', title: '成绩管理' } },// 暂时复用统计权限},
             { path: 'wrong-records', name: 'WrongRecordManagement', component: () => import('@/views/WrongRecordManage.vue'), meta: { permission: 'sys:wrong:list', title: '错题管理' } },
             { path: 'wrong-record-stats', name: 'WrongRecordStats', component: () => import('@/views/WrongRecordStats.vue'), meta: { permission: 'sys:wrong:list', title: '错题统计' } },
             { path: 'statistics', name: 'StatisticsDashboard', component: () => import('@/views/StatisticsDashboard.vue'), meta: { permission: 'sys:stats:list', title: '教学统计' } },
@@ -94,6 +95,7 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('@/views/student/ExamResultDetail.vue'),
                 meta: { title: '记录详情' }
             },
+
         ]
     }
 ];
