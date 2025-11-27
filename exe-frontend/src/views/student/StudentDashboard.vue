@@ -59,23 +59,20 @@
       </el-col>
     </el-row>
 
-
     <el-row :gutter="20" style="margin-bottom: 20px;">
-      <el-col :span="24">
-        <el-card shadow="never">
+      <el-col :span="16">
+        <el-card shadow="never" style="height: 100%;">
           <template #header>
             <div class="card-header">
               <span>📅 学习打卡记录 (过去一年)</span>
             </div>
           </template>
-          <div ref="heatmapChartRef" style="height: 180px; width: 100%;"></div>
+          <div ref="heatmapChartRef" style="height: 240px; width: 100%;"></div>
         </el-card>
       </el-col>
-      <el-col :span="8">
-        <el-card shadow="never" style="margin-bottom: 20px;">
-        </el-card>
 
-        <el-card shadow="never" class="leaderboard-card">
+      <el-col :span="8">
+        <el-card shadow="never" class="leaderboard-card" style="height: 100%;">
           <template #header>
             <div class="card-header">
               <span>🏆 学霸排行榜</span>
@@ -92,6 +89,7 @@
               </div>
               <div class="rank-score">{{ student.points || 0 }} 分</div>
             </div>
+            <el-empty v-if="leaderboard.length === 0" description="暂无排名数据" :image-size="50" />
           </div>
         </el-card>
       </el-col>
@@ -122,6 +120,9 @@
               <el-icon><Finished /></el-icon>
               <span>历史记录</span>
             </div>
+            <div class="access-item" @click="navigateTo('/student/favorites')">
+              <el-icon><Star /></el-icon> <span>我的收藏</span>
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -149,33 +150,43 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStudentAuthStore } from '@/stores/studentAuth';
 import { Tickets, Select, CloseBold, Clock, EditPen, Memo, DataLine, Finished } from '@element-plus/icons-vue';
-// 【新增】导入API函数和类型
 import { fetchStudentDashboardStats, type StudentDashboardStats } from '@/api/studentAuth';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
 import type { ApiResult } from '@/api/user';
-import type { BizLearningActivity } from '@/api/learningActivity'; // 假定你已创建此类型
-// 1. 引入 echarts
+import type { BizLearningActivity } from '@/api/learningActivity';
 import * as echarts from 'echarts';
-
 
 const studentAuth = useStudentAuthStore();
 const router = useRouter();
 
-// 2. 定义 ref
 const heatmapChartRef = ref<HTMLElement | null>(null);
-// 3. 定义渲染函数
+const leaderboard = ref<any[]>([]);
+const myPoints = ref(0);
+const loading = ref(true);
+const stats = ref<StudentDashboardStats>({
+  totalAnswered: 0,
+  averageAccuracy: 0,
+  wrongRecordCount: 0,
+  studyDurationHours: 0,
+});
+const activities = ref<BizLearningActivity[]>([]);
+
+// 【核心修复 2】修复热力图配置
 const initHeatmap = (dataMap: Record<string, number>) => {
   if (!heatmapChartRef.value) return;
 
   const myChart = echarts.init(heatmapChartRef.value);
-  const currentYear = new Date().getFullYear();
 
-  // 转换数据格式 [ ['2023-01-01', 5], ... ]
+  // 计算日期范围：从一年前的今天 到 今天
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setFullYear(endDate.getFullYear() - 1);
+
+  // 格式化为 'YYYY-MM-DD'
+  const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
   const chartData = Object.entries(dataMap).map(([date, count]) => [date, count]);
-  // 1. 定义变量
-  const leaderboard = ref<any[]>([]);
-  const myPoints = ref(0);
 
   const option = {
     tooltip: {
@@ -187,12 +198,12 @@ const initHeatmap = (dataMap: Record<string, number>) => {
     },
     visualMap: {
       min: 0,
-      max: 10, // 每天超过10次就算非常活跃
+      max: 10,
       calculable: false,
       orient: 'horizontal',
       left: 'center',
       bottom: 0,
-      inRange: { color: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'] }, // GitHub 绿
+      inRange: { color: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'] },
       text: ['勤奋', '少'],
       show: true
     },
@@ -201,9 +212,10 @@ const initHeatmap = (dataMap: Record<string, number>) => {
       left: 30,
       right: 30,
       cellSize: ['auto', 13],
-      range: currentYear, // 显示当年
+      // 关键修复：设置正确的 range 范围，不仅是当前年份，而是后端返回数据的区间
+      range: [formatDate(startDate), formatDate(endDate)],
       itemStyle: { borderWidth: 0.5, borderColor: '#fff' },
-      yearLabel: { show: false }
+      yearLabel: { show: true }
     },
     series: [{
       type: 'heatmap',
@@ -215,16 +227,6 @@ const initHeatmap = (dataMap: Record<string, number>) => {
   myChart.setOption(option);
   window.addEventListener('resize', () => myChart.resize());
 };
-// 【新增】用于存储统计数据的响应式变量
-const loading = ref(true);
-const stats = ref<StudentDashboardStats>({
-  totalAnswered: 0,
-  averageAccuracy: 0,
-  wrongRecordCount: 0,
-  studyDurationHours: 0,
-});
-// 【新增】学习活动列表
-const activities = ref<BizLearningActivity[]>([]);
 
 const welcomeMessage = computed(() => {
   const hour = new Date().getHours();
@@ -239,53 +241,48 @@ const navigateTo = (path: string) => {
   router.push(path);
 };
 
-// 【新增】在组件挂载后获取数据
 onMounted(async () => {
   loading.value = true;
   try {
+    // 1. 获取统计数据
     const res = await fetchStudentDashboardStats();
-    if (res.code === 200) {
-      stats.value = res.data;
-    }
-    // 【新增】获取学习活动日志
+    if (res.code === 200) stats.value = res.data;
+
+    // 2. 获取学习活动日志
     const activitiesRes: ApiResult<BizLearningActivity[]> = await request({
       url: '/api/v1/student/learning-activities',
       method: 'get'
     });
-    if (activitiesRes.code === 200) {
-      activities.value = activitiesRes.data;
-    }
-  } catch (error) {
-    console.error("获取仪表盘统计数据失败:", error);
-    ElMessage.error("获取统计数据失败，请稍后重试");
-  } finally {
-    loading.value = false;
-  }
-  // 获取热力图数据
-  try {
+    if (activitiesRes.code === 200) activities.value = activitiesRes.data;
+
+    // 3. 获取热力图数据
     const heatRes = await request.get('/api/v1/student/dashboard/activity-heatmap');
     if (heatRes.code === 200) {
       initHeatmap(heatRes.data);
     }
-  } catch(e) { console.error(e); }
-  // 获取排行榜
-  const rankRes = await request.get('/api/v1/student/dashboard/leaderboard');
-  if (rankRes.code === 200) {
-    leaderboard.value = rankRes.data;
-  }
 
-  // 获取我的最新信息(含积分)
-  const myInfoRes = await request.get('/api/v1/student/auth/me');
-  if(myInfoRes.code === 200) {
-    myPoints.value = myInfoRes.data.points || 0;
+    // 4. 获取排行榜
+    const rankRes = await request.get('/api/v1/student/dashboard/leaderboard');
+    if (rankRes.code === 200) {
+      leaderboard.value = rankRes.data;
+    }
+
+    // 5. 获取我的积分
+    const myInfoRes = await request.get('/api/v1/student/auth/me');
+    if(myInfoRes.code === 200) {
+      myPoints.value = myInfoRes.data.points || 0;
+    }
+
+  } catch (error) {
+    console.error("获取数据失败:", error);
+  } finally {
+    loading.value = false;
   }
 });
 </script>
 
 <style scoped>
-.dashboard-container {
-  padding: 24px;
-}
+.dashboard-container { padding: 24px; }
 .welcome-card { margin-bottom: 20px; }
 .welcome-content { display: flex; align-items: center; }
 .welcome-avatar { margin-right: 20px; flex-shrink: 0; }
@@ -296,50 +293,20 @@ onMounted(async () => {
 .stat-item .el-icon { font-size: 48px; color: #409EFF; }
 .stat-text .label { font-size: 14px; color: #909399; margin-bottom: 4px; }
 .stat-text .value { font-size: 24px; font-weight: bold; }
-.card-header { font-size: 1rem; font-weight: 600; }
+.card-header { font-size: 1rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
 .quick-access-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; height: 120px; }
 .access-item { display: flex; flex-direction: column; justify-content: center; align-items: center; border: 1px solid #e4e7ed; border-radius: 8px; cursor: pointer; transition: all 0.2s ease-in-out; }
 .access-item:hover { border-color: #409EFF; color: #409EFF; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-4px); }
 .access-item .el-icon { font-size: 32px; margin-bottom: 8px; }
 .timeline { padding-left: 5px; height: 120px; }
-.leaderboard-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.rank-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-radius: 8px;
-  background: #f8f9fa;
-}
-.rank-num {
-  width: 24px;
-  height: 24px;
-  line-height: 24px;
-  text-align: center;
-  font-weight: bold;
-  border-radius: 50%;
-  background: #e0e0e0;
-  color: #666;
-  font-size: 12px;
-}
-/* 前三名高亮 */
+.leaderboard-list { display: flex; flex-direction: column; gap: 12px; }
+.rank-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; background: #f8f9fa; }
+.rank-num { width: 24px; height: 24px; line-height: 24px; text-align: center; font-weight: bold; border-radius: 50%; background: #e0e0e0; color: #666; font-size: 12px; }
 .rank-1 { background: #FFD700; color: #fff; }
 .rank-2 { background: #C0C0C0; color: #fff; }
 .rank-3 { background: #CD7F32; color: #fff; }
-
-.rank-info {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-}
+.rank-info { flex-grow: 1; display: flex; flex-direction: column; }
 .rank-info .name { font-size: 14px; font-weight: 600; }
 .rank-info .grade { font-size: 12px; color: #999; }
-.rank-score {
-  font-weight: bold;
-  color: #f56c6c;
-}
+.rank-score { font-weight: bold; color: #f56c6c; }
 </style>

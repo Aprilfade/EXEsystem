@@ -30,6 +30,16 @@
     <el-card v-else-if="practiceState === 'practicing'" class="practice-card">
       <template #header>
         <div class="card-header-flex">
+          <el-button
+              type="warning"
+              link
+              @click="handleToggleFavorite"
+          >
+            <el-icon size="20">
+              <component :is="isFavorited ? StarFilled : Star" />
+            </el-icon>
+            {{ isFavorited ? '已收藏' : '收藏' }}
+          </el-button>
           <h2>{{ currentSubject?.name }} - 在线练习</h2>
           <div class="mode-selector">
             <el-radio-group v-model="practiceMode" size="small">
@@ -143,6 +153,9 @@ import type { ApiResult } from '@/api/user'; // 引入通用的 ApiResult 类型
 import { ElMessage } from 'element-plus';
 import { Collection, Reading } from '@element-plus/icons-vue';
 import { fetchPracticeQuestions } from '@/api/studentAuth'; // 确保你已修改此文件
+// 1. 导入 API 和 图标
+import { toggleFavorite, checkFavoriteStatus } from '@/api/favorite';
+import { Star, StarFilled } from '@element-plus/icons-vue';
 
 // 【修复】为 practiceResult 提供更具体的类型
 interface PracticeResult {
@@ -154,7 +167,8 @@ interface PracticeResult {
     isCorrect: boolean;
   }>;
 }
-
+// 2. 定义状态
+const isFavorited = ref(false);
 // 【新增】题目类型映射表
 const questionTypeMap: { [key: number]: string } = {
   1: '单选题',
@@ -286,6 +300,36 @@ const submitPractice = async () => {
     isSubmitting.value = false;
   }
 };
+// 3. 定义切换收藏函数
+const handleToggleFavorite = async () => {
+  if (!currentQuestion.value.id) return;
+  try {
+    await toggleFavorite(currentQuestion.value.id);
+    isFavorited.value = !isFavorited.value;
+    ElMessage.success(isFavorited.value ? '收藏成功' : '已取消收藏');
+  } catch (e) {
+    ElMessage.error('操作失败');
+  }
+};
+
+// 4. 定义检查状态函数
+const checkFavStatus = async () => {
+  if (!currentQuestion.value.id) return;
+  try {
+    const res = await checkFavoriteStatus(currentQuestion.value.id);
+    if (res.code === 200) {
+      isFavorited.value = res.data;
+    }
+  } catch(e) {}
+};
+
+// 5. 在切换题目时调用检查
+// 找到 nextQuestion 和 prevQuestion 方法，在末尾添加: checkFavStatus();
+// 找到 startPractice 方法，在成功获取题目后添加: checkFavStatus();
+// 也可以直接监听 currentQuestionIndex
+watch(currentQuestionIndex, () => {
+  checkFavStatus();
+});
 
 onMounted(loadAllSubjects);
 
