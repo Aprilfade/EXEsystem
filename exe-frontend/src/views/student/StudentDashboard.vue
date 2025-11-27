@@ -144,11 +144,6 @@ const welcomeMessage = computed(() => {
 });
 
 const navigateTo = (path: string) => {
-  if (path === '/student/history') {
-    // 假设历史记录功能也待开发
-    ElMessage.info('功能开发中，敬请期待');
-    return;
-  }
   router.push(path);
 };
 

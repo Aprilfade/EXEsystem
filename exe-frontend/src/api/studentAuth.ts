@@ -115,3 +115,23 @@ export function fetchPracticeSubjects(): Promise<ApiResult<any[]>> {
         method: 'get'
     });
 }
+/**
+ * 获取考试历史记录
+ */
+export function fetchExamHistory(params: { current: number; size: number }): Promise<ApiResult<any>> {
+    return request({
+        url: '/api/v1/student/history',
+        method: 'get',
+        params
+    });
+}
+
+/**
+ * 获取单次考试结果详情
+ */
+export function fetchExamHistoryDetail(resultId: number): Promise<ApiResult<any>> {
+    return request({
+        url: `/api/v1/student/history/${resultId}`,
+        method: 'get'
+    });
+}

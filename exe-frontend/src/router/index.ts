@@ -82,6 +82,18 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('@/views/student/ExamTaking.vue'),
                 meta: { title: '正在考试' }
             },
+            {
+                path: 'history',
+                name: 'StudentHistory',
+                component: () => import('@/views/student/History.vue'),
+                meta: { title: '考试记录' }
+            },
+            {
+                path: 'history/:resultId',
+                name: 'StudentHistoryDetail',
+                component: () => import('@/views/student/ExamResultDetail.vue'),
+                meta: { title: '记录详情' }
+            },
         ]
     }
 ];

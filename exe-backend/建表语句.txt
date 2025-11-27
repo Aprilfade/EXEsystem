@@ -306,3 +306,19 @@ CREATE TABLE `biz_learning_activity` (
   PRIMARY KEY (`id`),
   INDEX `idx_student_id` (`student_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学习活动日志表';
+
+-- ----------------------------
+-- 17. 【新增】考试成绩记录表
+-- ----------------------------
+CREATE TABLE `biz_exam_result` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `student_id` bigint NOT NULL COMMENT '学生ID',
+  `paper_id` bigint NOT NULL COMMENT '试卷ID',
+  `paper_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '试卷名称快照',
+  `score` int NOT NULL DEFAULT '0' COMMENT '得分',
+  `total_score` int NOT NULL DEFAULT '0' COMMENT '试卷总分',
+  `user_answers` json DEFAULT NULL COMMENT '用户答题详情(JSON)',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '考试时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_student_paper` (`student_id`, `paper_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='考试成绩记录表';

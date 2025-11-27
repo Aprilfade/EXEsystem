@@ -22,6 +22,15 @@ import org.springframework.web.multipart.MultipartFile;
 import com.ice.exebackend.mapper.BizQuestionMapper; // 【新增】导入 Mapper
 import com.ice.exebackend.service.BizLearningActivityService; // 【新增】
 import java.time.LocalDateTime; // 【新增】
+import com.ice.exebackend.entity.BizExamResult; // 【新增】
+import com.ice.exebackend.service.BizExamResultService; // 【新增】
+import com.alibaba.fastjson.JSON; // 确保引入 fastjson 或使用 Jackson
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
 
 
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +48,12 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/student")
 public class StudentDataController {
+
+    // 添加日志记录器（如果还没有的话）
+    private static final Logger logger = LoggerFactory.getLogger(StudentDataController.class);
+
+    @Autowired
+    private ObjectMapper objectMapper; // 【新增】注入 Jackson 工具类
 
     @Autowired
     private BizStudentService studentService;
@@ -60,6 +75,10 @@ public class StudentDataController {
 
     @Autowired
     private com.ice.exebackend.service.BizPaperService paperService;
+
+    // 1. 注入新的 Service
+    @Autowired
+    private BizExamResultService examResultService;
 
     @Value("${file.upload-dir}")
     private String uploadDir;
@@ -514,6 +533,28 @@ public class StudentDataController {
             }
         }
 
+
+        // --- 【修改】 保存考试结果到 BizExamResult 表 ---
+        BizExamResult examResult = new BizExamResult();
+        examResult.setStudentId(student.getId());
+        examResult.setPaperId(paperId);
+        examResult.setPaperName(paper.getName());
+        examResult.setScore(studentScore);
+        examResult.setTotalScore(totalScore);
+
+        // 【核心修复】使用 Jackson 序列化，它会将 Map<Long, String> 正确转换为 {"16":"B"} 格式
+        try {
+            String jsonAnswers = objectMapper.writeValueAsString(submission.getAnswers());
+            examResult.setUserAnswers(jsonAnswers);
+        } catch (JsonProcessingException e) {
+            logger.error("答案序列化失败", e);
+            examResult.setUserAnswers("{}"); // 发生异常时存入空对象，防止数据库报错
+        }
+
+        examResult.setCreateTime(LocalDateTime.now());
+        examResultService.save(examResult);
+        // ---------------------------------------------
+
         // 记录学习活动
         BizLearningActivity activity = new BizLearningActivity();
         activity.setStudentId(student.getId());
@@ -533,6 +574,66 @@ public class StudentDataController {
                 "totalScore", totalScore,
                 "details", results
         ));
+    }
+
+    // 3. 【新增】 获取历史考试记录列表
+    @GetMapping("/history")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result getExamHistory(
+            @RequestParam(defaultValue = "1") int current,
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication
+    ) {
+        String studentNo = authentication.getName();
+        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
+
+        Page<BizExamResult> page = new Page<>(current, size);
+        examResultService.lambdaQuery()
+                .eq(BizExamResult::getStudentId, student.getId())
+                .orderByDesc(BizExamResult::getCreateTime)
+                .page(page);
+
+        return Result.suc(page.getRecords(), page.getTotal());
+    }
+
+    // 4. 【新增】 获取某次考试的详情 (包含试卷结构和当时的用户答案)
+    @GetMapping("/history/{resultId}")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result getExamResultDetail(@PathVariable Long resultId, Authentication authentication) {
+        String studentNo = authentication.getName();
+        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
+
+        BizExamResult result = examResultService.getById(resultId);
+        if (result == null || !result.getStudentId().equals(student.getId())) {
+            return Result.fail("记录不存在或无权访问");
+        }
+
+        // 获取试卷原始结构
+        // 注意：如果试卷被删除了，这里可能会为空。实际生产中应该快照存储试卷内容。
+        // 这里为了简化，我们假设试卷结构还在。
+        com.ice.exebackend.dto.PaperDTO paper = paperService.getPaperWithQuestionsById(result.getPaperId());
+
+        // 填充题目的详细信息(包括答案和解析，因为这是查看结果，可以看答案)
+        if (paper != null && paper.getGroups() != null) {
+            List<Long> allQIds = paper.getGroups().stream()
+                    .flatMap(g -> g.getQuestions().stream())
+                    .map(com.ice.exebackend.entity.BizPaperQuestion::getQuestionId)
+                    .collect(Collectors.toList());
+
+            if(!allQIds.isEmpty()) {
+                Map<Long, BizQuestion> qMap = questionService.listByIds(allQIds).stream()
+                        .collect(Collectors.toMap(BizQuestion::getId, q -> q));
+
+                // 将题目详情放入一个 map 返回，前端根据ID匹配
+                return Result.suc(Map.of(
+                        "examResult", result,
+                        "paper", paper,
+                        "questions", qMap
+                ));
+            }
+        }
+
+        return Result.suc(Map.of("examResult", result, "paper", paper));
     }
 
     // 辅助方法：对逗号分隔的答案进行排序 (A,B -> A,B;  B,A -> A,B)
