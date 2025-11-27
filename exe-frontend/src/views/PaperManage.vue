@@ -60,14 +60,39 @@
         <div v-for="paper in filteredList" :key="paper.id" class="paper-card">
           <div class="card-header">
             <div>
+              <el-tag
+                  size="small"
+                  :type="paper.status === 1 ? 'success' : 'info'"
+                  effect="dark"
+                  style="margin-right: 8px;"
+              >
+                {{ paper.status === 1 ? '已发布' : '草稿' }}
+              </el-tag>
+
               <el-tag size="small">{{ getSubjectName(paper.subjectId) }}</el-tag>
               <el-tag v-if="paper.grade" size="small" type="success" style="margin-left: 8px;">{{ paper.grade }}</el-tag>
             </div>
-            <el-dropdown>
+
+            <el-dropdown @click.stop>
               <el-icon class="el-dropdown-link"><MoreFilled /></el-icon>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item @click="handleUpdate(paper.id)">编辑</el-dropdown-item>
+                  <el-dropdown-item
+                      v-if="paper.status !== 1"
+                      @click="handleStatusChange(paper, 1)"
+                      style="color: #67C23A;"
+                  >
+                    <el-icon><VideoPlay /></el-icon> 发布试卷
+                  </el-dropdown-item>
+                  <el-dropdown-item
+                      v-else
+                      @click="handleStatusChange(paper, 0)"
+                      style="color: #E6A23C;"
+                  >
+                    <el-icon><VideoPause /></el-icon> 下架试卷
+                  </el-dropdown-item>
+
+                  <el-dropdown-item divided @click="handleUpdate(paper.id)">编辑</el-dropdown-item>
                   <el-dropdown-item @click="handleExport(paper.id, false)">导出</el-dropdown-item>
                   <el-dropdown-item @click="handleExport(paper.id, true)">导出(含答案)</el-dropdown-item>
                   <el-dropdown-item @click="handleDelete(paper.id)" divided style="color: #f56c6c;">删除</el-dropdown-item>
@@ -142,7 +167,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchPaperList, deletePaper, downloadPaper, updatePaperStatus } from '@/api/paper';
 import type { Paper, PaperPageParams } from '@/api/paper';
 import { fetchAllSubjects, type Subject } from '@/api/subject';
-import { Plus, Edit, Delete, Grid, Menu, MoreFilled, Download } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Grid, Menu, MoreFilled, Download ,VideoPlay, VideoPause} from '@element-plus/icons-vue';
 import PaperEditDialog from '@/components/paper/PaperEditDialog.vue';
 
 const allPaperList = ref<Paper[]>([]); // 用于前端搜索

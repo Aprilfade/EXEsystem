@@ -1,6 +1,7 @@
 package com.ice.exebackend.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -17,6 +18,18 @@ public class BizPaperQuestion {
     private Integer sortOrder;
     private Long groupId; // 【新增此行】
 
+    // === 【新增】非数据库字段，用于组卷时携带题目信息 ===
+    @TableField(exist = false)
+    private BizQuestion questionDetail;
+
+    public BizQuestion getQuestionDetail() {
+        return questionDetail;
+    }
+
+    public void setQuestionDetail(BizQuestion questionDetail) {
+        this.questionDetail = questionDetail;
+    }
+    // ================================================
     public Long getId() {
         return id;
     }

@@ -2,8 +2,11 @@ package com.ice.exebackend.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ice.exebackend.dto.PaperDTO;
+import com.ice.exebackend.dto.SmartPaperReq;
 import com.ice.exebackend.entity.BizPaper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+
+import java.util.List;
 
 public interface BizPaperService extends IService<BizPaper> {
 
@@ -35,4 +38,9 @@ public interface BizPaperService extends IService<BizPaper> {
      * @return XWPFDocument Word文档对象
      */
     XWPFDocument exportPaperToWord(Long id, boolean includeAnswers);
+
+    /**
+     * 智能生成试卷结构
+     */
+    List<PaperDTO.PaperGroupDTO> generateSmartPaper(SmartPaperReq req);
 }

@@ -72,6 +72,16 @@ import { fetchQuestionList } from '@/api/question';
 import QuestionSelector from './QuestionSelector.vue';
 import { ElMessageBox } from 'element-plus';
 
+
+// 1. 在 script 顶部定义一个分值映射表 (可根据你的业务需求调整)
+// 1:单选, 2:多选, 3:填空, 4:判断, 5:主观
+const defaultScores: Record<number, number> = {
+  1: 2,   // 单选题默认 2 分
+  2: 4,   // 多选题默认 4 分
+  3: 2,   // 填空题默认 2 分
+  4: 2,   // 判断题默认 2 分
+  5: 10   // 主观题默认 10 分
+};
 const props = defineProps<{
   paperGroups: PaperGroup[];
   subjectId: number;
@@ -145,26 +155,33 @@ const removeQuestion = (groupIndex: number, questionIndex: number) => {
   emitUpdate();
 };
 
-// 将从题库选择的题目添加到第一个分组
+// 2. 修改添加题目的函数
 const addQuestionsToDefaultGroup = (selectedQuestions: Question[]) => {
+  // 如果没有分组，自动创建一个默认分组
   if (localGroups.value.length === 0) {
     addGroup();
   }
   const defaultGroup = localGroups.value[0];
 
   selectedQuestions.forEach(q => {
-    // 检查整个试卷是否已存在该题目
+    // 检查整个试卷是否已存在该题目 (防止重复添加)
     const exists = localGroups.value.some(g => g.questions.some(pq => pq.questionId === q.id));
+
     if (!exists) {
+      // === 【新增】第5点：获取智能默认分值 ===
+      // 如果题型在映射表中，就用映射表的分；否则默认给 5 分
+      const smartScore = defaultScores[q.questionType] || 5;
+
       defaultGroup.questions.push({
         paperId: 0,
         questionId: q.id,
-        score: 5, // 默认分值
+        score: smartScore, // <--- 这里使用了智能分值
         sortOrder: defaultGroup.questions.length,
         questionDetail: q
       });
     }
   });
+
   isQuestionSelectVisible.value = false;
   emitUpdate();
 };

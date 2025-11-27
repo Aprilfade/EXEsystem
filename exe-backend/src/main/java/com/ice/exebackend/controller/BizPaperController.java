@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.PaperDTO;
+import com.ice.exebackend.dto.SmartPaperReq;
 import com.ice.exebackend.entity.BizPaper;
 import com.ice.exebackend.service.BizPaperService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.io.ByteArrayOutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/papers")
@@ -136,4 +138,17 @@ public class BizPaperController {
 
         return success ? Result.suc() : Result.fail();
     }
+    @PostMapping("/generate")
+    @PreAuthorize("hasAuthority('sys:paper:create')")
+    public Result generateSmartPaper(@RequestBody SmartPaperReq req) {
+        if (req.getSubjectId() == null) {
+            return Result.fail("请选择科目");
+        }
+        List<PaperDTO.PaperGroupDTO> groups = paperService.generateSmartPaper(req);
+        if (groups.isEmpty()) {
+            return Result.fail("未找到符合条件的题目，请检查题库或调整条件");
+        }
+        return Result.suc(groups);
+    }
+
 }

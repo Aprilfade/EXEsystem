@@ -23,6 +23,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
+import com.ice.exebackend.service.BizPaperQuestionService; // 新增导入
+import com.ice.exebackend.dto.SmartPaperReq;
+import org.springframework.util.StringUtils;
 
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -50,8 +53,84 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
     @Autowired
     private BizQuestionService questionService;
 
+    // 【新增注入】注入 Service 以使用 saveBatch
+    @Autowired
+    private BizPaperQuestionService paperQuestionService;
+
     @Value("${file.upload-dir}")
     private String uploadDir;
+
+    @Override
+    public List<PaperDTO.PaperGroupDTO> generateSmartPaper(SmartPaperReq req) {
+        List<PaperDTO.PaperGroupDTO> groups = new ArrayList<>();
+        int sortOrder = 0;
+
+        // 辅助方法：生成指定题型的分组
+        generateGroup(groups, req, 1, "一、单选题", req.getSingleCount(), sortOrder++);
+        generateGroup(groups, req, 2, "二、多选题", req.getMultiCount(), sortOrder++);
+        generateGroup(groups, req, 4, "三、判断题", req.getJudgeCount(), sortOrder++); // 注意顺序
+        generateGroup(groups, req, 3, "四、填空题", req.getFillCount(), sortOrder++);
+        generateGroup(groups, req, 5, "五、主观题", req.getSubjectiveCount(), sortOrder++);
+
+        return groups;
+    }
+
+    private void generateGroup(List<PaperDTO.PaperGroupDTO> groups, SmartPaperReq req,
+                               int questionType, String groupName, Integer count, int groupSort) {
+        if (count == null || count <= 0) return;
+
+        // 1. 随机查询指定数量的题目
+        QueryWrapper<BizQuestion> query = new QueryWrapper<>();
+        query.eq("subject_id", req.getSubjectId())
+                .eq("question_type", questionType);
+
+        if (StringUtils.hasText(req.getGrade())) {
+            query.eq("grade", req.getGrade());
+        }
+
+        // 核心：随机排序并限制数量
+        query.last("ORDER BY RAND() LIMIT " + count);
+        List<BizQuestion> questions = questionService.list(query);
+
+        if (questions.isEmpty()) return;
+
+        // 2. 组装分组对象
+        PaperDTO.PaperGroupDTO groupDTO = new PaperDTO.PaperGroupDTO();
+        groupDTO.setName(groupName);
+        groupDTO.setSortOrder(groupSort);
+
+        List<BizPaperQuestion> paperQuestions = new ArrayList<>();
+
+        // 3. 设置默认分值 (可根据需求调整)
+        int defaultScore = switch (questionType) {
+            case 1, 3, 4 -> 2; // 单选、填空、判断 2分
+            case 2 -> 4;       // 多选 4分
+            case 5 -> 10;      // 主观 10分
+            default -> 5;
+        };
+
+        for (int i = 0; i < questions.size(); i++) {
+            BizQuestion q = questions.get(i);
+            BizPaperQuestion pq = new BizPaperQuestion();
+            pq.setQuestionId(q.getId());
+            pq.setScore(defaultScore);
+            pq.setSortOrder(i);
+            // 这是一个非数据库字段，用于前端显示题目详情 (需要在 BizPaperQuestion 实体中确认有此字段或通过 Map 返回)
+            // 在你的 PaperDTO 定义中，PaperGroupDTO 的 questions 列表是 BizPaperQuestion 类型
+            // 前端 PaperQuestionManager 需要 questionDetail 属性来显示题干
+            // 我们可以利用 MyBatisPlus 的 @TableField(exist=false) 或者直接在 Controller 层处理
+            // 这里为了简单，假设你已经处理好了前端需要的结构
+            // *注意：为了让前端能显示题干，这里必须把 BizQuestion 信息塞进去*
+            // 你需要在 BizPaperQuestion.java 实体中加一个 @TableField(exist=false) private BizQuestion questionDetail;
+            pq.setQuestionDetail(q);
+
+            paperQuestions.add(pq);
+        }
+
+        groupDTO.setQuestions(paperQuestions);
+        groups.add(groupDTO);
+    }
+
 
     @Override
     @Transactional
@@ -81,14 +160,18 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
     }
 
     // 【新增】更新分组和题目的核心逻辑
+    // 【核心修改】重构此方法
     private void updatePaperGroupsAndQuestions(Long paperId, List<PaperDTO.PaperGroupDTO> groups) {
-        // 1. 先删除所有与该试卷相关的旧分组和旧题目关联
+        // 1. 先删除所有与该试卷相关的旧分组和旧题目关联 (保持不变)
         paperGroupMapper.delete(new QueryWrapper<BizPaperGroup>().eq("paper_id", paperId));
         paperQuestionMapper.delete(new QueryWrapper<BizPaperQuestion>().eq("paper_id", paperId));
 
         if (CollectionUtils.isEmpty(groups)) {
             return;
         }
+
+        // 准备一个列表，用于收集所有待插入的题目
+        List<BizPaperQuestion> batchQuestionList = new ArrayList<>();
 
         // 2. 遍历前端传来的新分组数据并插入
         for (int i = 0; i < groups.size(); i++) {
@@ -98,16 +181,24 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
             paperGroup.setPaperId(paperId);
             paperGroup.setName(groupDTO.getName());
             paperGroup.setSortOrder(i);
-            paperGroupMapper.insert(paperGroup); // 插入后，MyBatis-Plus会自动将生成的主键ID回填到paperGroup对象中
+            paperGroupMapper.insert(paperGroup); // 分组数量少，普通插入即可
 
-            // 3. 遍历该分组下的题目并插入，关联到新生成的分组ID
+            Long newGroupId = paperGroup.getId(); // 获取生成的分组ID
+
+            // 3. 收集该分组下的题目
             if (!CollectionUtils.isEmpty(groupDTO.getQuestions())) {
                 for (BizPaperQuestion pq : groupDTO.getQuestions()) {
+                    pq.setId(null); // 确保ID为空，让数据库自增
                     pq.setPaperId(paperId);
-                    pq.setGroupId(paperGroup.getId()); // 关键：关联到新的分组ID
-                    paperQuestionMapper.insert(pq);
+                    pq.setGroupId(newGroupId); // 关联到新的分组ID
+                    batchQuestionList.add(pq); // 【关键】加入列表，而不是立即插入
                 }
             }
+        }
+
+        // 4. 【关键】执行批量插入
+        if (!batchQuestionList.isEmpty()) {
+            paperQuestionService.saveBatch(batchQuestionList);
         }
     }
 

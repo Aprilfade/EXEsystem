@@ -113,3 +113,22 @@ export function updatePaperStatus(id: number, status: number): Promise<ApiResult
         params: { status }
     });
 }
+// 新增请求参数接口
+export interface SmartPaperReq {
+    subjectId: number;
+    grade?: string;
+    singleCount?: number;
+    multiCount?: number;
+    fillCount?: number;
+    judgeCount?: number;
+    subjectiveCount?: number;
+}
+
+// 新增 API 方法
+export function generateSmartPaper(data: SmartPaperReq): Promise<ApiResult<PaperGroup[]>> {
+    return request({
+        url: '/api/v1/papers/generate',
+        method: 'post',
+        data
+    });
+}

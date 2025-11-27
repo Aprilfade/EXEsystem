@@ -41,6 +41,19 @@
             </el-radio-group>
           </el-form-item>
         </el-col>
+        <el-col :span="8">
+          <el-form-item label="发布状态" prop="status">
+            <el-switch
+                v-model="form.status"
+                :active-value="1"
+                :inactive-value="0"
+                active-text="立即发布"
+                inactive-text="存为草稿"
+                inline-prompt
+                style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
+            />
+          </el-form-item>
+        </el-col>
       </el-row>
       <el-form-item label="试卷描述" prop="description">
         <el-input v-model="form.description" type="textarea" placeholder="请输入试卷描述" />
@@ -50,6 +63,15 @@
     <el-divider />
 
     <div v-if="form.paperType === 1">
+      <div class="smart-entry-bar" style="margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; background: #f0f9eb; padding: 10px; border-radius: 4px; border: 1px solid #e1f3d8;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <el-icon color="#67C23A"><MagicStick /></el-icon>
+          <span style="font-size: 14px; color: #606266;">想快速创建试卷？试试智能生成功能。</span>
+        </div>
+        <el-button type="success" size="small" @click="openSmartDialog">
+          <el-icon style="margin-right: 4px"><MagicStick /></el-icon> 一键智能组卷
+        </el-button>
+      </div>
       <paper-question-manager
           v-if="form.paperType === 1 && form.subjectId"
           :paper-groups="form.groups"
@@ -58,6 +80,31 @@
       />
       <el-alert v-else title="请先选择一个科目来管理试题" type="info" show-icon :closable="false" />
     </div>
+    <el-dialog v-model="showSmartDialog" title="智能组卷配置" width="480px" append-to-body>
+      <el-form :model="smartForm" label-width="100px">
+        <el-alert title="系统将根据当前选择的科目和年级随机抽取题目" type="info" :closable="false" style="margin-bottom: 20px;" />
+
+        <el-form-item label="单选题数量">
+          <el-input-number v-model="smartForm.singleCount" :min="0" :max="50" style="width: 100%;" />
+        </el-form-item>
+        <el-form-item label="多选题数量">
+          <el-input-number v-model="smartForm.multiCount" :min="0" :max="20" style="width: 100%;" />
+        </el-form-item>
+        <el-form-item label="判断题数量">
+          <el-input-number v-model="smartForm.judgeCount" :min="0" :max="20" style="width: 100%;" />
+        </el-form-item>
+        <el-form-item label="填空题数量">
+          <el-input-number v-model="smartForm.fillCount" :min="0" :max="20" style="width: 100%;" />
+        </el-form-item>
+        <el-form-item label="主观题数量">
+          <el-input-number v-model="smartForm.subjectiveCount" :min="0" :max="10" style="width: 100%;" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showSmartDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleSmartGenerate" :loading="generating">开始生成</el-button>
+      </template>
+    </el-dialog>
 
     <div v-if="form.paperType === 2">
       <el-upload
@@ -114,6 +161,8 @@ import type { FormInstance, FormRules, UploadUserFile, UploadProps } from 'eleme
 import { ElMessage } from 'element-plus';
 import { createPaper, updatePaper, fetchPaperById } from '@/api/paper';
 import type { Paper, PaperQuestion, PaperGroup, PaperImage } from '@/api/paper'; // 确保 PaperGroup 已导入
+import { MagicStick } from '@element-plus/icons-vue'; // 引入图标
+import { generateSmartPaper, type SmartPaperReq } from '@/api/paper'; // 引入API
 import type { Subject } from '@/api/subject';
 import PaperQuestionManager from './PaperQuestionManager.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -130,7 +179,7 @@ const props = defineProps<{
 const emit = defineEmits(['update:visible', 'success']);
 const authStore = useAuthStore();
 const formRef = ref<FormInstance>();
-const form = ref<Partial<Paper>>({ name: '', subjectId: undefined, description: '', paperType: 1, groups: [], paperImages: [] });
+const form = ref<Partial<Paper>>({ name: '', subjectId: undefined, description: '', paperType: 1, groups: [], paperImages: [],status: 0 });
 const fileList = ref<UploadUserFile[]>([]);
 
 const dialogTitle = computed(() => (props.paperId ? '编辑试卷' : '新增试卷'));
@@ -175,18 +224,36 @@ const handleClose = () => emit('update:visible', false);
 
 const submitForm = async () => {
   if (!formRef.value || !form.value) return;
+
   await formRef.value.validate(async (valid) => {
     if (valid) {
-      try {
-        if(form.value.paperType === 1) {
-          form.value.totalScore = form.value.questions?.reduce((sum, q) => sum + (q.score || 0), 0);
-        } else {
-          form.value.totalScore = 100; // 图片试卷可以给一个默认分
-          form.value.paperImages?.forEach((image, index) => {
-            image.sortOrder = index;
-          });
+      // === 【新增】第4点：提交前的数据校验 ===
+      if (form.value.paperType === 1) {
+        // 1. 检查是否至少添加了一个题目
+        // 逻辑：遍历所有分组，只要有一个分组里的 questions 数组长度大于 0，就视为有效
+        const hasQuestions = form.value.groups?.some(g => g.questions && g.questions.length > 0);
+
+        if (!hasQuestions) {
+          ElMessage.warning('试卷不能为空，请至少添加一道试题！');
+          return; // 阻止提交
         }
 
+        // 2. 【修复总分计算Bug】：必须遍历 groups 来累加分数
+        form.value.totalScore = form.value.groups?.reduce((total, group) => {
+          const groupScore = group.questions?.reduce((sum, q) => sum + (q.score || 0), 0) || 0;
+          return total + groupScore;
+        }, 0) || 0;
+
+      } else {
+        // 图片试卷的处理逻辑保持不变
+        form.value.totalScore = 100;
+        form.value.paperImages?.forEach((image, index) => {
+          image.sortOrder = index;
+        });
+      }
+      // === 校验结束 ===
+
+      try {
         if (form.value.id) {
           await updatePaper(form.value.id, form.value);
           ElMessage.success('更新成功');
@@ -242,6 +309,54 @@ const removeImage = (index: number) => {
   // 同时也要更新 fileList 来确保 el-upload 状态同步（如果需要的话）
   fileList.value.splice(index, 1);
 };
+// --- 智能组卷相关变量 ---
+const showSmartDialog = ref(false);
+const generating = ref(false);
+const smartForm = reactive<SmartPaperReq>({
+  subjectId: 0, // 这里的初始值无所谓，打开弹窗时会覆盖
+  singleCount: 5,
+  multiCount: 2,
+  judgeCount: 2,
+  fillCount: 2,
+  subjectiveCount: 1
+});
+
+// 打开智能组卷弹窗
+const openSmartDialog = () => {
+  if (!form.value.subjectId) {
+    ElMessage.warning('请先在上方选择所属科目！');
+    return;
+  }
+  // 同步当前的科目和年级
+  smartForm.subjectId = form.value.subjectId;
+  smartForm.grade = form.value.grade;
+  showSmartDialog.value = true;
+};
+
+// 执行智能生成
+const handleSmartGenerate = async () => {
+  generating.value = true;
+  try {
+    const res = await generateSmartPaper(smartForm);
+    if (res.code === 200) {
+      // 核心：直接替换当前的 groups
+      form.value.groups = res.data;
+
+      // 自动计算一下总分 (利用我们之前修复的逻辑)
+      const newTotalScore = res.data.reduce((total, group) => {
+        return total + (group.questions?.reduce((sum, q) => sum + (q.score || 0), 0) || 0);
+      }, 0);
+      form.value.totalScore = newTotalScore;
+
+      ElMessage.success(`智能组卷成功！共生成 ${res.data.length} 个分组。`);
+      showSmartDialog.value = false;
+    }
+  } catch (error) {
+    console.error(error);
+  } finally {
+    generating.value = false;
+  }
+};
 
 
 
@@ -284,7 +399,8 @@ watchEffect(async () => {
         paperType: 1,
         grade: '', // <-- 新增
         groups: [], // <-- 必须是 groups: []
-        paperImages: []
+        paperImages: [],
+        status: 0
       };
       fileList.value = [];
     }
