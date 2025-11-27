@@ -53,6 +53,7 @@ import { fetchGoodsList, exchangeGoods, equipGoods, type Goods } from '@/api/goo
 import { useStudentAuthStore } from '@/stores/studentAuth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Coin } from '@element-plus/icons-vue';
+import UserAvatar from '@/components/UserAvatar.vue';
 
 const props = defineProps<{ visible: boolean }>();
 const emit = defineEmits(['update:visible', 'success']);
@@ -65,13 +66,13 @@ const currentPoints = ref(0);
 const loadData = async () => {
   loading.value = true;
   try {
-    // 并行刷新用户信息(获取最新积分)和商品列表
     await authStore.fetchStudentInfo();
     currentPoints.value = authStore.student?.points || 0;
 
     const res = await fetchGoodsList();
     if (res.code === 200) {
-      goodsList.value = res.data;
+      // 【修改】过滤掉 type 为 'BACKGROUND' 的商品
+      goodsList.value = res.data.filter((item: Goods) => item.type !== 'BACKGROUND');
     }
   } finally {
     loading.value = false;

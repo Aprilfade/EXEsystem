@@ -17,8 +17,13 @@
       <div class="header-user">
         <el-dropdown @command="handleCommand">
           <span class="avatar-dropdown">
-            <el-avatar :size="32" :src="studentAuth.student?.avatar || ''">{{ studentAuth.studentName.charAt(0) }}</el-avatar>
-            <span class="nickname-header">{{ studentAuth.studentName }}</span>
+            <UserAvatar
+                :src="studentAuth.student?.avatar"
+                :name="studentAuth.studentName"
+                :size="32"
+                :frame-style="studentAuth.student?.avatarFrameStyle"
+            />
+            <span class="nickname-header" style="margin-left: 8px;">{{ studentAuth.studentName }}</span>
             <el-icon class="el-icon--right"><arrow-down /></el-icon>
           </span>
           <template #dropdown>
@@ -48,6 +53,7 @@ import { useStudentAuthStore } from '@/stores/studentAuth';
 import { School, ArrowDown } from '@element-plus/icons-vue';
 // 【新增】导入我们新创建的弹窗组件
 import ProfileEditDialog from '@/components/student/ProfileEditDialog.vue';
+import UserAvatar from '@/components/UserAvatar.vue';
 
 const studentAuth = useStudentAuthStore();
 // 【新增】控制弹窗显示的变量

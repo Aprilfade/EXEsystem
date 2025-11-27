@@ -10,17 +10,23 @@
       <el-form-item label="头像" prop="avatar">
         <el-upload
             class="avatar-uploader"
-
             action="/api/v1/student/files/upload"
-
             :show-file-list="false"
             :on-success="handleAvatarSuccess"
             :headers="{ 'Authorization': 'Bearer ' + studentAuth.token }"
         >
-          <img v-if="form.avatar" :src="form.avatar" class="avatar" />
-          <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
+          <div class="avatar-edit-wrapper">
+            <UserAvatar
+                :src="form.avatar"
+                :name="form.name"
+                :size="100"
+                :frame-style="studentAuth.student?.avatarFrameStyle"
+            />
+            <div class="hover-mask">
+              <el-icon><Plus /></el-icon>
+            </div>
+          </div>
         </el-upload>
-        <div class="avatar-frame" :style="authStore.student?.avatarFrameStyle"></div>
       </el-form-item>
       <el-form-item label="学号">
         <el-input :value="form.studentNo" disabled />
@@ -42,6 +48,7 @@
   </el-dialog>
 </template>
 
+
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue';
 import type { FormInstance, FormRules, UploadProps } from 'element-plus';
@@ -50,6 +57,7 @@ import { Plus } from '@element-plus/icons-vue';
 import { useStudentAuthStore } from '@/stores/studentAuth';
 import { updateStudentProfile } from '@/api/studentAuth';
 import type { Student } from '@/api/student';
+import UserAvatar from '@/components/UserAvatar.vue'; // 引入新组件
 
 const props = defineProps<{
   visible: boolean;
@@ -132,5 +140,27 @@ const submitForm = async () => {
   pointer-events: none; /* 让点击事件穿透到上传按钮 */
   z-index: 10;
   border-radius: 50%;
+}
+/* 添加一些样式让上传交互更好看 */
+.avatar-edit-wrapper {
+  position: relative;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.hover-mask {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.5);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 20;
+}
+.avatar-edit-wrapper:hover .hover-mask {
+  opacity: 1;
 }
 </style>

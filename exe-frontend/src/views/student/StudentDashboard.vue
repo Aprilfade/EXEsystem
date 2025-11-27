@@ -2,9 +2,14 @@
   <div class="dashboard-container">
     <el-card shadow="never" class="welcome-card">
       <div class="welcome-content">
-        <el-avatar :size="72" :src="studentAuth.student?.avatar || ''" class="welcome-avatar">
-          {{ studentAuth.studentName.charAt(0) }}
-        </el-avatar>
+        <UserAvatar
+            :src="studentAuth.student?.avatar"
+            :name="studentAuth.studentName"
+            :size="72"
+            :frame-style="studentAuth.student?.avatarFrameStyle"
+            class="welcome-avatar"
+            style="margin-right: 20px;"
+        />
         <div class="welcome-text">
           <h2>{{ welcomeMessage }}，{{ studentAuth.studentName }} 同学！</h2>
           <p>“学而不思则罔，思而不学则殆。” 坚持学习，不断进步！</p>
@@ -82,8 +87,13 @@
           <div class="leaderboard-list">
             <div v-for="(student, index) in leaderboard" :key="index" class="rank-item">
               <div class="rank-num" :class="'rank-' + (index + 1)">{{ index + 1 }}</div>
-              <el-avatar :size="30" :src="student.avatar">{{ student.name.charAt(0) }}</el-avatar>
-              <div class="rank-info">
+              <UserAvatar
+                  :src="student.avatar"
+                  :name="student.name"
+                  :size="30"
+                  :frame-style="student.avatarFrameStyle"
+              />
+              <div class="rank-info" style="margin-left: 10px;">
                 <span class="name">{{ student.name }}</span>
                 <span class="grade">{{ student.grade }}</span>
               </div>
@@ -188,6 +198,7 @@ import type { BizLearningActivity } from '@/api/learningActivity';
 import * as echarts from 'echarts';
 import PointsMallDialog from '@/components/student/PointsMallDialog.vue';
 import { Present } from '@element-plus/icons-vue'; // 引入礼品图标
+import UserAvatar from '@/components/UserAvatar.vue';
 
 
 
