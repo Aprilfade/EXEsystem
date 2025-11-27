@@ -16,6 +16,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.ice.exebackend.entity.BizWrongRecord; // 【新增】 导入错题记录实体
 import com.ice.exebackend.service.BizWrongRecordService; // 【新增】 导入错题记录服务
+import com.ice.exebackend.entity.BizLearningActivity; // 【新增】
+import com.ice.exebackend.service.BizLearningActivityService; // 【新增】
+import java.time.LocalDateTime; // 【新增】
+import java.util.Map; // 【新增】
 
 import java.io.IOException;
 import java.net.URLEncoder; // 导入 URLEncoder
@@ -35,6 +39,10 @@ public class BizStudentController {
     // 2. 注入 RedisTemplate
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
+    // 【新增】注入学习活动服务，用于记录日志
+    @Autowired
+    private BizLearningActivityService learningActivityService;
 
     // 3. 定义缓存键常量
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
@@ -136,5 +144,51 @@ public class BizStudentController {
                 .sheet("学生数据")
                 .doWrite(list);
     }
+    /**
+     * 【新增】教师手动给学生增加/扣除积分
+     */
+    @PostMapping("/{id}/points")
+    public Result addPoints(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        // 从请求体获取积分值和备注
+        Integer points = (Integer) body.get("points");
+        String remark = (String) body.get("remark");
 
+        if (points == null || points == 0) {
+            return Result.fail("积分数值无效");
+        }
+
+        BizStudent student = studentService.getById(id);
+        if (student == null) {
+            return Result.fail("学生不存在");
+        }
+
+        // 更新积分
+        int currentPoints = student.getPoints() == null ? 0 : student.getPoints();
+        student.setPoints(currentPoints + points);
+        boolean success = studentService.updateById(student);
+
+        if (success) {
+            // 记录日志，这样学生在个人中心能看到
+            BizLearningActivity log = new BizLearningActivity();
+            log.setStudentId(id);
+            log.setActivityType("TEACHER_REWARD"); // 设置特定类型
+
+            // 构建描述信息
+            String action = points > 0 ? "奖励" : "扣除";
+            String desc = String.format("教师手动%s积分: %d", action, Math.abs(points));
+            if (remark != null && !remark.isEmpty()) {
+                desc += "，原因：" + remark;
+            }
+            log.setDescription(desc);
+
+            log.setCreateTime(LocalDateTime.now());
+            learningActivityService.save(log);
+
+            // 清除缓存
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+        }
+
+        return success ? Result.suc() : Result.fail("操作失败");
+    }
 }
+

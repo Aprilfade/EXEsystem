@@ -64,6 +64,13 @@
         <el-table-column type="selection" width="55" />
         <el-table-column prop="name" label="姓名" />
         <el-table-column prop="studentNo" label="学号" />
+
+        <el-table-column prop="points" label="积分" width="100" align="center">
+          <template #default="scope">
+            <el-tag effect="plain" type="warning">{{ scope.row.points || 0 }}</el-tag>
+          </template>
+        </el-table-column>
+
         <el-table-column label="所属科目">
           <template #default="scope">
             {{ getSubjectName(scope.row.subjectId) }}
@@ -71,8 +78,9 @@
         </el-table-column>
         <el-table-column prop="grade" label="年级" />
         <el-table-column prop="contact" label="联系方式" />
-        <el-table-column label="操作" width="180" align="center">
+        <el-table-column label="操作" width="250" align="center">
           <template #default="scope">
+            <el-button type="success" link :icon="Trophy" @click="handleOpenPointsDialog(scope.row)">奖惩</el-button>
             <el-button type="primary" link @click="handleUpdate(scope.row)">编辑</el-button>
             <el-button type="danger" link @click="handleDelete(scope.row.id)">删除</el-button>
           </template>
@@ -97,17 +105,41 @@
         :subjects="allSubjects"
         @success="getList"
     />
+
+    <el-dialog v-model="isPointsDialogVisible" title="积分奖惩" width="400px">
+      <el-form :model="pointsForm" label-width="80px">
+        <el-form-item label="学生">
+          <strong>{{ currentStudent?.name }}</strong>
+        </el-form-item>
+        <el-form-item label="变动类型">
+          <el-radio-group v-model="pointsType">
+            <el-radio label="add">奖励 (+)</el-radio>
+            <el-radio label="sub">扣除 (-)</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="分值">
+          <el-input-number v-model="pointsForm.val" :min="1" :max="1000" />
+        </el-form-item>
+        <el-form-item label="原因">
+          <el-input v-model="pointsForm.remark" placeholder="例如：课堂表现优秀" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="isPointsDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitPoints">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { fetchStudentList, deleteStudent, importStudents, exportStudentsExcel } from '@/api/student';
+import { fetchStudentList, deleteStudent, importStudents, exportStudentsExcel, addStudentPoints } from '@/api/student';
 import type { Student, StudentPageParams } from '@/api/student';
 import { fetchAllSubjects } from '@/api/subject';
 import type { Subject } from '@/api/subject';
-import { Plus, Edit, Delete, Search, Refresh, Upload, Download } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, Refresh, Upload, Download, Trophy } from '@element-plus/icons-vue';
 import StudentEditDialog from '@/components/student/StudentEditDialog.vue';
 import type { UploadRequestOptions } from 'element-plus';
 
@@ -118,6 +150,15 @@ const loading = ref(true);
 
 const isDialogVisible = ref(false);
 const editingStudent = ref<Student | undefined>(undefined);
+
+// --- 积分弹窗相关变量 (之前缺失的部分) ---
+const isPointsDialogVisible = ref(false);
+const currentStudent = ref<Student | null>(null);
+const pointsType = ref('add');
+const pointsForm = reactive({
+  val: 10,
+  remark: ''
+});
 
 const queryParams = reactive<StudentPageParams>({
   current: 1,
@@ -151,13 +192,6 @@ const getSubjectName = (subjectId: number) => {
 
 const handleQuery = () => {
   queryParams.current = 1;
-  getList();
-}
-
-const resetQuery = () => {
-  queryParams.current = 1;
-  queryParams.subjectId = undefined;
-  queryParams.name = '';
   getList();
 }
 
@@ -232,13 +266,40 @@ const handleExport = async () => {
   }
 };
 
+// --- 积分相关方法 (之前缺失的部分) ---
+const handleOpenPointsDialog = (student: Student) => {
+  currentStudent.value = student;
+  pointsForm.val = 10;
+  pointsForm.remark = '';
+  pointsType.value = 'add';
+  isPointsDialogVisible.value = true;
+};
+
+const submitPoints = async () => {
+  if (!currentStudent.value) return;
+
+  // 计算最终分值（如果是扣除，则转为负数）
+  const finalPoints = pointsType.value === 'add' ? pointsForm.val : -pointsForm.val;
+
+  try {
+    await addStudentPoints(currentStudent.value.id, {
+      points: finalPoints,
+      remark: pointsForm.remark
+    });
+    ElMessage.success('操作成功');
+    isPointsDialogVisible.value = false;
+    getList(); // 刷新列表以显示最新积分
+  } catch (error) {
+    // 错误已由拦截器统一处理
+  }
+};
+
 onMounted(() => {
   getAllSubjects().then(getList);
 });
 </script>
 
 <style scoped>
-/* 复用之前的样式 */
 .page-container { padding: 24px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { font-size: 24px; font-weight: 600; }

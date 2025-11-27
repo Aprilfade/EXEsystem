@@ -75,3 +75,15 @@ export function exportStudentsExcel(params: { subjectId?: number; name?: string 
         responseType: 'blob' // 关键: 告诉axios期望接收一个二进制对象(文件)
     });
 }
+/**
+ * 【新增】教师给学生增加积分
+ * @param id 学生ID
+ * @param data 包含积分(points)和备注(remark)
+ */
+export function addStudentPoints(id: number, data: { points: number; remark?: string }): Promise<ApiResult<null>> {
+    return request({
+        url: `/api/v1/students/${id}/points`,
+        method: 'post',
+        data
+    });
+}

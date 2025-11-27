@@ -42,6 +42,15 @@ public class BizStudent {
 
     // 【新增】积分字段
     private Integer points;
+    // 【新增】当前装配的装扮
+    private String avatarFrameStyle;
+    private String backgroundUrl;
+
+    // 【新增】Getter/Setter
+    public String getAvatarFrameStyle() { return avatarFrameStyle; }
+    public void setAvatarFrameStyle(String avatarFrameStyle) { this.avatarFrameStyle = avatarFrameStyle; }
+    public String getBackgroundUrl() { return backgroundUrl; }
+    public void setBackgroundUrl(String backgroundUrl) { this.backgroundUrl = backgroundUrl; }
 
     // 手动添加 Getter/Setter
     public Integer getPoints() { return points; }

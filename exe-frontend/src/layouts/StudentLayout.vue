@@ -1,5 +1,5 @@
 <template>
-  <el-container class="student-layout">
+  <el-container class="student-layout" :style="layoutStyle">
     <el-header class="header">
       <div class="header-logo">
         <el-icon><School /></el-icon>
@@ -43,6 +43,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'; // 【修改】导入 ref
+import { computed } from 'vue';
 import { useStudentAuthStore } from '@/stores/studentAuth';
 import { School, ArrowDown } from '@element-plus/icons-vue';
 // 【新增】导入我们新创建的弹窗组件
@@ -60,6 +61,19 @@ const handleCommand = (command: string) => {
     isProfileDialogVisible.value = true;
   }
 };
+// 【核心】计算背景样式
+const layoutStyle = computed(() => {
+  const bgUrl = studentAuth.student?.backgroundUrl;
+  if (bgUrl) {
+    return {
+      backgroundImage: `url(${bgUrl})`,
+      backgroundSize: 'cover',
+      backgroundAttachment: 'fixed',
+      backgroundPosition: 'center'
+    };
+  }
+  return {}; // 没有设置则使用默认 CSS 中的背景
+});
 </script>
 
 <style scoped>

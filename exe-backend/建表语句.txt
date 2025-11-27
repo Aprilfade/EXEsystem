@@ -337,3 +337,46 @@ CREATE TABLE `biz_favorite` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_student_question` (`student_id`, `question_id`) COMMENT '防止重复收藏'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='题目收藏表';
+
+-- ----------------------------
+-- 19. 积分商城-商品表
+-- ----------------------------
+CREATE TABLE `biz_goods` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL COMMENT '商品名称',
+  `description` varchar(255) DEFAULT NULL COMMENT '描述',
+  `price` int NOT NULL DEFAULT '0' COMMENT '兑换所需积分',
+  `image_url` varchar(500) DEFAULT NULL COMMENT '商品图片/图标URL',
+  `type` varchar(50) DEFAULT 'AVATAR_FRAME' COMMENT '类型: AVATAR_FRAME(头像框), BACKGROUND(背景)',
+  `resource_value` varchar(500) DEFAULT NULL COMMENT '资源值(如css类名或图片地址)',
+  `stock` int DEFAULT -1 COMMENT '库存，-1表示无限',
+  `is_enabled` tinyint(1) DEFAULT 1 COMMENT '是否上架',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='积分商品表';
+
+-- ----------------------------
+-- 20. 积分商城-用户兑换记录表
+-- ----------------------------
+CREATE TABLE `biz_user_goods` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `student_id` bigint NOT NULL COMMENT '学生ID',
+  `goods_id` bigint NOT NULL COMMENT '商品ID',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '兑换时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_student` (`student_id`),
+  UNIQUE KEY `uk_student_goods` (`student_id`, `goods_id`) -- 限制每个商品每人只能换一次(针对虚拟物品)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户商品持有表';
+
+-- 初始化几个测试商品数据
+INSERT INTO `biz_goods` (`name`, `description`, `price`, `type`, `resource_value`) VALUES
+('青铜学者框', '象征勤奋的青铜头像框', 50, 'AVATAR_FRAME', 'border: 3px solid #cd7f32; border-radius: 50%;'),
+('白银学霸框', '只有前10%的学生才能拥有', 200, 'AVATAR_FRAME', 'border: 3px solid #c0c0c0; box-shadow: 0 0 10px #c0c0c0; border-radius: 50%;'),
+('黄金战神框', '传说中的学神', 1000, 'AVATAR_FRAME', 'border: 3px solid #ffd700; box-shadow: 0 0 15px #ffd700; border-radius: 50%;'),
+('星空背景', '让你的主页充满科技感', 500, 'BACKGROUND', '/bg/star.jpg');
+
+-- 给学生表增加两个字段，存储当前使用的装扮
+ALTER TABLE `biz_student`
+ADD COLUMN `avatar_frame_style` varchar(500) DEFAULT NULL COMMENT '当前头像框CSS',
+ADD COLUMN `background_url` varchar(500) DEFAULT NULL COMMENT '当前背景图URL';
+

@@ -20,6 +20,7 @@
           <img v-if="form.avatar" :src="form.avatar" class="avatar" />
           <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
         </el-upload>
+        <div class="avatar-frame" :style="authStore.student?.avatarFrameStyle"></div>
       </el-form-item>
       <el-form-item label="学号">
         <el-input :value="form.studentNo" disabled />
@@ -119,5 +120,17 @@ const submitForm = async () => {
   width: 120px;
   height: 120px;
   display: block;
+}
+.avatar-wrapper {
+  position: relative;
+  display: inline-block;
+}
+/* 如果你的资源值是 CSS 边框代码 */
+.avatar-frame {
+  position: absolute;
+  top: -5px; left: -5px; right: -5px; bottom: -5px;
+  pointer-events: none; /* 让点击事件穿透到上传按钮 */
+  z-index: 10;
+  border-radius: 50%;
 }
 </style>

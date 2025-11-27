@@ -143,6 +143,15 @@
               <span class="title">我的收藏</span>
               <span class="desc">重点难题一键回顾</span>
             </div>
+
+            <div class="access-item item-gold" @click="isMallVisible = true">
+              <div class="icon-wrapper">
+                <el-icon><Present /></el-icon>
+              </div>
+              <span class="title">积分商城</span>
+              <span class="desc">兑换专属奖励</span>
+            </div>
+            <points-mall-dialog v-model:visible="isMallVisible" />
           </div>
         </el-card>
       </el-col>
@@ -177,9 +186,14 @@ import request from '@/utils/request';
 import type { ApiResult } from '@/api/user';
 import type { BizLearningActivity } from '@/api/learningActivity';
 import * as echarts from 'echarts';
+import PointsMallDialog from '@/components/student/PointsMallDialog.vue';
+import { Present } from '@element-plus/icons-vue'; // 引入礼品图标
+
+
 
 const studentAuth = useStudentAuthStore();
 const router = useRouter();
+const isMallVisible = ref(false);
 
 const heatmapChartRef = ref<HTMLElement | null>(null);
 const leaderboard = ref<any[]>([]);
@@ -401,4 +415,7 @@ onMounted(async () => {
 /* 绿色 */
 .item-green .icon-wrapper { background: #e1f3d8; color: #67c23a; }
 .item-green:hover .icon-wrapper { background: #67c23a; color: #fff; }
+
+.item-gold .icon-wrapper { background: #fffbf0; color: #faad14; }
+.item-gold:hover .icon-wrapper { background: #faad14; color: #fff; }
 </style>
