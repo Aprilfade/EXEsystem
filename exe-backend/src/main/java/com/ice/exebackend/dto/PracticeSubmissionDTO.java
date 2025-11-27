@@ -10,7 +10,10 @@ public class PracticeSubmissionDTO {
     // 提交的答案，键是题目ID (Long)，值是学生的答案 (String)
     private Map<Long, String> answers;
 
+    private Integer violationCount; // 【新增】
 
+    public Integer getViolationCount() { return violationCount; }
+    public void setViolationCount(Integer violationCount) { this.violationCount = violationCount; }
     public Map<Long, String> getAnswers() {
         return answers;
     }

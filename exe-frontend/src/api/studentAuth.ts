@@ -98,12 +98,17 @@ export function fetchExamPaperDetail(paperId: number): Promise<ApiResult<any>> {
 /**
  * 提交考试试卷
  */
-export function submitExamPaper(paperId: number, answers: Record<number, string>): Promise<ApiResult<any>> {
+// 修改后
+export function submitExamPaper(
+    paperId: number,
+    answers: Record<number, string>,
+    violationCount?: number // 新增参数
+): Promise<ApiResult<any>> {
     return request({
         url: '/api/v1/student/exam/submit',
         method: 'post',
         params: { paperId },
-        data: { answers }
+        data: { answers, violationCount } // 放入 body
     });
 }
 /**

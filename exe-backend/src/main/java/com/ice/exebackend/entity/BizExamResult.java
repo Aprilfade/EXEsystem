@@ -18,7 +18,11 @@ public class BizExamResult {
     private Integer totalScore;
     private String userAnswers; // JSON String
     private LocalDateTime createTime;
+    private Integer violationCount; // 【新增】
 
+    // 【新增】Getter 和 Setter
+    public Integer getViolationCount() { return violationCount; }
+    public void setViolationCount(Integer violationCount) { this.violationCount = violationCount; }
     // 手动添加 Getter/Setter
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

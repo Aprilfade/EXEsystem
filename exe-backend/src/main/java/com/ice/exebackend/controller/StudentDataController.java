@@ -541,6 +541,8 @@ public class StudentDataController {
         examResult.setPaperName(paper.getName());
         examResult.setScore(studentScore);
         examResult.setTotalScore(totalScore);
+        // 【新增】保存违规次数
+        examResult.setViolationCount(submission.getViolationCount() != null ? submission.getViolationCount() : 0);
 
         // 【核心修复】使用 Jackson 序列化，它会将 Map<Long, String> 正确转换为 {"16":"B"} 格式
         try {

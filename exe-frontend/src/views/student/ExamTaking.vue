@@ -1,5 +1,31 @@
 <template>
   <div class="exam-container" v-loading="loading">
+    <template>
+      <div v-if="!isExamStarted && !loading" class="exam-start-overlay">
+        <el-card class="start-card">
+          <h2>{{ paper?.name }} - 考试规则</h2>
+          <div class="rules-content">
+            <p><el-icon><Monitor /></el-icon> 考试全程需保持 <strong>全屏模式</strong></p>
+            <p><el-icon><View /></el-icon> 禁止 <strong>切屏</strong> 或移出鼠标，系统将自动记录</p>
+            <p><el-icon><WarningFilled /></el-icon> 累计违规超过 <strong>3次</strong> 将自动交卷！</p>
+          </div>
+          <el-button type="primary" size="large" @click="startExamAction" round>我已阅读，开始答题</el-button>
+        </el-card>
+      </div>
+
+      <div v-else class="exam-container" v-loading="loading" @contextmenu.prevent @copy.prevent @paste.prevent @selectstart.prevent>
+        <div class="exam-header">
+          <div class="left">
+            <h2>{{ paper?.name }}</h2>
+            <el-tag v-if="violationCount > 0" type="danger" effect="dark" style="margin-left: 10px;">
+              ⚠ 已违规 {{ violationCount }} 次
+            </el-tag>
+          </div>
+        </div>
+
+      </div>
+
+    </template>
     <div class="exam-header">
       <div class="left">
         <h2>{{ paper?.name }}</h2>
@@ -116,12 +142,17 @@ import { useRoute, useRouter } from 'vue-router';
 import { fetchExamPaperDetail, submitExamPaper } from '@/api/studentAuth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Timer } from '@element-plus/icons-vue';
+import { Monitor, View, WarningFilled } from '@element-plus/icons-vue'; // 新增图标
+import request from '@/utils/request';
 
 const route = useRoute();
 const router = useRouter();
 const paperId = parseInt(route.params.paperId as string);
 
 const loading = ref(true);
+const isExamStarted = ref(false); // 【新增】控制是否正式开始
+const violationCount = ref(0);    // 【新增】违规次数
+const MAX_VIOLATIONS = 3;         // 【新增】最大允许违规次数
 const paper = ref<any>(null);
 const questionsMap = ref<Record<number, any>>({});
 const answers = reactive<Record<number, string>>({});
@@ -207,37 +238,141 @@ const startTimer = () => {
     duration.value++;
   }, 1000);
 };
+// 【新增】开始考试动作
+const startExamAction = () => {
+  isExamStarted.value = true;
+  requestFullScreen();
+  startTimer(); // 将原来的 startTimer() 移到这里调用
+  // 添加事件监听
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('blur', handleWindowBlur);
+  // 某些浏览器按ESC退出全屏无法阻止，只能监听
+  document.addEventListener('fullscreenchange', handleFullScreenChange);
+};
 
-const handleSubmit = () => {
-  ElMessageBox.confirm('确认交卷吗？交卷后将无法修改答案。', '交卷确认', {
-    confirmButtonText: '确认交卷',
-    cancelButtonText: '继续答题',
-    type: 'warning'
-  }).then(async () => {
+// 【新增】请求全屏
+const requestFullScreen = () => {
+  const element = document.documentElement;
+  if (element.requestFullscreen) {
+    element.requestFullscreen();
+  }
+};
+
+// 【新增】切屏/失焦处理逻辑
+const handleViolation = (reason: string) => {
+  if (!isExamStarted.value) return;
+
+  violationCount.value++;
+
+  if (violationCount.value >= MAX_VIOLATIONS) {
+    ElMessageBox.alert(`您已违规 ${violationCount.value} 次（${reason}），系统将强制交卷！`, '严重警告', {
+      confirmButtonText: '确定',
+      type: 'error',
+      callback: () => {
+        handleSubmit(true); // 强制提交
+      }
+    });
+  } else {
+    ElMessage.error({
+      message: `警告：检测到${reason}行为！累计违规 ${violationCount.value}/${MAX_VIOLATIONS} 次`,
+      duration: 5000,
+      grouping: true
+    });
+  }
+};
+
+// 【新增】监听页面可见性（切标签页）
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    handleViolation('切屏/离开页面');
+  }
+};
+
+// 【新增】监听窗口失焦（如点击了其他软件、弹窗）
+const handleWindowBlur = () => {
+  // 某些情况下点击页面内部元素也会触发blur，需要仔细过滤，这里简化处理
+  // 为防止误判，可以只依赖 visibilitychange，或者结合使用
+  // handleViolation('窗口失焦');
+};
+
+// 【新增】监听退出全屏
+const handleFullScreenChange = () => {
+  if (!document.fullscreenElement && isExamStarted.value) {
+    handleViolation('退出全屏');
+    // 尝试重新全屏（浏览器可能拦截）
+    // requestFullScreen();
+  }
+};
+
+// 修改原来的 handleSubmit，增加一个 force 参数
+const handleSubmit = (force = false) => {
+  const submitLogic = async () => {
     clearInterval(timer);
     loading.value = true;
     try {
-      const res = await submitExamPaper(paperId, answers);
+      // 修改 submitExamPaper 的调用，传入 violationCount
+      // 注意：你需要去 api/studentAuth.ts 更新 submitExamPaper 的定义，或者在这里手动构建 payload
+      // 这里假设你已经更新了 API 或者直接传对象
+      const payload = {
+        answers: answers,
+        violationCount: violationCount.value // 传给后端
+      };
+
+      // 注意：这里我们得稍微改一下 api/studentAuth.ts 里的 submitExamPaper 函数签名
+      // 或者直接用 request 调用
+      const res = await request({ // 直接使用 request 避免类型报错，或者去改 API 定义
+        url: '/api/v1/student/exam/submit',
+        method: 'post',
+        params: { paperId },
+        data: payload
+      });
+
       if (res.code === 200) {
         examResult.value = res.data;
         resultVisible.value = true;
+        // 考试结束，移除监听
+        removeListeners();
+        // 退出全屏
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        }
       }
     } finally {
       loading.value = false;
     }
-  });
+  };
+
+  if (force) {
+    submitLogic();
+  } else {
+    ElMessageBox.confirm('确认交卷吗？交卷后将无法修改答案。', '交卷确认', {
+      confirmButtonText: '确认交卷',
+      cancelButtonText: '继续答题',
+      type: 'warning'
+    }).then(submitLogic);
+  }
+};
+const removeListeners = () => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  window.removeEventListener('blur', handleWindowBlur);
+  document.removeEventListener('fullscreenchange', handleFullScreenChange);
 };
 
+
+// 【修改】onMounted
 onMounted(() => {
   if (!paperId) {
     router.push('/student/exams');
     return;
   }
+  // loadPaper 内部不要再直接 startTimer 了，移到 startExamAction
   loadPaper();
 });
 
+// 【修改】onUnmounted
 onUnmounted(() => {
   clearInterval(timer);
+  removeListeners();
 });
 </script>
 
@@ -343,9 +478,50 @@ onUnmounted(() => {
   font-size: 14px;
 }
 .card-item.answered { background-color: #409eff; color: #fff; border-color: #409eff; }
-
 .result-content { text-align: center; }
 .score-text { font-size: 48px; font-weight: bold; }
 .score-label { font-size: 14px; color: #909399; }
 .result-detail { margin-top: 20px; font-size: 16px; line-height: 2; }
+.exam-start-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(5px);
+}
+.start-card {
+  width: 500px;
+  text-align: center;
+  padding: 20px;
+  border-radius: 16px;
+}
+.rules-content {
+  text-align: left;
+  margin: 30px 0;
+  font-size: 16px;
+  line-height: 2;
+  color: #606266;
+  background: #f8f8f8;
+  padding: 20px;
+  border-radius: 8px;
+}
+.rules-content p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+.rules-content strong {
+  color: #F56C6C;
+}
+/* 禁止选择文本 */
+.exam-container {
+  user-select: none; /* CSS禁止选中 */
+}
 </style>
