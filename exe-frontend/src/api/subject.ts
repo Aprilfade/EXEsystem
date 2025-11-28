@@ -22,9 +22,10 @@ export interface Subject {
 export interface SubjectPageParams {
     current: number;
     size: number;
-    name?: string; // 【新增此行】
-    sortField?: string; // 【新增】排序字段
-    sortOrder?: string; // 【新增】排序顺序 (asc/desc)
+    name?: string;
+    grade?: string; // 【新增】添加 grade 字段
+    sortField?: string;
+    sortOrder?: string;
 }
 
 /**

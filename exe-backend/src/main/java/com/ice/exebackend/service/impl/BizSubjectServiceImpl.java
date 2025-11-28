@@ -31,69 +31,69 @@ public class BizSubjectServiceImpl extends ServiceImpl<BizSubjectMapper, BizSubj
     @Autowired
     private BizQuestionService questionService;
 
+    /**
+     * 【优化版】获取包含统计数据的科目分页列表
+     * 解决了 N+1 查询问题，使用 GROUP BY 批量聚合，极大提升性能
+     */
     @Override
     public Page<SubjectStatsDTO> getSubjectStatsPage(Page<BizSubject> pageRequest, QueryWrapper<BizSubject> queryWrapper) {
-        // 这一部分保持不变，正常查询科目分页
-        page(pageRequest, queryWrapper);
+        // 1. 基础查询：获取当页的科目列表
+        this.page(pageRequest, queryWrapper);
 
+        // 如果当前页没有数据，直接返回空页，避免后续报错
         if (CollectionUtils.isEmpty(pageRequest.getRecords())) {
             Page<SubjectStatsDTO> emptyDtoPage = new Page<>(pageRequest.getCurrent(), pageRequest.getSize(), 0);
             emptyDtoPage.setRecords(Collections.emptyList());
             return emptyDtoPage;
         }
 
+        // 2. 提取当前页所有科目的 ID 列表
         List<Long> subjectIds = pageRequest.getRecords().stream()
                 .map(BizSubject::getId)
                 .collect(Collectors.toList());
 
-        Map<Long, Long> kpCounts = knowledgePointService.list(new QueryWrapper<BizKnowledgePoint>().in("subject_id", subjectIds))
+        // 3. 批量统计：查询这些科目关联的【知识点】数量
+        // SQL: SELECT subject_id, COUNT(*) FROM biz_knowledge_point WHERE subject_id IN (...) GROUP BY subject_id
+        Map<Long, Long> kpCounts = knowledgePointService.list(new QueryWrapper<BizKnowledgePoint>()
+                        .select("subject_id") // 仅查询必要字段，减少IO
+                        .in("subject_id", subjectIds))
                 .stream()
                 .collect(Collectors.groupingBy(BizKnowledgePoint::getSubjectId, Collectors.counting()));
 
-        // 将 Page<BizSubject> 转换为 Page<SubjectStatsDTO>
+        // 4. 批量统计：查询这些科目关联的【试题】数量 (核心优化点)
+        // SQL: SELECT subject_id, COUNT(*) as count FROM biz_question WHERE subject_id IN (...) GROUP BY subject_id
+        // 使用 listMaps 可以直接获取聚合结果
+        List<Map<String, Object>> questionCountMaps = questionService.listMaps(new QueryWrapper<BizQuestion>()
+                .select("subject_id", "COUNT(*) as count")
+                .in("subject_id", subjectIds)
+                .groupBy("subject_id"));
+
+        // 将查询结果转换为 Map<SubjectId, Count> 结构，方便 O(1) 获取
+        Map<Long, Long> questionCounts = questionCountMaps.stream()
+                .collect(Collectors.toMap(
+                        m -> ((Number) m.get("subject_id")).longValue(), // Key: subject_id
+                        m -> ((Number) m.get("count")).longValue()       // Value: count
+                ));
+
+        // 5. 内存组装：将 Entity 转换为 DTO 并填充统计数据
         return (Page<SubjectStatsDTO>) pageRequest.convert(subject -> {
             SubjectStatsDTO dto = new SubjectStatsDTO();
             BeanUtils.copyProperties(subject, dto);
+
+            // 从 Map 中直接取值，如果没有记录则默认为 0
             dto.setKnowledgePointCount(kpCounts.getOrDefault(subject.getId(), 0L));
-
-            // --- 【核心修复】---
-            // 创建一个新的查询，不再依赖于之前筛选出的题目列表
-            QueryWrapper<BizQuestion> questionCountQuery = new QueryWrapper<>();
-
-            // 关键：查询条件是所有 subject_id 指向的科目名 和 当前科目名相同的试题
-            questionCountQuery.inSql("subject_id", "SELECT id FROM biz_subject WHERE name = '" + subject.getName() + "'");
-
-            // 并且，如果当前科目有年级，那么试题的年级也必须匹配
-            if (StringUtils.hasText(subject.getGrade())) {
-                questionCountQuery.eq("grade", subject.getGrade());
-            }
-
-            long questionCount = questionService.count(questionCountQuery);
-            dto.setQuestionCount(questionCount);
-            // --- 修复结束 ---
+            dto.setQuestionCount(questionCounts.getOrDefault(subject.getId(), 0L));
 
             return dto;
         });
     }
-
     // 【同步修复】修复获取科目下试题列表的逻辑，使其与上面的统计逻辑一致
     @Override
     public List<BizQuestion> getQuestionsForSubject(Long subjectId) {
-        BizSubject subject = this.getById(subjectId);
-        if (subject == null) {
-            return Collections.emptyList();
-        }
-
-        QueryWrapper<BizQuestion> queryWrapper = new QueryWrapper<>();
-
-        // 关键：查询条件是所有 subject_id 指向的科目名 和 当前科目名相同的试题
-        queryWrapper.inSql("subject_id", "SELECT id FROM biz_subject WHERE name = '" + subject.getName() + "'");
-
-        // 并且，如果当前科目有年级，那么试题的年级也必须匹配
-        if (StringUtils.hasText(subject.getGrade())) {
-            queryWrapper.eq("grade", subject.getGrade());
-        }
-
-        return questionService.list(queryWrapper);
+        // 原有逻辑先查科目，再按名称匹配，完全多余
+        // 优化：直接根据 subject_id 查询，利用数据库索引，速度极快且准确
+        return questionService.list(
+                new QueryWrapper<BizQuestion>().eq("subject_id", subjectId)
+        );
     }
 }

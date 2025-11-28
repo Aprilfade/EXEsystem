@@ -46,11 +46,15 @@ public class BizSubjectController {
 
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
+    // 【新增】定义获取所有科目的缓存 Key
+    private static final String SUBJECT_ALL_CACHE_KEY = "sys:subject:all";
+
     @PostMapping
     public Result createSubject(@RequestBody BizSubject subject) {
         boolean success = subjectService.save(subject);
         if (success) {
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
+            redisTemplate.delete(SUBJECT_ALL_CACHE_KEY);
         }
         return success ? Result.suc() : Result.fail();
     }
@@ -59,21 +63,27 @@ public class BizSubjectController {
     public Result getSubjectList(@RequestParam(defaultValue = "1") int current,
                                  @RequestParam(defaultValue = "10") int size,
                                  @RequestParam(required = false) String name,
+                                 @RequestParam(required = false) String grade, // 【新增】接收年级参数
                                  @RequestParam(required = false) String sortField,
                                  @RequestParam(required = false) String sortOrder) {
         Page<BizSubject> pageRequest = new Page<>(current, size);
         QueryWrapper<BizSubject> queryWrapper = new QueryWrapper<>();
+
+        // 1. 名称模糊搜索 (同时匹配名称或简介)
         if (StringUtils.hasText(name)) {
-            queryWrapper.like("name", name).or().like("description", name);
+            queryWrapper.and(w -> w.like("name", name).or().like("description", name));
         }
+
+        // 2. 【新增】年级精确筛选
+        if (StringUtils.hasText(grade)) {
+            queryWrapper.eq("grade", grade);
+        }
+
         pageRequest.setOptimizeCountSql(false);
 
-        // 动态排序逻辑
+        // 3. 排序逻辑 (保持原有白名单校验)
         if (StringUtils.hasText(sortField) && StringUtils.hasText(sortOrder)) {
-            // 【关键修复1】使用MyBatis-Plus自带的StringUtils的全限定名进行调用
             String dbColumn = com.baomidou.mybatisplus.core.toolkit.StringUtils.camelToUnderline(sortField);
-
-            // 【关键修复2】白名单校验：只允许对数据库中真实存在的列进行排序
             if ("grade".equals(dbColumn) || "create_time".equals(dbColumn)) {
                 if ("asc".equalsIgnoreCase(sortOrder)) {
                     queryWrapper.orderByAsc(dbColumn);
@@ -81,21 +91,43 @@ public class BizSubjectController {
                     queryWrapper.orderByDesc(dbColumn);
                 }
             } else {
-                // 如果传入了非法的排序列名，则使用默认排序，防止SQL注入和报错
                 queryWrapper.orderByDesc("create_time");
             }
         } else {
-            // 如果前端没有传递排序参数，则使用默认排序
             queryWrapper.orderByDesc("create_time");
         }
 
+        // 使用之前优化过的 Service 方法获取统计数据
         Page<SubjectStatsDTO> statsPage = subjectService.getSubjectStatsPage(pageRequest, queryWrapper);
         return Result.suc(statsPage.getRecords(), statsPage.getTotal());
     }
 
     @GetMapping("/all")
     public Result getAllSubjects() {
+        // 1. 先尝试从 Redis 缓存中获取数据
+        try {
+            List<BizSubject> cachedList = (List<BizSubject>) redisTemplate.opsForValue().get(SUBJECT_ALL_CACHE_KEY);
+            if (cachedList != null && !cachedList.isEmpty()) {
+                // 如果缓存命中，直接返回缓存数据
+                return Result.suc(cachedList);
+            }
+        } catch (Exception e) {
+            // 缓存读取异常不应影响主业务，记录日志即可（此处省略日志）
+        }
+
+        // 2. 缓存未命中，查询数据库
         List<BizSubject> list = subjectService.list();
+
+        // 3. 将查询结果写入 Redis 缓存
+        // 设置过期时间为 1 天，防止数据永久不一致
+        if (list != null && !list.isEmpty()) {
+            try {
+                redisTemplate.opsForValue().set(SUBJECT_ALL_CACHE_KEY, list, 1, java.util.concurrent.TimeUnit.DAYS);
+            } catch (Exception e) {
+                // 缓存写入异常忽略
+            }
+        }
+
         return Result.suc(list);
     }
 
@@ -105,6 +137,7 @@ public class BizSubjectController {
         boolean success = subjectService.updateById(subject);
         if (success) {
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
+            redisTemplate.delete(SUBJECT_ALL_CACHE_KEY);
         }
         return success ? Result.suc() : Result.fail();
     }
@@ -130,6 +163,7 @@ public class BizSubjectController {
         boolean success = subjectService.removeById(id);
         if (success) {
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
+            redisTemplate.delete(SUBJECT_ALL_CACHE_KEY);
         }
         return success ? Result.suc() : Result.fail();
     }

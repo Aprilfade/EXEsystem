@@ -81,7 +81,8 @@ import { useAuthStore } from '../stores/auth';
 import ProfileEditDialog from '@/components/user/ProfileEditDialog.vue';
 import {
   Management, House, Collection, Reading, Tickets, DocumentCopy, Avatar, CircleClose, DataLine,
-  User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting, Fold, Expand, Document, Medal // 【修改】新增 Medal 图标
+  User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting, Fold, Expand, Document, Medal,
+  VideoPlay// 【修改】新增 Medal 图标
 } from '@element-plus/icons-vue';
 
 const isCollapsed = ref(false);
@@ -96,6 +97,7 @@ const allMenus = [
   { path: '/knowledge-points', name: '知识点管理', permission: 'sys:kp:list', icon: Reading },
   { path: '/questions', name: '题库管理', permission: 'sys:question:list', icon: Tickets },
   { path: '/papers', name: '试卷管理', permission: 'sys:paper:list', icon: DocumentCopy },
+  { path: '/courses', name: '课程管理', permission: 'sys:course:edit', icon: VideoPlay },
   { path: '/students', name: '学生管理', permission: 'sys:student:list', icon: Avatar },
   { path: '/score-manage', name: '成绩管理', permission: 'sys:stats:list', icon: Medal }, // 【修改】新增成绩管理菜单
   {
