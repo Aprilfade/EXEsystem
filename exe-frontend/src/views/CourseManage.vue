@@ -13,12 +13,33 @@
     <el-card shadow="never" class="filter-card">
       <el-form :inline="true" class="filter-form">
         <el-form-item label="科目">
-          <el-select v-model="queryParams.subjectId" placeholder="全部科目" clearable style="width: 140px" @change="handleQuery">
-            <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
+          <el-select
+              v-model="queryParams.subjectId"
+              placeholder="请选择科目"
+              clearable
+              style="width: 160px"
+              @change="handleQuery"
+              :disabled="filteredSubjectOptions.length === 0 && !!queryParams.grade"
+          >
+            <el-option
+                v-for="sub in filteredSubjectOptions"
+                :key="sub.id"
+                :label="queryParams.grade ? sub.name : `${sub.name} (${sub.grade})`"
+                :value="sub.id"
+            />
           </el-select>
         </el-form-item>
+        <el-form-item>
+          <el-input v-model="queryParams.name" placeholder="搜索课程名称..." prefix-icon="Search" style="width: 240px" @keyup.enter="handleQuery" />
+        </el-form-item>
         <el-form-item label="年级">
-          <el-select v-model="queryParams.grade" placeholder="全部年级" clearable style="width: 140px" @change="handleQuery">
+          <el-select
+              v-model="queryParams.grade"
+              placeholder="全部年级"
+              clearable
+              style="width: 140px"
+              @change="() => { queryParams.subjectId = undefined; handleQuery(); }"
+          >
             <el-option label="七年级" value="七年级" />
             <el-option label="八年级" value="八年级" />
             <el-option label="九年级" value="九年级" />
@@ -83,20 +104,40 @@
         </el-form-item>
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="所属科目">
-              <el-select v-model="courseForm.subjectId" placeholder="选择科目" style="width: 100%">
-                <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="适用年级">
-              <el-select v-model="courseForm.grade" placeholder="选择年级" style="width: 100%">
+              <el-select
+                  v-model="courseForm.grade"
+                  placeholder="选择年级"
+                  style="width: 100%"
+                  clearable
+                  @change="handleDialogGradeChange"
+              >
                 <el-option v-for="g in ['七年级','八年级','九年级','高一','高二','高三']" :key="g" :label="g" :value="g" />
               </el-select>
             </el-form-item>
           </el-col>
+          <el-col :span="12">
+            <el-form-item label="所属科目">
+              <el-select
+                  v-model="courseForm.subjectId"
+                  placeholder="选择科目"
+                  style="width: 100%"
+                  filterable
+                  @change="handleDialogSubjectChange"
+                  :disabled="dialogSubjectOptions.length === 0 && !!courseForm.grade"
+              >
+                <el-option
+                    v-for="sub in dialogSubjectOptions"
+                    :key="sub.id"
+                    :label="courseForm.grade ? sub.name : `${sub.name} (${sub.grade})`"
+                    :value="sub.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
         </el-row>
+
+
         <el-form-item label="封面图">
           <el-upload
               class="cover-uploader"
@@ -112,6 +153,8 @@
             </template>
           </el-upload>
         </el-form-item>
+
+
         <el-form-item label="课程简介">
           <el-input v-model="courseForm.description" type="textarea" :rows="3" placeholder="简要介绍课程目标和内容..." />
         </el-form-item>
@@ -315,6 +358,17 @@ const handleQuery = () => {
   loadCourses();
 };
 
+// 【新增】计算属性：根据当前选中的年级，过滤科目下拉框的选项
+const filteredSubjectOptions = computed(() => {
+  // 如果没有选年级，显示所有科目
+  if (!queryParams.grade) {
+    return allSubjects.value;
+  }
+  // 如果选了年级，只返回该年级下的科目
+  return allSubjects.value.filter(sub => sub.grade === queryParams.grade);
+});
+
+// 【修改】重置查询时，不仅清空数据，也要重置逻辑
 const resetQuery = () => {
   queryParams.subjectId = undefined;
   queryParams.grade = undefined;
@@ -363,6 +417,43 @@ const handleDelete = async (id: number) => {
   ElMessage.success('删除成功');
   loadCourses();
 };
+
+// 【新增】弹窗内的科目选项过滤逻辑
+const dialogSubjectOptions = computed(() => {
+  // 如果表单中未选择年级，则显示所有科目
+  if (!courseForm.value.grade) {
+    return allSubjects.value;
+  }
+  // 如果选了年级，仅返回该年级对应的科目
+  return allSubjects.value.filter(sub => sub.grade === courseForm.value.grade);
+});
+
+// 【新增】当在弹窗中改变【年级】时
+const handleDialogGradeChange = () => {
+  // 1. 获取当前已选的科目ID
+  const currentSubId = courseForm.value.subjectId;
+
+  // 2. 如果已选了科目，检查该科目是否属于新选择的年级
+  if (currentSubId) {
+    const subject = allSubjects.value.find(s => s.id === currentSubId);
+    // 如果科目的年级 不等于 新选择的年级，则清空科目，强制用户重选
+    if (subject && subject.grade !== courseForm.value.grade) {
+      courseForm.value.subjectId = undefined;
+    }
+  }
+};
+
+// 【新增】当在弹窗中改变【科目】时
+const handleDialogSubjectChange = (subjectId: number) => {
+  const subject = allSubjects.value.find(s => s.id === subjectId);
+  // 如果该科目绑定了年级，自动将表单的年级设置为该科目的年级
+  if (subject && subject.grade) {
+    courseForm.value.grade = subject.grade;
+  }
+};
+
+
+
 
 // --- 资源管理 ---
 const manageResources = async (course: Course) => {
@@ -428,9 +519,32 @@ const handleDeleteResource = async (id: number) => {
   ElMessage.success('资源已移除');
 };
 
+// 修复预览功能的逻辑
 const previewResource = (row: CourseResource) => {
-  window.open(row.resourceUrl, '_blank');
-}
+  const url = row.resourceUrl;
+
+  // 1. 如果是外部链接，直接跳转
+  if (row.resourceType === 'LINK') {
+    window.open(url, '_blank');
+    return;
+  }
+
+  // 2. 获取完整的后端文件地址 (假设你的后端端口是8080)
+  // 如果你的 url 已经是完整路径(http开头)，则不用拼接
+  // 注意：开发环境下可能需要根据你的 .env 配置来拼接 baseURL
+  const fullUrl = url.startsWith('http') ? url : `http://localhost:5173${url}`;
+
+  // 3. 针对 PPT/Word/Excel 使用微软在线预览服务
+  if (row.resourceType === 'PPT' || url.endsWith('.pptx') || url.endsWith('.ppt') || url.endsWith('.docx') || url.endsWith('.xlsx')) {
+    // 使用 encodeURIComponent 对文件地址进行编码
+    const officeViewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fullUrl)}`;
+    window.open(officeViewerUrl, '_blank');
+  }
+  // 4. 针对视频和PDF，浏览器可以直接预览
+  else {
+    window.open(fullUrl, '_blank');
+  }
+};
 </script>
 
 <style scoped>

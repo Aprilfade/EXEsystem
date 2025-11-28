@@ -21,21 +21,28 @@ public class BizCourseController {
 
     @Autowired
     private BizCourseResourceMapper resourceMapper;
-
     // 获取课程列表 (支持分页和搜索)
     @GetMapping
     public Result list(@RequestParam(defaultValue = "1") int current,
                        @RequestParam(defaultValue = "10") int size,
                        @RequestParam(required = false) String name,
-                       @RequestParam(required = false) String grade) {
+                       @RequestParam(required = false) String grade,
+                       @RequestParam(required = false) Long subjectId) { // 1. 新增 subjectId 参数
+
         Page<BizCourse> page = new Page<>(current, size);
         QueryWrapper<BizCourse> query = new QueryWrapper<>();
+
         if (StringUtils.hasText(name)) query.like("name", name);
         if (StringUtils.hasText(grade)) query.eq("grade", grade);
+
+        // 2. 新增查询逻辑
+        if (subjectId != null) {
+            query.eq("subject_id", subjectId);
+        }
+
         query.orderByDesc("create_time");
         return Result.suc(courseService.page(page, query));
     }
-
     // 获取课程详情（包含资源列表）
     @GetMapping("/{id}")
     public Result detail(@PathVariable Long id) {

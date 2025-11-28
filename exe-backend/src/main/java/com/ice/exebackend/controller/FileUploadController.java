@@ -74,13 +74,25 @@ public class FileUploadController {
             Resource resource = new UrlResource(file.toUri());
 
             if (resource.exists() || resource.isReadable()) {
+                // 【新增】动态探测文件的 Content-Type
+                String contentType = null;
+                try {
+                    contentType = Files.probeContentType(file);
+                } catch (IOException e) {
+                    // 默认类型
+                }
+                if(contentType == null) {
+                    contentType = "application/octet-stream";
+                }
+
                 return ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_TYPE, contentType) // 【关键】显式设置 Content-Type
                         .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
                         .body(resource);
             } else {
                 throw new RuntimeException("无法读取文件!");
             }
-        } catch (MalformedURLException e) {
+        } catch (Exception e) { // 改为捕获 Exception 以处理 probeContentType 的异常
             throw new RuntimeException("无法读取文件!", e);
         }
     }
