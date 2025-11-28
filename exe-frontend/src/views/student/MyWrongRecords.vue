@@ -10,10 +10,10 @@
         <el-table-column prop="paperName" label="来源试卷" />
         <el-table-column prop="wrongReason" label="错误原因" />
         <el-table-column prop="createTime" label="记录时间" />
-        <el-table-column label="操作" width="180">
-          <template #default="scope">
-            <el-button link type="primary" @click="handleReview(scope.row)">重新练习</el-button>
-          </template>
+        <el-table-column label="操作" width="220"> <template #default="scope">
+          <el-button link type="primary" @click="handleReview(scope.row)">详情</el-button>
+          <el-button link type="warning" :icon="MagicStick" @click="handleAiAnalysis(scope.row)">AI 解析</el-button>
+        </template>
         </el-table-column>
       </el-table>
 
@@ -28,6 +28,24 @@
           @current-change="getMyRecords"
       />
     </el-card>
+
+    <el-dialog v-model="aiResultVisible" title="🤖 AI 智能助教" width="600px">
+      <div v-loading="aiLoading" class="ai-content">
+        <div v-if="aiResponse" class="markdown-body">
+          <pre style="white-space: pre-wrap; font-family: sans-serif; line-height: 1.6;">{{ aiResponse }}</pre>
+        </div>
+        <el-empty v-else description="正在思考中..." />
+      </div>
+    </el-dialog>
+
+    <ai-key-dialog
+        v-model:visible="keyDialogVisible"
+        @saved="onKeySaved"
+    />
+
+
+
+
     <el-dialog v-model="isReviewDialogVisible" title="错题解析" width="700px">
       <div v-if="reviewQuestion">
         <el-descriptions :column="1" border>
@@ -74,6 +92,14 @@ import type { WrongRecordVO, WrongRecordPageParams } from '@/api/wrongRecord';
 import request from '@/utils/request';
 import { fetchWrongRecordDetail, markWrongRecordAsMastered } from '@/api/wrongRecord';
 import type { Question } from '@/api/question';
+import { MagicStick } from '@element-plus/icons-vue'; // 记得引入图标
+// 新增引入
+import { useStudentAuthStore } from '@/stores/studentAuth';
+import AiKeyDialog from '@/components/student/AiKeyDialog.vue';
+import { analyzeQuestion } from '@/api/ai';
+import MarkdownIt from 'markdown-it';
+const md = new MarkdownIt();
+
 
 
 
@@ -135,6 +161,67 @@ const handleMarkAsMastered = async () => {
   isReviewDialogVisible.value = false;
   await getMyRecords(); // 重新加载列表
 };
+
+// --- AI 相关状态 ---
+const store = useStudentAuthStore();
+const keyDialogVisible = ref(false);
+const aiResultVisible = ref(false);
+const aiLoading = ref(false);
+const aiResponse = ref('');
+const currentRecordForAi = ref<WrongRecordVO | null>(null); // 暂存当前操作的记录
+
+// 点击 AI 解析按钮
+const handleAiAnalysis = async (record: WrongRecordVO) => {
+  // 1. 检查是否有 Key
+  if (!store.aiKey) {
+    currentRecordForAi.value = record; // 记住当前想操作的记录
+    keyDialogVisible.value = true; // 打开设置弹窗
+    return;
+  }
+
+  // 2. 执行分析
+  performAiAnalysis(record);
+};
+
+// Key 设置成功后的回调
+const onKeySaved = () => {
+  if (currentRecordForAi.value) {
+    performAiAnalysis(currentRecordForAi.value);
+    currentRecordForAi.value = null;
+  }
+};
+
+// 执行 AI 分析的核心逻辑
+const performAiAnalysis = async (record: WrongRecordVO) => {
+  aiResultVisible.value = true;
+  aiLoading.value = true;
+  aiResponse.value = ''; // 清空旧内容
+
+  try {
+    // 1. 获取题目详情（需要题干、正确答案、解析等完整信息）
+    const detailRes = await fetchWrongRecordDetail(record.id);
+    if (detailRes.code !== 200) throw new Error("获取题目详情失败");
+
+    const question = detailRes.data;
+
+    // 2. 调用 AI 接口
+    const res = await analyzeQuestion({
+      questionContent: question.content,
+      studentAnswer: record.wrongAnswer || '未作答', // 这里需要后端 WrongRecordVO 返回 wrongAnswer
+      correctAnswer: question.answer,
+      analysis: question.description
+    });
+
+    if (res.code === 200) {
+      aiResponse.value = res.data;
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || 'AI 分析请求失败，请检查 API Key 是否正确');
+    aiResultVisible.value = false;
+  } finally {
+    aiLoading.value = false;
+  }
+};
 onMounted(getMyRecords);
 </script>
 
@@ -147,5 +234,11 @@ onMounted(getMyRecords);
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+.ai-content {
+  min-height: 200px;
+  padding: 10px;
+  background-color: #f9f9fa;
+  border-radius: 8px;
 }
 </style>

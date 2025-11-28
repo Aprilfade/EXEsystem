@@ -10,6 +10,10 @@ export const useStudentAuthStore = defineStore('studentAuth', {
     state: () => ({
         token: localStorage.getItem(STUDENT_TOKEN_KEY) || null,
         student: null as Student | null,
+        // 【新增】AI Key，从本地存储读取
+        aiKey: localStorage.getItem('student_ai_key') || '',
+        // 【新增】存储 AI 提供商，默认为 DEEPSEEK
+        aiProvider: localStorage.getItem('student_ai_provider') || 'DEEPSEEK',
     }),
     getters: {
         isAuthenticated: (state) => !!state.token,
@@ -42,6 +46,21 @@ export const useStudentAuthStore = defineStore('studentAuth', {
             } catch (error) {
                 console.error("获取学生信息失败", error);
                 this.logout();
+            }
+        },
+        // 【修改】同时保存 Key 和 Provider
+        setAiConfig(key: string, provider: string) {
+            this.aiKey = key;
+            this.aiProvider = provider;
+
+            if (key) {
+                localStorage.setItem('student_ai_key', key);
+            } else {
+                localStorage.removeItem('student_ai_key');
+            }
+
+            if (provider) {
+                localStorage.setItem('student_ai_provider', provider);
             }
         },
 
