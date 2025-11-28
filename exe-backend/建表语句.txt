@@ -380,3 +380,46 @@ ALTER TABLE `biz_student`
 ADD COLUMN `avatar_frame_style` varchar(500) DEFAULT NULL COMMENT '当前头像框CSS',
 ADD COLUMN `background_url` varchar(500) DEFAULT NULL COMMENT '当前背景图URL';
 
+
+-- ----------------------------
+-- 1. 课程表
+-- ----------------------------
+CREATE TABLE `biz_course` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '课程名称',
+  `description` text COLLATE utf8mb4_unicode_ci COMMENT '课程简介',
+  `cover_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '课程封面图',
+  `subject_id` bigint DEFAULT NULL COMMENT '关联科目ID',
+  `grade` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '适用年级',
+  `teacher_id` bigint DEFAULT NULL COMMENT '创建教师ID',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='课程表';
+
+-- ----------------------------
+-- 2. 课程资源表 (章节/课时)
+-- ----------------------------
+CREATE TABLE `biz_course_resource` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `course_id` bigint NOT NULL COMMENT '所属课程ID',
+  `name` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '资源/章节名称',
+  `resource_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '类型: VIDEO, PDF, PPT, LINK',
+  `resource_url` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '资源地址',
+  `knowledge_point_id` bigint DEFAULT NULL COMMENT '关联知识点ID(可选)',
+  `sort_order` int DEFAULT '0' COMMENT '排序',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_course_id` (`course_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='课程资源表';
+
+
+-- 1. 在权限表插入“课程管理”菜单权限
+-- id=30 (确保不重复即可), type=1 (表示菜单), parent_id=0 (表示一级菜单)
+INSERT INTO `sys_permission` (`id`, `name`, `code`, `type`, `parent_id`)
+VALUES (30, '课程管理', 'sys:course:edit', 1, 0);
+
+-- 2. 为管理员角色（假设 ID 为 2）分配该权限
+-- 如果您有其他角色需要此权限，请重复此语句并修改 role_id
+INSERT INTO `sys_role_permission` (`role_id`, `permission_id`)
+VALUES (2, 30);

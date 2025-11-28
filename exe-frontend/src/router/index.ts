@@ -38,6 +38,13 @@ const routes: Array<RouteRecordRaw> = [
             { path: 'statistics', name: 'StatisticsDashboard', component: () => import('@/views/StatisticsDashboard.vue'), meta: { permission: 'sys:stats:list', title: '教学统计' } },
             { path: 'notifications', name: 'NotificationManagement', component: () => import('@/views/NotificationManage.vue'), meta: { permission: 'sys:notify:list', title: '通知管理' } },
             { path: 'logs/login', name: 'LoginLog', component: () => import('@/views/LoginLog.vue'), meta: { permission: 'sys:log:login', title: '登录日志' } },
+// 在 children 数组中添加：
+            {
+                path: 'courses',
+                name: 'CourseManage',
+                component: () => import('@/views/CourseManage.vue'),
+                meta: { permission: 'sys:course:edit', title: '课程管理' } // 记得去数据库加权限
+            },
         ]
     },
     // --- 学生端路由 ---
@@ -101,6 +108,8 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('@/views/student/MyFavorites.vue'),
                 meta: { title: '我的收藏' }
             },
+
+
 
         ]
     }
