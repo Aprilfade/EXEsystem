@@ -65,6 +65,13 @@ const routes: Array<RouteRecordRaw> = [
                 // 【核心修改】将这里的 component 指向我们创建的完整文件
                 component: () => import('@/views/student/StudentDashboard.vue') // 原来可能是一个占位符
             },
+            // === 【新增】课程列表路由 ===
+            {
+                path: 'courses',
+                name: 'StudentCourseList',
+                component: () => import('@/views/student/StudentCourseList.vue'),
+                meta: { title: '课程中心' }
+            },
             {
                 path: 'wrong-records',
                 name: 'MyWrongRecords',

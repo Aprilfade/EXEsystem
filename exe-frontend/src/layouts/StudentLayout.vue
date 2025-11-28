@@ -8,6 +8,7 @@
       <div class="header-menu">
         <el-menu mode="horizontal" :default-active="$route.path" router :ellipsis="false">
           <el-menu-item index="/student/dashboard">我的首页</el-menu-item>
+          <el-menu-item index="/student/courses">课程中心</el-menu-item>
           <el-menu-item index="/student/wrong-records">我的错题本</el-menu-item>
           <el-menu-item index="/student/practice">在线练习</el-menu-item>
           <el-menu-item index="/student/exams">模拟考试</el-menu-item>
