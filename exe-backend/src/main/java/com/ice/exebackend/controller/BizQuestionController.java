@@ -17,6 +17,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+// 必须导入这两个，且不要导入 lombok.Log
+import com.ice.exebackend.annotation.Log;
+import com.ice.exebackend.enums.BusinessType;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -28,6 +31,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/questions")
 @PreAuthorize("hasAuthority('sys:question:list')")
+@Log(title = "题库管理", businessType = BusinessType.INSERT) // 新增
 public class BizQuestionController {
 
     private static final Logger logger = LoggerFactory.getLogger(BizQuestionController.class);
