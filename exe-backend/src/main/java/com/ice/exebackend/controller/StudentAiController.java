@@ -19,22 +19,18 @@ public class StudentAiController {
     private AiService aiService;
 
     @PostMapping("/analyze")
-    public Result analyzeWrongQuestion(@RequestBody AiAnalysisReq req, HttpServletRequest request) {
+    public Result analyzeWrongQuestion(@RequestBody AiAnalysisReq req, HttpServletRequest request) throws Exception { // 允许抛出 Exception
         String apiKey = request.getHeader("X-Ai-Api-Key");
-        // 【新增】获取提供商标识
         String provider = request.getHeader("X-Ai-Provider");
 
         if (!StringUtils.hasText(apiKey)) {
             return Result.fail("未提供 API Key，请在个人设置中配置");
         }
 
-        try {
-            // 传入 provider
-            String analysisResult = aiService.analyzeWrongQuestion(apiKey, provider, req);
-            return Result.suc(analysisResult);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Result.fail("AI 分析失败：" + e.getMessage());
-        }
+        // 直接调用逻辑，移除 try-catch
+        // 如果 aiService 抛出 RuntimeException("AI 接口调用失败...")，全局处理器会捕获它
+        String analysisResult = aiService.analyzeWrongQuestion(apiKey, provider, req);
+
+        return Result.suc(analysisResult);
     }
 }

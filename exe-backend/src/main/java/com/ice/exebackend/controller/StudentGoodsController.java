@@ -44,17 +44,17 @@ public class StudentGoodsController {
     }
 
     /**
-     * 兑换商品
+     * 兑换商品 - 优化后
+     * 移除了 try-catch，Service 层抛出的 "积分不足" 或 "商品不存在" 异常会自动被处理
      */
     @PostMapping("/exchange/{goodsId}")
     public Result exchange(@PathVariable Long goodsId, Authentication auth) {
         Long studentId = getCurrentStudentId(auth);
-        try {
-            goodsService.exchangeGoods(studentId, goodsId);
-            return Result.suc("兑换成功！");
-        } catch (RuntimeException e) {
-            return Result.fail(e.getMessage());
-        }
+
+        // 直接调用，不再需要 try-catch 包裹
+        goodsService.exchangeGoods(studentId, goodsId);
+
+        return Result.suc("兑换成功！");
     }
     /**
      * 【新增】装配/使用商品

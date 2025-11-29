@@ -90,9 +90,12 @@ public class AuthController {
     }
 
 
+    /**
+     * 登录接口优化
+     * 保留 try-catch 仅为了记录失败日志，最后 re-throw 异常
+     */
     @PostMapping("/login")
     public Result login(@RequestBody Map<String, String> loginRequest) {
-        // 【核心修复】将 username 的定义移动到方法开头
         String username = loginRequest.get("username");
 
         try {
@@ -101,19 +104,20 @@ public class AuthController {
             );
             UserDetails userDetails = (UserDetails) authentication.getPrincipal();
             String token = jwtUtil.generateToken(userDetails);
-            logger.info("用户 '{}' 登录成功!", userDetails.getUsername());
 
+            logger.info("用户 '{}' 登录成功!", userDetails.getUsername());
             // 记录成功日志
             loginLogService.recordLoginLog(username, "LOGIN_SUCCESS", getIpAddress(), getUserAgent());
 
             return Result.suc(Map.of("token", token));
+
         } catch (AuthenticationException e) {
             logger.error("用户 '{}' 认证失败: {}", username, e.getMessage());
-
-            // 记录失败日志 (现在可以安全地访问 username)
+            // 1. 记录失败日志 (这是我们保留 try-catch 的唯一原因)
             loginLogService.recordLoginLog(username, "LOGIN_FAILURE", getIpAddress(), getUserAgent());
 
-            return Result.fail("用户名或密码错误");
+            // 2. 【关键】重新抛出异常，交给 GlobalExceptionHandler 统一处理返回 Result.fail(...)
+            throw e;
         }
     }
 
@@ -124,16 +128,16 @@ public class AuthController {
         return Result.suc();
     }
 
+    /**
+     * 注册接口优化
+     * 移除了 try-catch，代码更清爽
+     */
     @PostMapping("/register")
     public Result register(@RequestBody SysUser user) {
-        try {
-            boolean success = sysUserService.createUser(user);
-            return success ? Result.suc("注册成功，请登录！") : Result.fail("注册失败，请稍后再试。");
-        } catch (RuntimeException e) {
-            return Result.fail(e.getMessage());
-        }
+        // 如果 createUser 抛出 "用户名已存在" 等异常，会被 GlobalExceptionHandler 捕获并返回给前端
+        sysUserService.createUser(user);
+        return Result.suc("注册成功，请登录！");
     }
-
     @GetMapping("/me")
     public Result getUserInfo() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -146,13 +150,10 @@ public class AuthController {
         List<SysRole> roles = sysRoleMapper.selectRolesByUserId(user.getId());
         List<String> permissions = sysPermissionMapper.selectPermissionCodesByUserId(user.getId());
 
+        // ... 组装数据 ...
         UserInfoDTO userInfoDTO = new UserInfoDTO();
         BeanUtils.copyProperties(user, userInfoDTO);
-        userInfoDTO.setRoles(roles);
-
-        return Result.suc(Map.of(
-                "user", userInfoDTO,
-                "permissions", permissions
-        ));
+        userInfoDTO.setRoles(sysRoleMapper.selectRolesByUserId(user.getId()));
+        return Result.suc(Map.of("user", userInfoDTO, "permissions", sysPermissionMapper.selectPermissionCodesByUserId(user.getId())));
     }
 }
