@@ -429,3 +429,21 @@ CREATE INDEX idx_question_subject_id ON biz_question(subject_id);
 
 -- 添加联合唯一索引
 ALTER TABLE `biz_subject` ADD UNIQUE INDEX `uk_grade_name` (`grade`, `name`);
+
+
+-- ----------------------------
+-- 21. 课程评论/讨论表
+-- ----------------------------
+CREATE TABLE `biz_course_comment` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `course_id` bigint NOT NULL COMMENT '课程ID',
+  `student_id` bigint NOT NULL COMMENT '学生ID',
+  `content` varchar(1000) NOT NULL COMMENT '评论内容',
+  `reply_id` bigint DEFAULT NULL COMMENT '回复的父评论ID(可选)',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_course_id` (`course_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='课程讨论表';
+
+
+
