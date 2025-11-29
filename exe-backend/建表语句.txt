@@ -446,4 +446,18 @@ CREATE TABLE `biz_course_comment` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='课程讨论表';
 
 
+-- ----------------------------
+-- 22. 【新增】签到记录表
+-- ----------------------------
+CREATE TABLE `biz_sign_in` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `student_id` bigint NOT NULL COMMENT '学生ID',
+  `sign_date` date NOT NULL COMMENT '签到日期',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_student_date` (`student_id`, `sign_date`) COMMENT '每日只能签到一次',
+  INDEX `idx_student_id` (`student_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学生签到表';
+
+
 

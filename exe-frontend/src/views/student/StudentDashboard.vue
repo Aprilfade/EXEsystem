@@ -166,6 +166,7 @@
         </el-card>
       </el-col>
       <el-col :span="8">
+        <SignInCalendar style="margin-bottom: 20px;" />
         <el-card shadow="never">
           <template #header>
             <div class="card-header">
@@ -199,6 +200,7 @@ import * as echarts from 'echarts';
 import PointsMallDialog from '@/components/student/PointsMallDialog.vue';
 import { Present } from '@element-plus/icons-vue'; // 引入礼品图标
 import UserAvatar from '@/components/UserAvatar.vue';
+import SignInCalendar from '@/components/student/SignInCalendar.vue';
 
 
 

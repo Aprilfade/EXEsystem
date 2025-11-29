@@ -63,8 +63,10 @@ public class BizFavoriteServiceImpl extends ServiceImpl<BizFavoriteMapper, BizFa
                 .map(BizFavorite::getQuestionId)
                 .collect(Collectors.toList());
 
-        // 4. 批量查询题目详情
-        List<BizQuestion> questionsFromDb = questionMapper.selectBatchIds(qIds);
+        // 【修改点】使用 selectList 替代 selectBatchIds
+        List<BizQuestion> questionsFromDb = questionMapper.selectList(
+                new QueryWrapper<BizQuestion>().in("id", qIds)
+        );
 
         // 【关键修复】将查询结果转为 Map，防止 selectBatchIds 导致的乱序问题
         Map<Long, BizQuestion> questionMap = questionsFromDb.stream()

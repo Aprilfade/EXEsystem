@@ -21,20 +21,24 @@
         <el-card shadow="never">
           <div class="stat-item">
             <p class="label">试卷下载次数</p>
-            <p class="value">6</p> </div>
+            <p class="value">6</p>
+          </div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="never">
           <div class="stat-item">
             <p class="label">试卷题目平均分值</p>
-            <p class="value">80</p> </div>
+            <p class="value">80</p>
+          </div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="never">
           <div class="stat-item">
-            <p class="label">试卷关联学生题目数量</p> <p class="value">45</p> </div>
+            <p class="label">试卷关联学生题目数量</p>
+            <p class="value">45</p>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -43,11 +47,17 @@
       <div class="content-header">
         <el-input v-model="searchQuery" placeholder="输入试卷名称或编码搜索" size="large" style="width: 300px;"/>
         <div>
-          <el-select v-model="queryParams.subjectId" placeholder="按科目筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 20px;"></el-select>
+          <el-select v-model="queryParams.subjectId" placeholder="按科目筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 20px;">
+            <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
+          </el-select>
+
           <el-select v-model="queryParams.grade" placeholder="按年级筛选" clearable @change="handleQuery" size="large" style="width: 150px; margin-right: 20px;">
             <el-option label="七年级" value="七年级" />
             <el-option label="八年级" value="八年级" />
             <el-option label="九年级" value="九年级" />
+            <el-option label="高一" value="高一" />
+            <el-option label="高二" value="高二" />
+            <el-option label="高三" value="高三" />
           </el-select>
           <el-button-group>
             <el-button :icon="Grid" :type="viewMode === 'grid' ? 'primary' : 'default'" @click="viewMode = 'grid'"/>
@@ -93,8 +103,9 @@
                   </el-dropdown-item>
 
                   <el-dropdown-item divided @click="handleUpdate(paper.id)">编辑</el-dropdown-item>
-                  <el-dropdown-item @click="handleExport(paper.id, false)">导出</el-dropdown-item>
-                  <el-dropdown-item @click="handleExport(paper.id, true)">导出(含答案)</el-dropdown-item>
+                  <el-dropdown-item @click="handleExport(paper.id, false, 'word')">导出 Word</el-dropdown-item>
+                  <el-dropdown-item @click="handleExport(paper.id, true, 'word')">导出 Word(含答案)</el-dropdown-item>
+                  <el-dropdown-item divided @click="handleExport(paper.id, false, 'pdf')">导出 PDF (预览)</el-dropdown-item>
                   <el-dropdown-item @click="handleDelete(paper.id)" divided style="color: #f56c6c;">删除</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -116,8 +127,9 @@
         <el-table-column label="所属科目" width="150">
           <template #default="scope">{{ getSubjectName(scope.row.subjectId) }}</template>
         </el-table-column>
-        <el-table-column prop="grade" label="年级" width="120" /> <el-table-column prop="totalScore" label="总分" width="100" />
+        <el-table-column prop="grade" label="年级" width="120" />
         <el-table-column prop="totalScore" label="总分" width="100" />
+
         <el-table-column label="状态" width="100" align="center">
           <template #default="scope">
             <el-tag :type="scope.row.status === 1 ? 'success' : 'info'">
@@ -128,12 +140,14 @@
         <el-table-column label="操作" width="350" align="center">
           <template #default="scope">
             <el-button type="primary" link :icon="Edit" @click="handleUpdate(scope.row.id)">编辑</el-button>
-            <el-button type="success" link :icon="Download" @click="handleExport(scope.row.id, false)">导出</el-button>
-            <el-button type="warning" link :icon="Download" @click="handleExport(scope.row.id, true)">导出(含答案)</el-button>
+            <el-button type="success" link :icon="Download" @click="handleExport(scope.row.id, false, 'word')">Word</el-button>
+            <el-button type="primary" link :icon="VideoPlay" @click="handleExport(scope.row.id, false, 'pdf')">PDF</el-button>
             <el-button type="danger" link :icon="Delete" @click="handleDelete(scope.row.id)">删除</el-button>
+
+            <el-divider direction="vertical" />
+
             <el-button v-if="scope.row.status !== 1" type="success" link @click="handleStatusChange(scope.row, 1)">发布</el-button>
             <el-button v-else type="warning" link @click="handleStatusChange(scope.row, 0)">下架</el-button>
-            <el-divider direction="vertical" />
           </template>
         </el-table-column>
       </el-table>
@@ -164,10 +178,10 @@
 <script lang="ts" setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { fetchPaperList, deletePaper, downloadPaper, updatePaperStatus } from '@/api/paper';
+import { fetchPaperList, deletePaper, downloadPaper, updatePaperStatus, downloadPaperPdf } from '@/api/paper';
 import type { Paper, PaperPageParams } from '@/api/paper';
 import { fetchAllSubjects, type Subject } from '@/api/subject';
-import { Plus, Edit, Delete, Grid, Menu, MoreFilled, Download ,VideoPlay, VideoPause} from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Grid, Menu, MoreFilled, Download, VideoPlay, VideoPause } from '@element-plus/icons-vue';
 import PaperEditDialog from '@/components/paper/PaperEditDialog.vue';
 
 const allPaperList = ref<Paper[]>([]); // 用于前端搜索
@@ -185,18 +199,17 @@ const queryParams = reactive<PaperPageParams>({
   current: 1,
   size: 10,
   subjectId: undefined,
-  grade: undefined // 【新增此行】
+  grade: undefined
 });
 
-// 【修改】: filteredList 计算属性，增加年级过滤逻辑
 const filteredList = computed(() => {
   return allPaperList.value.filter(item => {
     const searchMatch = searchQuery.value
         ? item.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || (item.code && item.code.toLowerCase().includes(searchQuery.value.toLowerCase()))
         : true;
     const subjectMatch = queryParams.subjectId ? item.subjectId === queryParams.subjectId : true;
-    const gradeMatch = queryParams.grade ? item.grade === queryParams.grade : true; // <-- 新增
-    return searchMatch && subjectMatch && gradeMatch; // <-- 新增
+    const gradeMatch = queryParams.grade ? item.grade === queryParams.grade : true;
+    return searchMatch && subjectMatch && gradeMatch;
   });
 });
 
@@ -236,8 +249,7 @@ const handleQuery = () => {
   }
 };
 
-// 【修改】: watch 侦听器，增加对 grade 的监听
-watch(() => [queryParams.subjectId, queryParams.grade], () => { // <-- 修改
+watch(() => [queryParams.subjectId, queryParams.grade], () => {
   if (viewMode.value === 'list') {
     handleQuery();
   }
@@ -262,12 +274,21 @@ const handleDelete = (id: number) => {
       });
 };
 
-const handleExport = async (id: number, includeAnswers: boolean) => {
+const handleExport = async (id: number, includeAnswers: boolean, type: 'word' | 'pdf' = 'word') => {
   try {
-    ElMessage.info('正在生成Word文件，请稍候...');
-    const response = await downloadPaper(id, includeAnswers);
+    const typeName = type === 'word' ? 'Word' : 'PDF';
+    ElMessage.info(`正在生成 ${typeName} 文件，请稍候...`);
+
+    // 根据类型调用不同的 API
+    let response;
+    if (type === 'pdf') {
+      response = await downloadPaperPdf(id, includeAnswers);
+    } else {
+      response = await downloadPaper(id, includeAnswers);
+    }
+
     const contentDisposition = response.headers['content-disposition'];
-    let fileName = '试卷.docx';
+    let fileName = `试卷.${type === 'word' ? 'docx' : 'pdf'}`;
     if (contentDisposition) {
       const match = contentDisposition.match(/filename="(.+)"/);
       if (match && match.length > 1) {
@@ -277,19 +298,25 @@ const handleExport = async (id: number, includeAnswers: boolean) => {
 
     const blob = new Blob([response.data], { type: response.headers['content-type'] });
     const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+
+    if (type === 'pdf') {
+      window.open(url);
+    } else {
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
   } catch (error) {
     console.error('文件导出失败:', error);
     ElMessage.error('文件导出失败，请稍后重试。');
   }
 };
-// 2. 【新增】处理状态变更
+
 const handleStatusChange = async (row: Paper, newStatus: number) => {
   const actionName = newStatus === 1 ? '发布' : '下架';
   try {
@@ -301,7 +328,7 @@ const handleStatusChange = async (row: Paper, newStatus: number) => {
 
     await updatePaperStatus(row.id, newStatus);
     ElMessage.success(`${actionName}成功`);
-    getList(); // 刷新列表
+    getList();
   } catch (e) {
     // 取消或失败
   }
@@ -341,7 +368,7 @@ onMounted(() => {
 .paper-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: var(--brand-color); /* 使用 style.css 中定义的品牌色 */
+  border-color: var(--brand-color);
 }
 .card-header {
   display: flex;

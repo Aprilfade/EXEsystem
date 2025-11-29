@@ -36,8 +36,10 @@ public class BizCourseCommentServiceImpl extends ServiceImpl<BizCourseCommentMap
         // 2. 收集所有发帖学生的ID
         List<Long> studentIds = comments.stream().map(BizCourseComment::getStudentId).distinct().collect(Collectors.toList());
 
-        // 3. 批量查询学生信息
-        List<BizStudent> students = studentMapper.selectBatchIds(studentIds);
+        // 3. 【修改点】使用 selectList 替代 selectBatchIds
+        List<BizStudent> students = studentMapper.selectList(
+                new QueryWrapper<BizStudent>().in("id", studentIds)
+        );
         Map<Long, BizStudent> studentMap = students.stream().collect(Collectors.toMap(BizStudent::getId, s -> s));
 
         // 4. 组装 VO

@@ -132,3 +132,14 @@ export function generateSmartPaper(data: SmartPaperReq): Promise<ApiResult<Paper
         data
     });
 }
+/**
+ * 【新增】下载 PDF 试卷
+ */
+export function downloadPaperPdf(id: number, includeAnswers: boolean): Promise<any> {
+    return request({
+        url: `/api/v1/papers/export/pdf/${id}`,
+        method: 'get',
+        params: { includeAnswers },
+        responseType: 'blob' // 必须设置为 blob
+    });
+}

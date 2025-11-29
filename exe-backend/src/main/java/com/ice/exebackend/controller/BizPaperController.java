@@ -7,6 +7,7 @@ import com.ice.exebackend.dto.PaperDTO;
 import com.ice.exebackend.dto.SmartPaperReq;
 import com.ice.exebackend.entity.BizPaper;
 import com.ice.exebackend.service.BizPaperService;
+import com.ice.exebackend.service.PdfService; // 【1. 新增导入】
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,9 @@ public class BizPaperController {
 
     @Autowired
     private BizPaperService paperService;
+    // 【2. 新增注入 PdfService】 解决 "找不到符号 pdfService" 的错误
+    @Autowired
+    private PdfService pdfService;
 
     // 2. 注入 RedisTemplate
     @Autowired
@@ -149,6 +153,30 @@ public class BizPaperController {
             return Result.fail("未找到符合条件的题目，请检查题库或调整条件");
         }
         return Result.suc(groups);
+    }
+    /**
+     * 【新增】导出 PDF 试卷
+     */
+    @GetMapping("/export/pdf/{id}")
+    public ResponseEntity<byte[]> exportPaperPdf(@PathVariable Long id, @RequestParam(defaultValue = "false") boolean includeAnswers) {
+        try (ByteArrayOutputStream out = pdfService.generatePaperPdf(id, includeAnswers, "在线学习系统专用")) {
+
+            // 获取文件名
+            PaperDTO paper = paperService.getPaperWithQuestionsById(id);
+            String fileName = URLEncoder.encode(paper.getName() + ".pdf", StandardCharsets.UTF_8.toString());
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
+            headers.add(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE);
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(out.toByteArray());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
     }
 
 }

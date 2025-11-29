@@ -97,7 +97,8 @@ public class BizQuestionController {
                 .ne(currentId != null, BizQuestion::getId, currentId)
                 .select(BizQuestion::getId, BizQuestion::getContent)
                 .list();
-        LevenshteinDistance distance = new LevenshteinDistance();
+        // 【修改点】使用 getDefaultInstance() 替代 new LevenshteinDistance()
+        LevenshteinDistance distance = LevenshteinDistance.getDefaultInstance();
         List<BizQuestion> similarQuestions = candidates.stream()
                 .filter(q -> {
                     double similarity = 1.0 - (double) distance.apply(content, q.getContent()) / Math.max(content.length(), q.getContent().length());

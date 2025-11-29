@@ -56,6 +56,7 @@ public class SecurityConfig {
     }
 
     @Bean
+    @SuppressWarnings("deprecation") // 【修改点】压制过时警告
     public AuthenticationProvider adminAuthenticationProvider() {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(adminUserDetailsService);
@@ -64,6 +65,7 @@ public class SecurityConfig {
     }
 
     @Bean
+    @SuppressWarnings("deprecation") // 【修改点】压制过时警告
     public AuthenticationProvider studentAuthenticationProvider() {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(studentUserDetailsService);
