@@ -2,10 +2,12 @@ package com.ice.exebackend.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.PaperDTO;
 import com.ice.exebackend.dto.SmartPaperReq;
 import com.ice.exebackend.entity.BizPaper;
+import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.BizPaperService;
 import com.ice.exebackend.service.PdfService; // 【1. 新增导入】
 import jakarta.servlet.http.HttpServletResponse;
@@ -44,6 +46,7 @@ public class BizPaperController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('sys:paper:create')")
+    @Log(title = "试卷管理", businessType = BusinessType.INSERT) // 新增
     public Result createPaper(@RequestBody PaperDTO paperDTO) {
         boolean success = paperService.createPaperWithQuestions(paperDTO);
         if (success) {
@@ -79,6 +82,7 @@ public class BizPaperController {
     }
 
     @GetMapping("/export/{id}")
+    @Log(title = "试卷管理", businessType = BusinessType.EXPORT) // 导出Word
     public ResponseEntity<byte[]> exportPaper(@PathVariable Long id, @RequestParam(defaultValue = "false") boolean includeAnswers) {
         try (XWPFDocument document = paperService.exportPaperToWord(id, includeAnswers);
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -104,6 +108,7 @@ public class BizPaperController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('sys:paper:update')")
+    @Log(title = "试卷管理", businessType = BusinessType.UPDATE) // 修改
     public Result updatePaper(@PathVariable Long id, @RequestBody PaperDTO paperDTO) {
         paperDTO.setId(id);
         boolean success = paperService.updatePaperWithQuestions(paperDTO);
@@ -116,6 +121,7 @@ public class BizPaperController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('sys:paper:delete')")
+    @Log(title = "试卷管理", businessType = BusinessType.DELETE) // 删除
     public Result deletePaper(@PathVariable Long id) {
         boolean success = paperService.removeById(id);
         if (success) {
@@ -129,6 +135,7 @@ public class BizPaperController {
      */
     @PutMapping("/{id}/status")
     @PreAuthorize("hasAuthority('sys:paper:update')")
+    @Log(title = "试卷管理", businessType = BusinessType.UPDATE) // 状态变更
     public Result updatePaperStatus(@PathVariable Long id, @RequestParam Integer status) {
         BizPaper paper = new BizPaper();
         paper.setId(id);
@@ -144,6 +151,7 @@ public class BizPaperController {
     }
     @PostMapping("/generate")
     @PreAuthorize("hasAuthority('sys:paper:create')")
+    @Log(title = "试卷管理", businessType = BusinessType.OTHER) // 智能组卷 (属于操作但不是简单的增删改)
     public Result generateSmartPaper(@RequestBody SmartPaperReq req) {
         if (req.getSubjectId() == null) {
             return Result.fail("请选择科目");
@@ -158,6 +166,7 @@ public class BizPaperController {
      * 【新增】导出 PDF 试卷
      */
     @GetMapping("/export/pdf/{id}")
+    @Log(title = "试卷管理", businessType = BusinessType.EXPORT) // 导出PDF
     public ResponseEntity<byte[]> exportPaperPdf(@PathVariable Long id, @RequestParam(defaultValue = "false") boolean includeAnswers) {
         try (ByteArrayOutputStream out = pdfService.generatePaperPdf(id, includeAnswers, "在线学习系统专用")) {
 

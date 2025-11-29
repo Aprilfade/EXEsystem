@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 // 【关键修复】移除无效的 import 别名语法
 // import com.baomidou.mybatisplus.core.toolkit.StringUtils as MybatisStringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.SubjectStatsDTO;
 import com.ice.exebackend.entity.BizKnowledgePoint;
@@ -11,6 +12,7 @@ import com.ice.exebackend.entity.BizPaper;
 import com.ice.exebackend.entity.BizQuestion;
 import com.ice.exebackend.entity.BizStudent;
 import com.ice.exebackend.entity.BizSubject;
+import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -50,6 +52,7 @@ public class BizSubjectController {
     private static final String SUBJECT_ALL_CACHE_KEY = "sys:subject:all";
 
     @PostMapping
+    @Log(title = "科目管理", businessType = BusinessType.INSERT)
     public Result createSubject(@RequestBody BizSubject subject) {
         boolean success = subjectService.save(subject);
         if (success) {
@@ -132,6 +135,7 @@ public class BizSubjectController {
     }
 
     @PutMapping("/{id}")
+    @Log(title = "科目管理", businessType = BusinessType.UPDATE)
     public Result updateSubject(@PathVariable Long id, @RequestBody BizSubject subject) {
         subject.setId(id);
         boolean success = subjectService.updateById(subject);
@@ -143,6 +147,7 @@ public class BizSubjectController {
     }
 
     @DeleteMapping("/{id}")
+    @Log(title = "科目管理", businessType = BusinessType.DELETE)
     public Result deleteSubject(@PathVariable Long id) {
         long knowledgePointCount = knowledgePointService.count(new QueryWrapper<BizKnowledgePoint>().eq("subject_id", id));
         if (knowledgePointCount > 0) {

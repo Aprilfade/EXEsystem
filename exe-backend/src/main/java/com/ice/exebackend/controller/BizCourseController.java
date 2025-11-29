@@ -2,9 +2,11 @@ package com.ice.exebackend.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.entity.BizCourse;
 import com.ice.exebackend.entity.BizCourseResource;
+import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.BizCourseService; // 假设你已创建接口
 import com.ice.exebackend.mapper.BizCourseResourceMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,7 +53,8 @@ public class BizCourseController {
 
     // 创建/更新课程
     @PostMapping
-    @PreAuthorize("hasAuthority('sys:course:edit')") // 需在数据库添加相应权限
+    @PreAuthorize("hasAuthority('sys:course:edit')")
+    @Log(title = "课程管理", businessType = BusinessType.INSERT) // 创建/更新课程
     public Result save(@RequestBody BizCourse course) {
         courseService.saveOrUpdate(course);
         return Result.suc(course.getId());
@@ -60,6 +63,7 @@ public class BizCourseController {
     // 添加/更新资源
     @PostMapping("/resource")
     @PreAuthorize("hasAuthority('sys:course:edit')")
+    @Log(title = "课程资源", businessType = BusinessType.INSERT) // 添加/更新资源
     public Result saveResource(@RequestBody BizCourseResource resource) {
         courseService.saveResource(resource);
         return Result.suc();
@@ -68,6 +72,7 @@ public class BizCourseController {
     // 删除资源
     @DeleteMapping("/resource/{id}")
     @PreAuthorize("hasAuthority('sys:course:edit')")
+    @Log(title = "课程资源", businessType = BusinessType.DELETE) // 删除资源
     public Result deleteResource(@PathVariable Long id) {
         resourceMapper.deleteById(id);
         return Result.suc();
@@ -76,6 +81,7 @@ public class BizCourseController {
     // 删除课程
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('sys:course:edit')")
+    @Log(title = "课程管理", businessType = BusinessType.DELETE) // 删除课程
     public Result deleteCourse(@PathVariable Long id) {
         courseService.removeById(id);
         resourceMapper.delete(new QueryWrapper<BizCourseResource>().eq("course_id", id));

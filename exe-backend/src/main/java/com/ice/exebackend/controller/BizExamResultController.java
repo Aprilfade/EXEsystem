@@ -2,9 +2,11 @@ package com.ice.exebackend.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.entity.BizExamResult;
 import com.ice.exebackend.entity.BizStudent;
+import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.BizExamResultService;
 import com.ice.exebackend.service.BizStudentService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,6 +72,7 @@ public class BizExamResultController {
      * 教师批阅：更新分数
      */
     @PutMapping("/{id}/score")
+    @Log(title = "成绩管理", businessType = BusinessType.UPDATE) // 教师改分
     public Result updateScore(@PathVariable Long id, @RequestBody Map<String, Integer> body) {
         Integer score = body.get("score");
         if (score == null) return Result.fail("分数不能为空");

@@ -2,8 +2,10 @@ package com.ice.exebackend.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.entity.SysNotification;
+import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.SysNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate; // 1. 导入 RedisTemplate
@@ -26,6 +28,7 @@ public class SysNotificationController {
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
     @PostMapping
+    @Log(title = "通知管理", businessType = BusinessType.INSERT)
     public Result createNotification(@RequestBody SysNotification notification) {
         if (notification.getIsPublished() != null && notification.getIsPublished()) {
             notification.setPublishTime(LocalDateTime.now());
@@ -52,6 +55,7 @@ public class SysNotificationController {
     }
 
     @PutMapping("/{id}")
+    @Log(title = "通知管理", businessType = BusinessType.UPDATE)
     public Result updateNotification(@PathVariable Long id, @RequestBody SysNotification notification) {
         notification.setId(id);
 
@@ -87,6 +91,7 @@ public class SysNotificationController {
     }
 
     @DeleteMapping("/{id}")
+    @Log(title = "通知管理", businessType = BusinessType.DELETE)
     public Result deleteNotification(@PathVariable Long id) {
         boolean success = notificationService.removeById(id);
         if (success) {

@@ -3,9 +3,11 @@ package com.ice.exebackend.controller;
 import com.alibaba.excel.EasyExcel; // 导入 EasyExcel
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.StudentExportDTO;
 import com.ice.exebackend.entity.BizStudent;
+import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.BizStudentService;
 import jakarta.servlet.http.HttpServletResponse; // 导入 HttpServletResponse
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,6 +50,7 @@ public class BizStudentController {
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
     @PostMapping
+    @Log(title = "学生管理", businessType = BusinessType.INSERT) // 新增
     public Result createStudent(@RequestBody BizStudent student) {
         boolean success = studentService.save(student);
         if (success) {
@@ -77,6 +80,7 @@ public class BizStudentController {
     }
 
     @PutMapping("/{id}")
+    @Log(title = "学生管理", businessType = BusinessType.UPDATE) // 修改
     public Result updateStudent(@PathVariable Long id, @RequestBody BizStudent student) {
         student.setId(id);
         boolean success = studentService.updateById(student);
@@ -91,6 +95,7 @@ public class BizStudentController {
      * 删除学生 - 【已优化】
      */
     @DeleteMapping("/{id}")
+    @Log(title = "学生管理", businessType = BusinessType.DELETE) // 删除
     public Result deleteStudent(@PathVariable Long id) {
         // 【新增】 安全删除检查
         // 1. 检查该学生是否已存在错题记录
@@ -111,6 +116,7 @@ public class BizStudentController {
     }
 
     @PostMapping("/import")
+    @Log(title = "学生管理", businessType = BusinessType.IMPORT) // 导入
     public Result importStudents(@RequestParam("file") MultipartFile file,
                                  @RequestParam("subjectId") Long subjectId) {
         try {
@@ -127,6 +133,7 @@ public class BizStudentController {
      * 【新增】导出学生列表为Excel
      */
     @GetMapping("/export")
+    @Log(title = "学生管理", businessType = BusinessType.EXPORT) // 导出
     public void exportStudents(HttpServletResponse response,
                                @RequestParam(required = false) Long subjectId,
                                @RequestParam(required = false) String name) throws IOException {
@@ -148,6 +155,7 @@ public class BizStudentController {
      * 【新增】教师手动给学生增加/扣除积分
      */
     @PostMapping("/{id}/points")
+    @Log(title = "学生管理", businessType = BusinessType.UPDATE) // 积分奖惩
     public Result addPoints(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         // 从请求体获取积分值和备注
         Integer points = (Integer) body.get("points");

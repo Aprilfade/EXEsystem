@@ -1,8 +1,10 @@
 package com.ice.exebackend.controller;
 
+import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result; // 导入您定义的Result类
 import com.ice.exebackend.dto.UserInfoDTO;
 import com.ice.exebackend.entity.SysUser;
+import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,6 +27,7 @@ public class SysUserController {
      */
     @PostMapping
     @PreAuthorize("hasAuthority('sys:user:create')")
+    @Log(title = "成员管理", businessType = BusinessType.INSERT) // 新增用户
     public Result createUser(@RequestBody SysUser user) {
         boolean success = sysUserService.createUser(user);
         return success ? Result.suc() : Result.fail();
@@ -59,6 +62,7 @@ public class SysUserController {
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('sys:user:update')")
+    @Log(title = "成员管理", businessType = BusinessType.UPDATE) // 更新用户
     public Result updateUser(@PathVariable Long id, @RequestBody SysUser user) {
         user.setId(id);
         // 修改前: boolean success = sysUserService.updateById(user);
@@ -71,6 +75,7 @@ public class SysUserController {
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('sys:user:delete')")
+    @Log(title = "成员管理", businessType = BusinessType.DELETE) // 删除用户
     public Result deleteUser(@PathVariable Long id) {
         boolean success = sysUserService.deleteUserById(id);
         return success ? Result.suc() : Result.fail();
@@ -79,6 +84,7 @@ public class SysUserController {
      * 当前登录用户更新自己的个人信息
      */
     @PutMapping("/me")
+    @Log(title = "个人中心", businessType = BusinessType.UPDATE) // 更新个人信息
     public Result updateMyProfile(@RequestBody SysUser user) {
         // 从安全上下文中获取当前登录用户的用户名
         String username = SecurityContextHolder.getContext().getAuthentication().getName();

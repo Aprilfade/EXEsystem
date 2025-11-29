@@ -1,7 +1,9 @@
 package com.ice.exebackend.controller;
 
+import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.entity.SysRole;
+import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.SysRoleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,7 +39,8 @@ public class SysRoleController {
 
     // 【新增】更新角色的权限
     @PutMapping("/{id}/permissions")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('sys:role:perm')") //
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('sys:role:perm')")
+    @Log(title = "角色管理", businessType = BusinessType.GRANT) // 授权 (使用 GRANT 类型)
     public Result updateRolePermissions(@PathVariable Long id, @RequestBody List<Long> permissionIds) {
         boolean success = sysRoleService.updateRolePermissions(id, permissionIds);
         return success ? Result.suc() : Result.fail("更新失败");

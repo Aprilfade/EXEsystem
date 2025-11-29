@@ -1,12 +1,14 @@
 package com.ice.exebackend.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.PaperStatsVO;
 import com.ice.exebackend.dto.WrongRecordDTO;
 import com.ice.exebackend.dto.WrongRecordVO;
 import com.ice.exebackend.entity.BizStudent;
 import com.ice.exebackend.entity.BizWrongRecord;
+import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.BizWrongRecordService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,6 +32,7 @@ public class BizWrongRecordController {
     private BizStudentService studentService;
 
     @PostMapping
+    @Log(title = "错题管理", businessType = BusinessType.INSERT)
     public Result createRecord(@RequestBody WrongRecordDTO dto) {
         boolean success = wrongRecordService.createWrongRecord(dto);
         return success ? Result.suc() : Result.fail("创建失败，参数不完整");
@@ -46,6 +49,7 @@ public class BizWrongRecordController {
     }
 
     @PutMapping("/{id}")
+    @Log(title = "错题管理", businessType = BusinessType.UPDATE)
     public Result updateRecord(@PathVariable Long id, @RequestBody BizWrongRecord record) {
         record.setId(id);
         boolean success = wrongRecordService.updateById(record);
@@ -53,6 +57,7 @@ public class BizWrongRecordController {
     }
 
     @DeleteMapping("/{id}")
+    @Log(title = "错题管理", businessType = BusinessType.DELETE)
     public Result deleteRecord(@PathVariable Long id) {
         boolean success = wrongRecordService.removeById(id);
         return success ? Result.suc() : Result.fail();

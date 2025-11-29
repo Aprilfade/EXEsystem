@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/questions")
 @PreAuthorize("hasAuthority('sys:question:list')")
-@Log(title = "题库管理", businessType = BusinessType.INSERT) // 新增
+
 public class BizQuestionController {
 
     private static final Logger logger = LoggerFactory.getLogger(BizQuestionController.class);
@@ -47,6 +47,8 @@ public class BizQuestionController {
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
     @PostMapping
+    @PreAuthorize("hasAuthority('sys:question:list')")
+    @Log(title = "题库管理", businessType = BusinessType.INSERT) // 新增
     public Result createQuestion(@RequestBody QuestionDTO questionDTO) {
         boolean success = questionService.createQuestionWithKnowledgePoints(questionDTO);
         if (success) {
@@ -113,6 +115,7 @@ public class BizQuestionController {
     }
 
     @GetMapping("/export")
+    @Log(title = "题库管理", businessType = BusinessType.EXPORT) // 导出
     public void exportQuestions(HttpServletResponse response, QuestionPageParams params) throws IOException {
         List<QuestionExcelDTO> list = questionService.getQuestionsForExport(params);
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -123,6 +126,8 @@ public class BizQuestionController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('sys:question:list')") // 这里您之前的代码可能没有加权限，建议加上
+    @Log(title = "题库管理", businessType = BusinessType.UPDATE) // 修改
     public Result updateQuestion(@PathVariable Long id, @RequestBody QuestionDTO questionDTO) {
         questionDTO.setId(id);
         boolean success = questionService.updateQuestionWithKnowledgePoints(questionDTO);
@@ -134,6 +139,7 @@ public class BizQuestionController {
     }
 
     @DeleteMapping("/{id}")
+    @Log(title = "题库管理", businessType = BusinessType.DELETE) // 删除
     public Result deleteQuestion(@PathVariable Long id) {
         boolean success = questionService.removeById(id);
         if (success) {
@@ -144,6 +150,7 @@ public class BizQuestionController {
     }
 
     @PostMapping("/import")
+    @Log(title = "题库管理", businessType = BusinessType.IMPORT) // 导入
     public Result importQuestions(@RequestParam("file") MultipartFile file) {
         try {
             questionService.importQuestions(file);
@@ -157,6 +164,7 @@ public class BizQuestionController {
 
     @PutMapping("/batch-update")
     @PreAuthorize("hasAuthority('sys:question:list')")
+    @Log(title = "题库管理", businessType = BusinessType.UPDATE) // 批量修改
     public Result batchUpdateQuestions(@RequestBody QuestionBatchUpdateDTO dto) {
         boolean success = questionService.batchUpdateQuestions(dto);
         if (success) {

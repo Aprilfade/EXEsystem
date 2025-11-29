@@ -2,11 +2,13 @@ package com.ice.exebackend.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.KnowledgePointStatsDTO;
 import com.ice.exebackend.entity.BizKnowledgePoint;
 import com.ice.exebackend.entity.BizQuestion;
 import com.ice.exebackend.entity.BizQuestionKnowledgePoint;
+import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.mapper.BizQuestionKnowledgePointMapper;
 import com.ice.exebackend.service.BizKnowledgePointService;
 import com.ice.exebackend.service.BizQuestionService;
@@ -42,6 +44,7 @@ public class BizKnowledgePointController {
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
     @PostMapping
+    @Log(title = "知识点管理", businessType = BusinessType.INSERT)
     public Result createKnowledgePoint(@RequestBody BizKnowledgePoint knowledgePoint) {
         boolean success = knowledgePointService.save(knowledgePoint);
         if (success) {
@@ -77,6 +80,7 @@ public class BizKnowledgePointController {
     }
 
     @PutMapping("/{id}")
+    @Log(title = "知识点管理", businessType = BusinessType.UPDATE)
     public Result updateKnowledgePoint(@PathVariable Long id, @RequestBody BizKnowledgePoint knowledgePoint) {
         knowledgePoint.setId(id);
         boolean success = knowledgePointService.updateById(knowledgePoint);
@@ -88,6 +92,7 @@ public class BizKnowledgePointController {
     }
 
     @DeleteMapping("/{id}")
+    @Log(title = "知识点管理", businessType = BusinessType.DELETE)
     public Result deleteKnowledgePoint(@PathVariable Long id) {
         QueryWrapper<BizQuestionKnowledgePoint> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("knowledge_point_id", id);
