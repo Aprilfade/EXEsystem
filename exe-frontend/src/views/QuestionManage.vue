@@ -5,7 +5,26 @@
         <h2>题库管理</h2>
         <p>覆盖多学科题型，支持丰富题目的创建与创作</p>
       </div>
-      <el-button type="primary" :icon="Plus" size="large" @click="handleCreate">新增试题</el-button>
+      <div class="header-actions">
+        <el-button
+            type="success"
+            :icon="MagicStick"
+            size="large"
+            @click="router.push('/text-to-quiz')"
+        >
+          AI 智能出题
+        </el-button>
+
+        <el-button
+            type="primary"
+            :icon="Plus"
+            size="large"
+            @click="handleCreate"
+            style="margin-left: 12px;"
+        >
+          新增试题
+        </el-button>
+      </div>
     </div>
 
     <el-row :gutter="20" class="stats-cards">
@@ -55,12 +74,6 @@
             <el-option v-for="sub in allSubjects" :key="sub.id" :label="`${sub.name} (${sub.grade})`" :value="sub.id" />
           </el-select>
           <el-select v-model="queryParams.grade" placeholder="按年级筛选" clearable @change="handleQuery" size="large" style="width: 140px;">
-            <el-option label="一年级" value="一年级" />
-            <el-option label="二年级" value="二年级" />
-            <el-option label="三年级" value="三年级" />
-            <el-option label="四年级" value="四年级" />
-            <el-option label="五年级" value="五年级" />
-            <el-option label="六年级" value="六年级" />
             <el-option label="七年级" value="七年级" />
             <el-option label="八年级" value="八年级" />
             <el-option label="九年级" value="九年级" />
@@ -183,11 +196,17 @@ import type { Subject } from '@/api/subject';
 import { getDashboardStats } from '@/api/dashboard';
 import { fetchKnowledgePointList } from '@/api/knowledgePoint';
 import type { KnowledgePoint } from '@/api/knowledgePoint';
-import { Plus, Edit, Delete, Grid, Menu, MoreFilled, View, Upload, Download } from '@element-plus/icons-vue';
+// 2. [修改] 在图标引入中添加 MagicStick
+import { Plus, Edit, Delete, Grid, Menu, MoreFilled, View, Upload, Download, MagicStick } from '@element-plus/icons-vue';
 import QuestionEditDialog from '@/components/question/QuestionEditDialog.vue';
 import QuestionPreviewDialog from '@/components/question/QuestionPreviewDialog.vue';
 import QuestionBatchEditDialog from '@/components/question/QuestionBatchEditDialog.vue';
 import type { UploadRequestOptions } from 'element-plus';
+// 1. [新增] 引入 useRouter
+import { useRouter } from 'vue-router';
+
+
+
 
 const questionList = ref<Question[]>([]);
 const allSubjects = ref<Subject[]>([]);
@@ -199,6 +218,9 @@ const editingId = ref<number | undefined>(undefined);
 const viewMode = ref<'list' | 'grid'>('list'); // 默认改为列表视图
 const selectedQuestionIds = ref<number[]>([]);
 const isBatchEditDialogVisible = ref(false);
+
+// 3. [新增] 初始化 router
+const router = useRouter();
 
 const queryParams = reactive<QuestionPageParams>({
   current: 1,

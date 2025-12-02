@@ -1,10 +1,13 @@
 package com.ice.exebackend.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ice.exebackend.dto.AiAnalysisReq;
+import com.ice.exebackend.dto.AiGeneratedQuestionDTO;
 import com.ice.exebackend.dto.AiGradingResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.core.type.TypeReference; // 导入 TypeReference
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -12,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -120,20 +124,26 @@ public class AiService {
         }
     }
 
-    // 【替换】原有的 cleanJsonString 方法，改用更稳健的正则查找逻辑
+    // 【修改】辅助方法：更智能地提取 JSON 部分
     private String extractJson(String content) {
-        if (content == null) return "{}";
+        if (content == null) return "[]";
 
-        // 寻找第一个 '{' 和最后一个 '}'
+        // 优先寻找数组标记
+        int firstBracket = content.indexOf("[");
+        int lastBracket = content.lastIndexOf("]");
+
+        // 如果找到了成对的 []，且它们之间包含了主要内容，则优先截取数组
+        if (firstBracket != -1 && lastBracket != -1 && firstBracket < lastBracket) {
+            return content.substring(firstBracket, lastBracket + 1);
+        }
+
+        // 如果没找到数组，寻找对象标记 {} (作为容错)
         int firstBrace = content.indexOf("{");
         int lastBrace = content.lastIndexOf("}");
-
         if (firstBrace != -1 && lastBrace != -1 && firstBrace < lastBrace) {
-            // 只截取 JSON 对象部分，忽略前后的 Markdown 或废话
             return content.substring(firstBrace, lastBrace + 1);
         }
 
-        // 如果找不到花括号，可能 AI 真的没返回 JSON，返回原串碰碰运气或返回空对象
         return content.trim();
     }
     // 在方法签名中增加 provider 参数
@@ -202,4 +212,111 @@ public class AiService {
         Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
         return (String) message.get("content");
     }
+    /**
+     * 【修改】AI 智能出题 - 增强了解析逻辑
+     */
+    public List<AiGeneratedQuestionDTO> generateQuestionsFromText(String apiKey, String providerKey, String text, int count, int type) throws Exception {
+        // 1. 确定提供商
+        AiProvider provider;
+        try {
+            provider = AiProvider.valueOf(providerKey != null ? providerKey.toUpperCase() : "DEEPSEEK");
+        } catch (Exception e) {
+            provider = AiProvider.DEEPSEEK;
+        }
+
+        // 2. 构建 Prompt
+        String typeDesc = switch (type) {
+            case 1 -> "单选题";
+            case 2 -> "多选题";
+            case 3 -> "填空题";
+            case 4 -> "判断题";
+            default -> "混合题型（包含单选、判断、填空）";
+        };
+
+        String systemPrompt = "你是一位专业的出题专家。请根据用户提供的文本内容，生成 " + count + " 道 " + typeDesc + "。\n" +
+                "请务必严格只返回一个合法的 JSON 数组，不要包含 Markdown 代码块标记（如 ```json），也不要包含其他多余文字。\n" +
+                "JSON 数组中每个对象的格式如下：\n" +
+                "{\n" +
+                "  \"content\": \"题目内容\",\n" +
+                "  \"questionType\": 1, // 1单选 2多选 3填空 4判断\n" +
+                "  \"options\": [{\"key\":\"A\",\"value\":\"选项1\"},{\"key\":\"B\",\"value\":\"选项2\"}], // 选择题必填，填空判断题可为空数组\n" +
+                "  \"answer\": \"A\", // 答案\n" +
+                "  \"description\": \"解析\"\n" +
+                "}";
+
+        String userPrompt = "文本内容如下：\n" + (text.length() > 3000 ? text.substring(0, 3000) : text);
+
+        // 3. 构建请求体
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("model", provider.model);
+        requestBody.put("messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userPrompt)
+        ));
+        requestBody.put("temperature", 0.5);
+        requestBody.put("stream", false);
+
+        String jsonBody = objectMapper.writeValueAsString(requestBody);
+
+        // 4. 发送请求
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(60)).build();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(provider.url))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
+                .timeout(Duration.ofMinutes(3))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("AI 请求失败: " + response.statusCode() + " " + response.body());
+        }
+
+        // 5. 解析响应
+        Map<String, Object> responseMap = objectMapper.readValue(response.body(), Map.class);
+        List<Map<String, Object>> choices = (List<Map<String, Object>>) responseMap.get("choices");
+        String content = (String) ((Map<String, Object>) choices.get(0).get("message")).get("content");
+
+        // 6. 【核心修改】增强清洗并解析 JSON
+        String cleanJson = extractJson(content);
+
+        try {
+            // 尝试直接解析为 List
+            return objectMapper.readValue(cleanJson, new TypeReference<List<AiGeneratedQuestionDTO>>() {});
+        } catch (Exception e) {
+            // 如果解析 List 失败，尝试解析为 JsonNode (处理 AI 返回对象的情况)
+            try {
+                JsonNode root = objectMapper.readTree(cleanJson);
+                // 情况 A: 返回的是个对象，但里面包了数组 (例如 {"questions": [...]})
+                if (root.isObject()) {
+                    // 遍历所有字段，找到第一个是数组的字段
+                    Iterator<String> fieldNames = root.fieldNames();
+                    while (fieldNames.hasNext()) {
+                        String fieldName = fieldNames.next();
+                        JsonNode field = root.get(fieldName);
+                        if (field.isArray()) {
+                            return objectMapper.convertValue(field, new TypeReference<List<AiGeneratedQuestionDTO>>() {});
+                        }
+                    }
+                    // 情况 B: 返回的是单个题目对象，不是数组
+                    // 尝试将整个对象转为单个 DTO 放入 List
+                    try {
+                        AiGeneratedQuestionDTO singleQuestion = objectMapper.convertValue(root, AiGeneratedQuestionDTO.class);
+                        if (singleQuestion.getContent() != null) {
+                            return List.of(singleQuestion);
+                        }
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ex) {
+                // ignore, throw original error below
+            }
+            // 如果补救措施也失败，抛出原始异常，并在日志中打印 AI 返回的内容以便调试
+            System.err.println("AI 返回的非标准 JSON 内容: " + cleanJson);
+            throw new RuntimeException("解析 AI 结果失败，请重试或检查文本内容。");
+        }
+    }
+
+
+
 }

@@ -45,6 +45,12 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('@/views/CourseManage.vue'),
                 meta: { permission: 'sys:course:edit', title: '课程管理' } // 记得去数据库加权限
             },
+            {
+                path: 'text-to-quiz',
+                name: 'TextToQuiz',
+                component: () => import('@/views/TextToQuiz.vue'),
+                meta: { permission: 'sys:question:list', title: '智能出题' }
+            },
         ]
     },
     // --- 学生端路由 ---

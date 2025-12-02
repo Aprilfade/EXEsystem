@@ -20,6 +20,12 @@ import org.springframework.web.multipart.MultipartFile;
 // 必须导入这两个，且不要导入 lombok.Log
 import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.enums.BusinessType;
+import com.ice.exebackend.service.AiService; // 导入 AiService
+import com.ice.exebackend.dto.AiGeneratedQuestionDTO; // 导入 DTO
+import jakarta.servlet.http.HttpServletRequest; // 导入 HttpServletRequest
+
+
+
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -43,6 +49,9 @@ public class BizQuestionController {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
+
+    @Autowired
+    private AiService aiService; // 注入 AI 服务
     // 3. 定义缓存键常量
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
@@ -172,5 +181,37 @@ public class BizQuestionController {
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
         }
         return success ? Result.suc("批量更新成功") : Result.fail("批量更新失败");
+    }
+    /**
+     * 【新增】AI 智能生成题目
+     */
+    @PostMapping("/ai-generate")
+    @Log(title = "题库管理", businessType = BusinessType.OTHER)
+    public Result generateQuestions(@RequestBody Map<String, Object> params, HttpServletRequest request) {
+        String text = (String) params.get("text");
+        Integer count = (Integer) params.get("count");
+        Integer type = (Integer) params.get("type"); // 1,2,3,4,0
+
+        // 从 Header 获取 Key (因为管理员/教师也需要在前端配置 Key，或者你可以写死系统 Key)
+        String apiKey = request.getHeader("X-Ai-Api-Key");
+        String provider = request.getHeader("X-Ai-Provider");
+
+        if (!StringUtils.hasText(apiKey)) {
+            // 如果 Header 没传，可以尝试从配置文件或数据库读取系统默认 Key
+            // 这里为了演示，直接报错
+            return Result.fail("请在设置中配置 AI API Key");
+        }
+
+        try {
+            List<AiGeneratedQuestionDTO> questions = aiService.generateQuestionsFromText(
+                    apiKey, provider, text,
+                    count == null ? 5 : count,
+                    type == null ? 1 : type
+            );
+            return Result.suc(questions);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.fail("生成失败: " + e.getMessage());
+        }
     }
 }

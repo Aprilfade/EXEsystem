@@ -1,5 +1,6 @@
 import request from '@/utils/request';
 import type { ApiResult } from './user';
+import { useStudentAuthStore } from '@/stores/studentAuth'; // 借用 store 获取 key，或者新建 admin store
 
 /**
  * 试题选项接口定义
@@ -123,5 +124,26 @@ export function batchUpdateQuestions(data: { questionIds: number[]; subjectId?: 
         url: '/api/v1/questions/batch-update',
         method: 'put',
         data
+    });
+}
+/**
+ * 【新增】AI 智能生成题目
+ */
+export function generateQuestionsFromText(data: { text: string; count: number; type: number }): Promise<ApiResult<any[]>> {
+    // 注意：这里需要获取管理员的 Key。
+    // 如果你在后台没有做管理员的 Key 配置界面，可以暂时借用 studentAuthStore 的逻辑，
+    // 或者在 localStorage 中单独存一个 'admin_ai_key'。
+    // 这里假设你用 localStorage 'student_ai_key' 或者你在页面上弹窗让老师输入。
+    const apiKey = localStorage.getItem('student_ai_key') || '';
+    const provider = localStorage.getItem('student_ai_provider') || 'DEEPSEEK';
+
+    return request({
+        url: '/api/v1/questions/ai-generate',
+        method: 'post',
+        data,
+        headers: {
+            'X-Ai-Api-Key': apiKey,
+            'X-Ai-Provider': provider
+        }
     });
 }
