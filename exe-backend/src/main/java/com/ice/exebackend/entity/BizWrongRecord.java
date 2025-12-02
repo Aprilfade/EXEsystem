@@ -20,6 +20,16 @@ public class BizWrongRecord {
     private String wrongReason;
     private Integer isMastered; // 【新增】字段，类型改为Integer
     private LocalDateTime createTime;
+    // 【新增】复习次数
+    private Integer reviewCount;
+    // 【新增】下次复习时间
+    private LocalDateTime nextReviewTime;
+
+    // 手动 Getter/Setter (保持你原有的风格)
+    public Integer getReviewCount() { return reviewCount; }
+    public void setReviewCount(Integer reviewCount) { this.reviewCount = reviewCount; }
+    public LocalDateTime getNextReviewTime() { return nextReviewTime; }
+    public void setNextReviewTime(LocalDateTime nextReviewTime) { this.nextReviewTime = nextReviewTime; }
 
     public Long getId(){
         return id;

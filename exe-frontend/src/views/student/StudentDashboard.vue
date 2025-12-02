@@ -130,6 +130,14 @@
               <span class="desc">温故知新 / 举一反三</span>
             </div>
 
+            <div class="access-item item-green" @click="navigateTo('/student/review')">
+              <div class="icon-wrapper">
+                <el-icon><AlarmClock /></el-icon>
+              </div>
+              <span class="title">智能复习</span>
+              <span class="desc">基于遗忘曲线 / 科学记忆</span>
+            </div>
+
             <div class="access-item item-purple" @click="navigateTo('/student/exams')">
               <div class="icon-wrapper">
                 <el-icon><DataLine /></el-icon>

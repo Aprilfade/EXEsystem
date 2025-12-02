@@ -115,6 +115,12 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('@/views/student/MyFavorites.vue'),
                 meta: { title: '我的收藏' }
             },
+            {
+                path: 'review',
+                name: 'StudentSmartReview',
+                component: () => import('@/views/student/SmartReview.vue'),
+                meta: { title: '智能复习' }
+            },
 
 
 

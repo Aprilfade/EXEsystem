@@ -482,3 +482,13 @@ CREATE TABLE `sys_oper_log` (
 
 ALTER TABLE `biz_exam_result`
 ADD COLUMN `result_details` LONGTEXT COMMENT '考试结果详情(存储AI评分和建议 JSON)';
+
+
+-- 为错题表增加复习计数字段，默认为 0
+ALTER TABLE biz_wrong_record ADD COLUMN review_count INT DEFAULT 0 COMMENT '已成功复习次数';
+
+-- 为错题表增加下次复习时间字段，默认为创建后的第2天
+ALTER TABLE biz_wrong_record ADD COLUMN next_review_time DATETIME DEFAULT NULL COMMENT '计划下次复习时间';
+
+-- 初始化旧数据：将所有旧错题的下次复习时间设为当前，以便立即复习
+UPDATE biz_wrong_record SET next_review_time = NOW() WHERE next_review_time IS NULL;

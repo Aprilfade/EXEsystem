@@ -62,7 +62,7 @@
             wr.wrong_answer AS wrongAnswer,
             wr.wrong_reason AS wrongReason,
             q.id as questionId,
-            q.content,
+            q.question_type AS questionType,  q.content,
             q.image_url AS imageUrl,
             q.options,
             q.answer,
