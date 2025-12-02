@@ -52,6 +52,8 @@ import { ref } from 'vue'; // 【修改】导入 ref
 import { computed } from 'vue';
 import { useStudentAuthStore } from '@/stores/studentAuth';
 import { School, ArrowDown } from '@element-plus/icons-vue';
+import { onMounted, onUnmounted } from 'vue';
+import { useNotificationSocketStore } from '@/stores/notificationSocket';
 // 【新增】导入我们新创建的弹窗组件
 import ProfileEditDialog from '@/components/student/ProfileEditDialog.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
@@ -80,6 +82,18 @@ const layoutStyle = computed(() => {
     };
   }
   return {}; // 没有设置则使用默认 CSS 中的背景
+});
+
+const socketStore = useNotificationSocketStore();
+
+onMounted(() => {
+  // 页面加载时尝试连接 WebSocket
+  socketStore.connect();
+});
+
+onUnmounted(() => {
+  // 页面卸载时断开
+  socketStore.disconnect();
 });
 </script>
 

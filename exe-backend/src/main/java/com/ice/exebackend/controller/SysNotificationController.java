@@ -6,12 +6,16 @@ import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.entity.SysNotification;
 import com.ice.exebackend.enums.BusinessType;
+import com.ice.exebackend.handler.NotificationWebSocketHandler;
 import com.ice.exebackend.service.SysNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate; // 1. 导入 RedisTemplate
 import org.springframework.web.bind.annotation.*;
+import com.ice.exebackend.handler.NotificationWebSocketHandler; // 导入 Handler
+import com.alibaba.fastjson.JSON; // 导入 JSON 工具 (确保 pom.xml 有 fastjson 或 jackson)
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
@@ -24,6 +28,10 @@ public class SysNotificationController {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
+    // 【新增】注入 WebSocket Handler
+    @Autowired
+    private NotificationWebSocketHandler webSocketHandler;
+
     // 3. 定义与 Service 中一致的缓存键常量
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
@@ -35,12 +43,21 @@ public class SysNotificationController {
         }
         boolean success = notificationService.save(notification);
         if (success) {
-            // 4. 当成功创建一个新通知后，删除缓存
-            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+            redisTemplate.delete("dashboard:stats:all");
+
+            // 【新增】如果是立即发布，则实时推送
+            if (Boolean.TRUE.equals(notification.getIsPublished())) {
+                // 构建推送消息 JSON
+                String msg = JSON.toJSONString(Map.of(
+                        "type", "SYSTEM_NOTICE",
+                        "title", notification.getTitle(),
+                        "content", notification.getContent()
+                ));
+                webSocketHandler.broadcast(msg);
+            }
         }
         return success ? Result.suc() : Result.fail();
     }
-
     @GetMapping
     public Result getNotificationList(@RequestParam(defaultValue = "1") int current,
                                       @RequestParam(defaultValue = "10") int size) {
@@ -59,7 +76,7 @@ public class SysNotificationController {
     public Result updateNotification(@PathVariable Long id, @RequestBody SysNotification notification) {
         notification.setId(id);
 
-        // 【修改】获取旧数据，用于判断状态变更
+        // 【修改】获取旧数据
         SysNotification oldNotification = notificationService.getById(id);
 
         // 场景1：从 "草稿" 或 "定时发布" 变为 "立即发布"
@@ -84,8 +101,18 @@ public class SysNotificationController {
 
         boolean success = notificationService.updateById(notification);
         if (success) {
-            // 4. 成功更新通知后，删除缓存
-            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+            redisTemplate.delete("dashboard:stats:all");
+
+            // 【新增】如果操作是“发布”，则实时推送
+            // 判断逻辑：只有当它被设置为已发布，且之前未发布，或者这次显式要求发布
+            if (Boolean.TRUE.equals(notification.getIsPublished())) {
+                String msg = JSON.toJSONString(Map.of(
+                        "type", "SYSTEM_NOTICE",
+                        "title", notification.getTitle(),
+                        "content", notification.getContent() // 注意：内容如果太长可以只发简略信息
+                ));
+                webSocketHandler.broadcast(msg);
+            }
         }
         return success ? Result.suc() : Result.fail();
     }

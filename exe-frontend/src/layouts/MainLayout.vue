@@ -75,21 +75,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import ProfileEditDialog from '@/components/user/ProfileEditDialog.vue';
+// 2. 引入图标和 WebSocket Store
 import {
   Management, House, Collection, Reading, Tickets, DocumentCopy, Avatar, CircleClose, DataLine,
   User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting, Fold, Expand, Document, Medal,
-  VideoPlay// 【修改】新增 Medal 图标
+  VideoPlay
 } from '@element-plus/icons-vue';
+import { useNotificationSocketStore } from '@/stores/notificationSocket';
 
 const isCollapsed = ref(false);
 
 const authStore = useAuthStore();
 const router = useRouter();
 const isProfileDialogVisible = ref(false);
+const socketStore = useNotificationSocketStore();
 
 const allMenus = [
   { path: '/home', name: '工作台', permission: 'sys:home', icon: House },
@@ -136,6 +139,17 @@ const handleCommand = (command: string) => {
     isProfileDialogVisible.value = true;
   }
 };
+// 4. 【核心逻辑】组件挂载时建立连接
+onMounted(() => {
+  // 管理员登录后，Token 存在于 authStore 中，
+  // socketStore.connect() 会自动读取 Token 并建立连接
+  socketStore.connect();
+});
+
+// 5. 【核心逻辑】组件卸载时断开连接
+onUnmounted(() => {
+  socketStore.disconnect();
+});
 </script>
 
 <style scoped>
