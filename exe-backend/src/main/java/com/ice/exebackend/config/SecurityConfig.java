@@ -84,7 +84,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/register",
                                 "/api/v1/student/auth/login",
-                                "/api/v1/files/**"
+                                "/api/v1/files/**",
+                                "/ws/**"
                         ).permitAll()
                         // 【核心修改1】将 /api/v1/files/** 的规则拆分
                         // GET请求（查看图片）对所有人开放

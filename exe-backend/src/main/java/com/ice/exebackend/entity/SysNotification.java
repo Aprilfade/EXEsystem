@@ -22,7 +22,13 @@ public class SysNotification {
     private LocalDateTime publishTime;
 
     private LocalDateTime createTime;
+    // 【新增】发布对象：ALL, STUDENT, TEACHER
+    private String targetType;
 
+
+    // ... 手动 Getter/Setter ...
+    public String getTargetType() { return targetType; }
+    public void setTargetType(String targetType) { this.targetType = targetType; }
     public  String getTitle(){
         return title;
     }

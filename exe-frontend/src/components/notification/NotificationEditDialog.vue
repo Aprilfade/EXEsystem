@@ -10,6 +10,15 @@
       <el-form-item label="通知标题" prop="title">
         <el-input v-model="form.title" placeholder="请输入通知标题" />
       </el-form-item>
+
+      <el-form-item label="发布对象" prop="targetType">
+        <el-radio-group v-model="form.targetType">
+          <el-radio label="ALL">全体成员</el-radio>
+          <el-radio label="STUDENT">仅学生</el-radio>
+          <el-radio label="TEACHER">仅教师/管理员</el-radio>
+        </el-radio-group>
+      </el-form-item>
+
       <el-form-item label="通知内容" prop="content">
         <el-input v-model="form.content" type="textarea" :rows="5" placeholder="请输入通知内容" />
       </el-form-item>
@@ -42,6 +51,7 @@ import { ElMessage } from 'element-plus';
 import { createNotification, updateNotification, fetchNotificationById } from '@/api/notification';
 import type { Notification } from '@/api/notification';
 
+
 const props = defineProps<{
   visible: boolean;
   notificationId?: number;
@@ -54,24 +64,34 @@ const form = ref<Partial<Notification>>({ title: '', content: '', isPublished: f
 
 const dialogTitle = computed(() => (props.notificationId ? '编辑通知' : '新增通知'));
 
+// 【修改】初始化 logic
 watch(() => props.visible, (isVisible) => {
   if (isVisible) {
     if (props.notificationId) {
       fetchNotificationById(props.notificationId).then(res => {
         form.value = res.data;
+        // 如果旧数据没有 targetType，默认为 ALL
+        if (!form.value.targetType) form.value.targetType = 'ALL';
       });
     } else {
-      // 【修改】初始化时添加 publishTime 字段
-      form.value = { title: '', content: '', isPublished: false, publishTime: undefined };
+      // 【修改】初始化增加 targetType
+      form.value = {
+        title: '',
+        content: '',
+        isPublished: false,
+        publishTime: undefined,
+        targetType: 'ALL' // 默认发给所有人
+      };
     }
   }
 });
 
+// 【修改】规则校验
 const rules = reactive<FormRules>({
   title: [{ required: true, message: '请输入通知标题', trigger: 'blur' }],
   content: [{ required: true, message: '请输入通知内容', trigger: 'blur' }],
+  targetType: [{ required: true, message: '请选择发布对象', trigger: 'change' }], // 新增校验
 });
-
 const handleClose = () => {
   emit('update:visible', false);
 };

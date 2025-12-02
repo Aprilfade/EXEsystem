@@ -8,6 +8,7 @@ export interface Notification {
     isPublished: boolean;
     publishTime?: string;
     createTime?: string;
+    targetType: string; // 【新增】
 }
 
 export interface NotificationPageParams {

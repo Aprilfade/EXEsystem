@@ -38,22 +38,28 @@ public class SysNotificationController {
     @PostMapping
     @Log(title = "通知管理", businessType = BusinessType.INSERT)
     public Result createNotification(@RequestBody SysNotification notification) {
-        if (notification.getIsPublished() != null && notification.getIsPublished()) {
+        // 设置默认目标为 ALL
+        if (notification.getTargetType() == null || notification.getTargetType().isEmpty()) {
+            notification.setTargetType("ALL");
+        }
+
+        if (Boolean.TRUE.equals(notification.getIsPublished())) {
             notification.setPublishTime(LocalDateTime.now());
         }
+
         boolean success = notificationService.save(notification);
         if (success) {
             redisTemplate.delete("dashboard:stats:all");
 
-            // 【新增】如果是立即发布，则实时推送
+            // 【修改】传递 targetType
             if (Boolean.TRUE.equals(notification.getIsPublished())) {
-                // 构建推送消息 JSON
                 String msg = JSON.toJSONString(Map.of(
                         "type", "SYSTEM_NOTICE",
                         "title", notification.getTitle(),
                         "content", notification.getContent()
                 ));
-                webSocketHandler.broadcast(msg);
+                // 传入目标类型
+                webSocketHandler.broadcast(msg, notification.getTargetType());
             }
         }
         return success ? Result.suc() : Result.fail();
@@ -76,42 +82,42 @@ public class SysNotificationController {
     public Result updateNotification(@PathVariable Long id, @RequestBody SysNotification notification) {
         notification.setId(id);
 
-        // 【修改】获取旧数据
-        SysNotification oldNotification = notificationService.getById(id);
+        // 确保 targetType 不为空
+        if (notification.getTargetType() == null && notification.getIsPublished() != null && notification.getIsPublished()) {
+            // 如果没传，可能是旧数据或只需要更新状态，建议先查一下旧数据的 targetType，或者默认为 ALL
+            SysNotification old = notificationService.getById(id);
+            if (old != null && old.getTargetType() != null) {
+                notification.setTargetType(old.getTargetType());
+            } else {
+                notification.setTargetType("ALL");
+            }
+        }
 
-        // 场景1：从 "草稿" 或 "定时发布" 变为 "立即发布"
+        // ... (原有的发布时间逻辑保持不变) ...
+        SysNotification oldNotification = notificationService.getById(id);
         if (oldNotification != null &&
                 (oldNotification.getIsPublished() == null || !oldNotification.getIsPublished()) &&
                 (notification.getIsPublished() != null && notification.getIsPublished())) {
-
             notification.setPublishTime(LocalDateTime.now());
-        }
-        // 场景2：从 "立即发布" 改为 "草稿" (清除定时时间)
-        else if (oldNotification != null &&
+        } else if (oldNotification != null &&
                 oldNotification.getIsPublished() &&
                 (notification.getIsPublished() != null && !notification.getIsPublished()) &&
-                notification.getPublishTime() == null) { // 并且前端没有指定新的定时时间
-
+                notification.getPublishTime() == null) {
             notification.setPublishTime(null);
         }
-        // 场景3：设置为 "草稿" (isPublished=false, publishTime=null)
-        // 场景4：设置为 "定时发布" (isPublished=false, publishTime=future)
-        // 场景5：从 "立即发布" 改为 "定时发布"
-        // 这三种情况，我们都信任前端传来的 notification 对象的 (isPublished 和 publishTime) 值，无需额外处理。
 
         boolean success = notificationService.updateById(notification);
         if (success) {
             redisTemplate.delete("dashboard:stats:all");
 
-            // 【新增】如果操作是“发布”，则实时推送
-            // 判断逻辑：只有当它被设置为已发布，且之前未发布，或者这次显式要求发布
+            // 【修改】传递 targetType
             if (Boolean.TRUE.equals(notification.getIsPublished())) {
                 String msg = JSON.toJSONString(Map.of(
                         "type", "SYSTEM_NOTICE",
                         "title", notification.getTitle(),
-                        "content", notification.getContent() // 注意：内容如果太长可以只发简略信息
+                        "content", notification.getContent()
                 ));
-                webSocketHandler.broadcast(msg);
+                webSocketHandler.broadcast(msg, notification.getTargetType());
             }
         }
         return success ? Result.suc() : Result.fail();

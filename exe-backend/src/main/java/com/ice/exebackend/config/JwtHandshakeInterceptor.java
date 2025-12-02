@@ -10,11 +10,9 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 
+import java.util.List;
 import java.util.Map;
 
-/**
- * WebSocket 握手拦截器：用于验证 Token
- */
 @Component
 public class JwtHandshakeInterceptor implements HandshakeInterceptor {
 
@@ -26,15 +24,31 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
                                    WebSocketHandler wsHandler, Map<String, Object> attributes) {
         if (request instanceof ServletServerHttpRequest) {
             ServletServerHttpRequest servletRequest = (ServletServerHttpRequest) request;
-            // 从 URL 参数中获取 token (例如: ws://localhost:8080/ws/notify?token=xxxxx)
             String token = servletRequest.getServletRequest().getParameter("token");
 
             if (StringUtils.hasText(token)) {
                 try {
                     String username = jwtUtil.getUsernameFromToken(token);
                     if (username != null) {
-                        // 将用户信息放入 Session 属性中，供 Handler 使用
                         attributes.put("username", username);
+
+                        // 【新增】解析用户角色类型
+                        // 默认为 TEACHER，如果检测到 ROLE_STUDENT 则设为 STUDENT
+                        String userType = "TEACHER";
+
+                        // 获取权限列表
+                        List<Map<String, String>> authorities = jwtUtil.getClaimFromToken(token, claims -> claims.get("authorities", List.class));
+
+                        if (authorities != null) {
+                            for (Map<String, String> auth : authorities) {
+                                if ("ROLE_STUDENT".equals(auth.get("authority"))) {
+                                    userType = "STUDENT";
+                                    break;
+                                }
+                            }
+                        }
+
+                        attributes.put("userType", userType); // 存入 session 属性
                         return true;
                     }
                 } catch (Exception e) {
