@@ -19,7 +19,12 @@ public class BizExamResult {
     private String userAnswers; // JSON String
     private LocalDateTime createTime;
     private Integer violationCount; // 【新增】
+    // 【新增】存储 AI 分析结果的 JSON 字符串
+    private String resultDetails;
 
+    // === 手动添加 Getter 和 Setter ===
+    public String getResultDetails() { return resultDetails; }
+    public void setResultDetails(String resultDetails) { this.resultDetails = resultDetails; }
     // 【新增】Getter 和 Setter
     public Integer getViolationCount() { return violationCount; }
     public void setViolationCount(Integer violationCount) { this.violationCount = violationCount; }

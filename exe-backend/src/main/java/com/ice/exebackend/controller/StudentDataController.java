@@ -451,13 +451,13 @@ public class StudentDataController {
         return Result.suc(Map.of("paper", paperDTO));
     }
     /**
-     * 3. 提交试卷 (集成 AI 批改主观题)
+     * 3. 提交试卷 (集成 AI 批改主观题并持久化存储)
      */
     @PostMapping("/exam/submit")
     @PreAuthorize("hasAuthority('ROLE_STUDENT')")
     public Result submitExam(@RequestBody PracticeSubmissionDTO submission,
                              @RequestParam Long paperId,
-                             HttpServletRequest request, // 【新增】获取请求头
+                             HttpServletRequest request,
                              Authentication authentication) {
         String studentNo = authentication.getName();
         BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
@@ -474,11 +474,15 @@ public class StudentDataController {
         int studentScore = 0;
         List<PracticeResultDTO.AnswerResult> results = new ArrayList<>();
 
+        // 【新增】用于收集每道题的 AI 分析结果，Key 是题目 ID
+        // 结构: QuestionID -> { "score": 5, "feedback": "...", "reason": "..." }
+        Map<Long, Map<String, Object>> analysisResultMap = new java.util.HashMap<>();
+
         // === 区分试卷类型 ===
         if (paper.getPaperType() != null && paper.getPaperType() == 2) {
             // --- 图片试卷处理逻辑 (保持不变) ---
             totalScore = paper.getTotalScore() != null ? paper.getTotalScore() : 100;
-            studentScore = 0; // 图片试卷暂无法自动判分，需人工或后续处理
+            studentScore = 0;
         } else {
             // --- 传统试卷处理逻辑 ---
 
@@ -519,22 +523,29 @@ public class StudentDataController {
                                             );
 
                                             awardedScore = aiResult.getScore();
-                                            // 简单判定：得分超过满分60%算“正确”（用于统计正确率，可根据需求调整）
+                                            // 简单判定：得分超过满分60%算“正确”
                                             isCorrect = awardedScore >= (pq.getScore() * 0.6);
 
-                                            // 【重要】将 AI 评语追加到题目解析中，让学生在结果页能看到
-                                            String feedback = "\n\n【AI 智能点评】\n" + aiResult.getFeedback();
+                                            String feedback = aiResult.getFeedback();
                                             if (aiResult.getReason() != null) {
                                                 feedback += "\n(扣分原因: " + aiResult.getReason() + ")";
                                             }
-                                            q.setDescription((q.getDescription() == null ? "" : q.getDescription()) + feedback);
+
+                                            // 1. 临时修改用于本次立即返回给前端展示
+                                            String aiComment = "\n\n【AI 智能点评】\n" + feedback;
+                                            q.setDescription((q.getDescription() == null ? "" : q.getDescription()) + aiComment);
+
+                                            // 2. 【关键】保存到 Map 中以便存入数据库
+                                            Map<String, Object> detail = new java.util.HashMap<>();
+                                            detail.put("score", awardedScore);
+                                            detail.put("feedback", feedback);
+                                            analysisResultMap.put(q.getId(), detail);
 
                                         } catch (Exception e) {
                                             logger.error("AI 批改失败", e);
-                                            // AI 失败兜底策略：给 0 分或保持待批改状态
                                             awardedScore = 0;
                                             isCorrect = false;
-                                            q.setDescription((q.getDescription() == null ? "" : q.getDescription()) + "\n\n(AI 服务暂时不可用，请等待人工批阅)");
+                                            q.setDescription((q.getDescription() == null ? "" : q.getDescription()) + "\n\n(AI 服务连接超时或异常，未能完成批改)");
                                         }
                                     } else {
                                         // 未配置 Key 或未作答，给 0 分
@@ -544,13 +555,11 @@ public class StudentDataController {
                                 }
                                 // === 客观题判分逻辑 (保持不变) ===
                                 else if (q.getQuestionType() == 2) {
-                                    // 多选题：排序后比对
                                     String sortedUser = sortString(userAns);
                                     String sortedDb = sortString(q.getAnswer());
                                     isCorrect = sortedUser.equalsIgnoreCase(sortedDb);
                                     if(isCorrect) awardedScore = pq.getScore();
                                 } else {
-                                    // 单选、判断、填空
                                     isCorrect = userAns.trim().equalsIgnoreCase(q.getAnswer().trim());
                                     if(isCorrect) awardedScore = pq.getScore();
                                 }
@@ -564,7 +573,6 @@ public class StudentDataController {
                             res.setQuestion(q); // 此时 q.description 可能已包含 AI 评语
                             res.setUserAnswer(userAns);
                             res.setCorrect(isCorrect);
-                            // 【新增】设置单题得分
                             res.setEarnedScore(awardedScore);
                             results.add(res);
                         }
@@ -573,7 +581,7 @@ public class StudentDataController {
             }
         }
 
-        // --- 保存考试结果 (保持不变) ---
+        // --- 保存考试结果 ---
         BizExamResult examResult = new BizExamResult();
         examResult.setStudentId(student.getId());
         examResult.setPaperId(paperId);
@@ -583,11 +591,17 @@ public class StudentDataController {
         examResult.setViolationCount(submission.getViolationCount() != null ? submission.getViolationCount() : 0);
 
         try {
+            // 保存用户答案
             Map<Long, String> finalAnswers = submission.getAnswers() != null ? submission.getAnswers() : Map.of();
-            String jsonAnswers = objectMapper.writeValueAsString(finalAnswers);
-            examResult.setUserAnswers(jsonAnswers);
+            examResult.setUserAnswers(objectMapper.writeValueAsString(finalAnswers));
+
+            // 【新增】保存 AI 分析结果详情 (如果有数据)
+            if (!analysisResultMap.isEmpty()) {
+                // 将分析结果 Map 序列化为 JSON 字符串存入数据库
+                examResult.setResultDetails(objectMapper.writeValueAsString(analysisResultMap));
+            }
         } catch (JsonProcessingException e) {
-            logger.error("答案序列化失败", e);
+            logger.error("JSON序列化失败", e);
             examResult.setUserAnswers("{}");
         }
 
@@ -605,7 +619,6 @@ public class StudentDataController {
         student.setPoints((student.getPoints() == null ? 0 : student.getPoints()) + 10);
         studentService.updateById(student);
 
-        // 返回结果
         return Result.suc(Map.of(
                 "score", studentScore,
                 "totalScore", totalScore,
@@ -633,7 +646,9 @@ public class StudentDataController {
         return Result.suc(page.getRecords(), page.getTotal());
     }
 
-    // 4. 【新增】 获取某次考试的详情 (包含试卷结构和当时的用户答案)
+    /**
+     * 4. 获取某次考试的详情 (包含试卷结构、当时的用户答案以及AI点评)
+     */
     @GetMapping("/history/{resultId}")
     @PreAuthorize("hasAuthority('ROLE_STUDENT')")
     public Result getExamResultDetail(@PathVariable Long resultId, Authentication authentication) {
@@ -645,12 +660,8 @@ public class StudentDataController {
             return Result.fail("记录不存在或无权访问");
         }
 
-        // 获取试卷原始结构
-        // 注意：如果试卷被删除了，这里可能会为空。实际生产中应该快照存储试卷内容。
-        // 这里为了简化，我们假设试卷结构还在。
         com.ice.exebackend.dto.PaperDTO paper = paperService.getPaperWithQuestionsById(result.getPaperId());
 
-        // 填充题目的详细信息(包括答案和解析，因为这是查看结果，可以看答案)
         if (paper != null && paper.getGroups() != null) {
             List<Long> allQIds = paper.getGroups().stream()
                     .flatMap(g -> g.getQuestions().stream())
@@ -661,7 +672,38 @@ public class StudentDataController {
                 Map<Long, BizQuestion> qMap = questionService.listByIds(allQIds).stream()
                         .collect(Collectors.toMap(BizQuestion::getId, q -> q));
 
-                // 将题目详情放入一个 map 返回，前端根据ID匹配
+                // === 【核心修改】读取并注入 AI 历史评语 ===
+                // 检查数据库中是否有存储 AI 分析详情
+                if (StringUtils.hasText(result.getResultDetails())) {
+                    try {
+                        // 解析存储的 JSON: { "101": { "score": 5, "feedback": "做得好..." }, ... }
+                        Map<String, Map<String, Object>> detailsMap = objectMapper.readValue(
+                                result.getResultDetails(), Map.class);
+
+                        // 遍历当前试卷的题目
+                        for (BizQuestion q : qMap.values()) {
+                            // JSON key 默认为 String 类型，需要将 Long ID 转为 String 匹配
+                            String qIdStr = q.getId().toString();
+
+                            if (detailsMap.containsKey(qIdStr)) {
+                                Map<String, Object> detail = detailsMap.get(qIdStr);
+                                String feedback = (String) detail.get("feedback");
+
+                                // 如果有评语，将其拼接到原解析后面
+                                if (StringUtils.hasText(feedback)) {
+                                    String originalDesc = q.getDescription() == null ? "暂无标准解析" : q.getDescription();
+                                    // 拼接 AI 点评
+                                    q.setDescription(originalDesc + "\n\n【AI 智能点评】\n" + feedback);
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.error("解析历史 AI 评语失败", e);
+                    }
+                }
+                // ==========================================
+
+                // 将处理过（注入了AI点评）的题目详情返回给前端
                 return Result.suc(Map.of(
                         "examResult", result,
                         "paper", paper,

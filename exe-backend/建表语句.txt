@@ -480,3 +480,5 @@ CREATE TABLE `sys_oper_log` (
 
 
 
+ALTER TABLE `biz_exam_result`
+ADD COLUMN `result_details` LONGTEXT COMMENT '考试结果详情(存储AI评分和建议 JSON)';

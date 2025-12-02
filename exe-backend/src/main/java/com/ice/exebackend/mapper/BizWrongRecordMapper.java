@@ -20,11 +20,6 @@ public interface BizWrongRecordMapper extends BaseMapper<BizWrongRecord> {
 
     List<PaperStatsVO> countErrorsByPaper(@Param("paperId") Long paperId);
 
-    // 【修改】查询字段补全，匹配新的 DTO 结构
-    @Select("SELECT wr.id, wr.wrong_answer, wr.wrong_reason, " +
-            "q.id as questionId, q.content, q.image_url, q.options, q.answer, q.answer_image_url, q.description " +
-            "FROM biz_wrong_record wr " +
-            "JOIN biz_question q ON wr.question_id = q.id " +
-            "WHERE wr.id = #{recordId} AND wr.student_id = #{studentId}")
+
     WrongRecordVO selectWrongRecordDetail(@Param("recordId") Long recordId, @Param("studentId") Long studentId);
 }

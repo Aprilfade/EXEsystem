@@ -98,37 +98,44 @@ public class AiService {
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
         if (response.statusCode() != 200) {
-            // 降级处理：如果 AI 挂了，给个 0 分或满分的一半? 这里抛出异常让上层处理
             throw new RuntimeException("AI 批改失败: " + response.statusCode());
         }
 
-        // 5. 解析响应
+        // 5. 解析 AI 响应外层
         Map<String, Object> responseMap = objectMapper.readValue(response.body(), Map.class);
         List<Map<String, Object>> choices = (List<Map<String, Object>>) responseMap.get("choices");
         Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
         String content = (String) message.get("content");
 
-        // 6. 清洗并解析 AI 返回的 JSON (防止 AI 有时会加 Markdown 代码块)
-        String jsonString = cleanJsonString(content);
+        // 6. 【核心修改】使用新的提取方法清洗内容
+        String jsonString = extractJson(content);
 
-        return objectMapper.readValue(jsonString, AiGradingResult.class);
+        // 7. 解析清洗后的 JSON
+        try {
+            return objectMapper.readValue(jsonString, AiGradingResult.class);
+        } catch (Exception e) {
+            // 如果解析依然失败，打印原始返回内容以便调试
+            System.err.println("AI 返回的原始内容无法解析: " + content);
+            throw e; // 继续抛出，让 Controller 捕获
+        }
     }
 
-    // 辅助方法：去除 Markdown 代码块标记
-    private String cleanJsonString(String input) {
-        if (input == null) return "{}";
-        String cleaned = input.trim();
-        if (cleaned.startsWith("```json")) {
-            cleaned = cleaned.substring(7);
-        } else if (cleaned.startsWith("```")) {
-            cleaned = cleaned.substring(3);
-        }
-        if (cleaned.endsWith("```")) {
-            cleaned = cleaned.substring(0, cleaned.length() - 3);
-        }
-        return cleaned.trim();
-    }
+    // 【替换】原有的 cleanJsonString 方法，改用更稳健的正则查找逻辑
+    private String extractJson(String content) {
+        if (content == null) return "{}";
 
+        // 寻找第一个 '{' 和最后一个 '}'
+        int firstBrace = content.indexOf("{");
+        int lastBrace = content.lastIndexOf("}");
+
+        if (firstBrace != -1 && lastBrace != -1 && firstBrace < lastBrace) {
+            // 只截取 JSON 对象部分，忽略前后的 Markdown 或废话
+            return content.substring(firstBrace, lastBrace + 1);
+        }
+
+        // 如果找不到花括号，可能 AI 真的没返回 JSON，返回原串碰碰运气或返回空对象
+        return content.trim();
+    }
     // 在方法签名中增加 provider 参数
     @SuppressWarnings("unchecked")
     public String analyzeWrongQuestion(String apiKey, String providerKey, AiAnalysisReq req) throws Exception {
@@ -169,13 +176,14 @@ public class AiService {
 
         // 4. 发起 HTTP 请求
         HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(15)) // 放宽一点超时时间
+                .connectTimeout(Duration.ofSeconds(60)) // 放宽一点超时时间
                 .build();
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(provider.url)) // 使用动态 URL
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + apiKey)
+                .timeout(Duration.ofMinutes(4)) // 【新增】显式设置读取超时为 3分钟，防止 AI 生成过长导致挂起
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build();
 
