@@ -15,6 +15,8 @@ public class WrongRecordVO {
     // 题目信息 (列表用)
     private Long questionId;
     private String questionContent;
+    // 【关键修复】新增题型字段
+    private Integer questionType;
 
     // 试卷信息
     private Long paperId;
@@ -31,6 +33,11 @@ public class WrongRecordVO {
     private String answer;          // 正确答案
     private String answerImageUrl;  // 答案图片
     private String description;     // 解析
+
+
+    // === 手动添加 Getter/Setter ===
+    public Integer getQuestionType() { return questionType; }
+    public void setQuestionType(Integer questionType) { this.questionType = questionType; }
 
     // === 手动添加 Getter/Setter (如果 lombok 不生效) ===
     public String getWrongAnswer() { return wrongAnswer; }

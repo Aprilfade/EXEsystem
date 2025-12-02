@@ -136,6 +136,8 @@ public class BizWrongRecordServiceImpl extends ServiceImpl<BizWrongRecordMapper,
                 // 我们假设前端会单独拉取题目详情，或者我们扩展 WrongRecordVO 增加 questionType
                 // 这里简单起见，我们把 questionType 拼在 content 里或者扩展 VO
                 // *建议在 WrongRecordVO 中增加 questionType 字段，这里暂略*
+                // 【关键修复】填充题型字段
+                vo.setQuestionType(q.getQuestionType());
                 voList.add(vo);
             }
         }

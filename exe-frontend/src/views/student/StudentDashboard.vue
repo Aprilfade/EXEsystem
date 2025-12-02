@@ -198,7 +198,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStudentAuthStore } from '@/stores/studentAuth';
 // 【修复】添加 Star 图标导入
-import { Tickets, Select, CloseBold, Clock, EditPen, Memo, DataLine, Finished, Star } from '@element-plus/icons-vue';
+import { Tickets, Select, CloseBold, Clock, EditPen, Memo, DataLine, Finished, Star , AlarmClock} from '@element-plus/icons-vue';
 import { fetchStudentDashboardStats, type StudentDashboardStats } from '@/api/studentAuth';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
