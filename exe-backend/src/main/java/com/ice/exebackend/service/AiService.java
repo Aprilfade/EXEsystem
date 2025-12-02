@@ -213,10 +213,10 @@ public class AiService {
         return (String) message.get("content");
     }
     /**
-     * 【修改】AI 智能出题 - 增强了解析逻辑
+     * 【修改】AI 智能出题 - 支持主观题
      */
     public List<AiGeneratedQuestionDTO> generateQuestionsFromText(String apiKey, String providerKey, String text, int count, int type) throws Exception {
-        // 1. 确定提供商
+        // 1. 确定提供商 (保持不变)
         AiProvider provider;
         try {
             provider = AiProvider.valueOf(providerKey != null ? providerKey.toUpperCase() : "DEEPSEEK");
@@ -224,24 +224,26 @@ public class AiService {
             provider = AiProvider.DEEPSEEK;
         }
 
-        // 2. 构建 Prompt
+        // 2. 【修改点 1】构建 Prompt，增加主观题类型说明
         String typeDesc = switch (type) {
             case 1 -> "单选题";
             case 2 -> "多选题";
             case 3 -> "填空题";
             case 4 -> "判断题";
-            default -> "混合题型（包含单选、判断、填空）";
+            case 5 -> "主观题"; // 新增
+            default -> "混合题型（包含单选、多选、填空、判断、主观题）"; // 修改描述
         };
 
+        // 【修改点 2】更新 JSON 结构说明，告知 AI type=5 的规则
         String systemPrompt = "你是一位专业的出题专家。请根据用户提供的文本内容，生成 " + count + " 道 " + typeDesc + "。\n" +
                 "请务必严格只返回一个合法的 JSON 数组，不要包含 Markdown 代码块标记（如 ```json），也不要包含其他多余文字。\n" +
                 "JSON 数组中每个对象的格式如下：\n" +
                 "{\n" +
                 "  \"content\": \"题目内容\",\n" +
-                "  \"questionType\": 1, // 1单选 2多选 3填空 4判断\n" +
-                "  \"options\": [{\"key\":\"A\",\"value\":\"选项1\"},{\"key\":\"B\",\"value\":\"选项2\"}], // 选择题必填，填空判断题可为空数组\n" +
-                "  \"answer\": \"A\", // 答案\n" +
-                "  \"description\": \"解析\"\n" +
+                "  \"questionType\": 1, // 1单选 2多选 3填空 4判断 5主观题\n" +
+                "  \"options\": [{\"key\":\"A\",\"value\":\"选项1\"},{\"key\":\"B\",\"value\":\"选项2\"}], // 选择题必填，填空/判断/主观题可为空数组\n" +
+                "  \"answer\": \"参考答案\", // 答案\n" +
+                "  \"description\": \"解析或评分要点\"\n" +
                 "}";
 
         String userPrompt = "文本内容如下：\n" + (text.length() > 3000 ? text.substring(0, 3000) : text);

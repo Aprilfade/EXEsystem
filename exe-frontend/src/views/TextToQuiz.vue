@@ -39,6 +39,7 @@
                     <el-option label="多选题" :value="2" />
                     <el-option label="填空题" :value="3" />
                     <el-option label="判断题" :value="4" />
+                    <el-option label="主观题" :value="5" />
                     <el-option label="混合生成" :value="0" />
                   </el-select>
                 </el-form-item>
@@ -82,8 +83,23 @@
 
               <div class="answer-row">
                 <span class="label">答案：</span>
-                <el-input v-model="q.answer" size="small" style="width: 150px;" />
+
+                <el-input
+                    v-if="q.questionType === 5"
+                    v-model="q.answer"
+                    type="textarea"
+                    :rows="2"
+                    size="small"
+                    placeholder="参考答案"
+                />
+                <el-input
+                    v-else
+                    v-model="q.answer"
+                    size="small"
+                    style="width: 150px;"
+                />
               </div>
+
               <div class="desc-row">
                 <span class="label">解析：</span>
                 <el-input v-model="q.description" type="textarea" :rows="1" size="small" />
@@ -184,10 +200,10 @@ const removeQuestion = (index: number) => {
 };
 
 const getTypeName = (type: number) => {
-  const map: any = { 1: '单选题', 2: '多选题', 3: '填空题', 4: '判断题' };
+  // 【修改】增加 5: '主观题'
+  const map: any = { 1: '单选题', 2: '多选题', 3: '填空题', 4: '判断题', 5: '主观题' };
   return map[type] || '未知';
 };
-
 const openSaveDialog = async () => {
   // 加载科目
   if (allSubjects.value.length === 0) {
