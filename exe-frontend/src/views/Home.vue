@@ -156,6 +156,9 @@ let kpChartInstance: echarts.ECharts | null = null;
 let subjectStatsChartInstance: echarts.ECharts | null = null; // 【新增】图表实例变量
 let resizeObserver: ResizeObserver | null = null;
 
+// 【修改 1】定义一个定时器变量
+let onlineCountTimer: any = null;
+
 const isPreviewVisible = ref(false);
 const selectedNotification = ref<Notification | undefined>(undefined);
 const stats = ref<DashboardStats>({
@@ -299,26 +302,34 @@ onMounted(async () => {
     stagger: 0.1, ease: "back.out(1.7)",
   });
 
-  // 【核心修改】直接调用 fetchData 即可
   await fetchData();
 
   if (kpAndQuestionChart.value) {
     resizeObserver = new ResizeObserver(() => {
       kpChartInstance?.resize();
       subjectStatsChartInstance?.resize();
-      // 【核心修改】让新图表也支持响应式缩放
       wrongStatsChartInstance?.resize();
     });
     resizeObserver.observe(kpAndQuestionChart.value);
   }
-  // 【新增】组件加载时主动拉取一次在线人数（防止 WebSocket 连接延迟导致显示0）
-  try {
-    const res = await fetchOnlineStudentCount();
-    if (res.code === 200) {
-      socketStore.onlineStudentCount = res.data.count;
-    }
-  } catch (e) {
-    console.error("获取在线人数失败", e);
+
+  // 【修改 3】立即获取一次，并启动定时轮询（每 5 秒刷新一次）
+  await updateOnlineCount();
+  onlineCountTimer = setInterval(updateOnlineCount, 5000);
+});
+
+onUnmounted(() => {
+  kpChartInstance?.dispose();
+  subjectStatsChartInstance?.dispose();
+  wrongStatsChartInstance?.dispose();
+  if (kpAndQuestionChart.value && resizeObserver) {
+    resizeObserver.unobserve(kpAndQuestionChart.value);
+  }
+
+  // 【修改 4】组件卸载时清除定时器
+  if (onlineCountTimer) {
+    clearInterval(onlineCountTimer);
+    onlineCountTimer = null;
   }
 });
 
@@ -326,10 +337,15 @@ onMounted(async () => {
 onUnmounted(() => {
   kpChartInstance?.dispose();
   subjectStatsChartInstance?.dispose();
-  // 【核心修改】在组件卸载时销毁新图表的实例
   wrongStatsChartInstance?.dispose();
   if (kpAndQuestionChart.value && resizeObserver) {
     resizeObserver.unobserve(kpAndQuestionChart.value);
+  }
+
+  // 【修改 4】组件卸载时清除定时器
+  if (onlineCountTimer) {
+    clearInterval(onlineCountTimer);
+    onlineCountTimer = null;
   }
 });
 
@@ -341,6 +357,17 @@ const handleNotificationClick = async (id: number) => {
       isPreviewVisible.value = true;
     }
   } catch (error) { /* silent fail */ }
+};
+// 【修改 2】封装更新在线人数的方法
+const updateOnlineCount = async () => {
+  try {
+    const res = await fetchOnlineStudentCount();
+    if (res.code === 200) {
+      socketStore.onlineStudentCount = res.data.count;
+    }
+  } catch (e) {
+    console.error("获取在线人数失败", e);
+  }
 };
 </script>
 

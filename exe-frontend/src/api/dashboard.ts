@@ -33,10 +33,14 @@ export function getDashboardStats(): Promise<ApiResult<DashboardStats>> {
         method: 'get'
     });
 }
-// 【新增】获取在线学生人数
+// 【修改】获取在线学生人数
+// 增加 params: { _t: Date.now() } 以防止浏览器缓存 GET 请求
 export function fetchOnlineStudentCount(): Promise<ApiResult<{ count: number }>> {
     return request({
         url: '/api/v1/dashboard/online-students',
-        method: 'get'
+        method: 'get',
+        params: {
+            _t: new Date().getTime() // 添加时间戳参数，确保每次 URL 都不一样
+        }
     });
 }
