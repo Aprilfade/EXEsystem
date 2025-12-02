@@ -10,6 +10,8 @@ export const useNotificationSocketStore = defineStore('notificationSocket', {
         reconnectAttempts: 0,
         // 添加心跳检测定时器
         heartbeatTimer: null as number | null,
+        // 【新增】存储在线学生人数
+        onlineStudentCount: 0,
     }),
     actions: {
         connect() {
@@ -101,6 +103,10 @@ export const useNotificationSocketStore = defineStore('notificationSocket', {
                     // 点击通知跳转（可选优化）
                     // onClick: () => { router.push('/notifications') }
                 });
+            }
+            // 【新增】处理在线人数更新消息
+            else if (data.type === 'ONLINE_COUNT') {
+                this.onlineStudentCount = data.count;
             }
         }
     }

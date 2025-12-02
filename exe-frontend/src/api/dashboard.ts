@@ -33,3 +33,10 @@ export function getDashboardStats(): Promise<ApiResult<DashboardStats>> {
         method: 'get'
     });
 }
+// 【新增】获取在线学生人数
+export function fetchOnlineStudentCount(): Promise<ApiResult<{ count: number }>> {
+    return request({
+        url: '/api/v1/dashboard/online-students',
+        method: 'get'
+    });
+}

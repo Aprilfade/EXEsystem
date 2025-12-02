@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.ice.exebackend.handler.NotificationWebSocketHandler; // 导入 Handler
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/dashboard")
@@ -21,6 +24,10 @@ public class DashboardController {
 
     @Autowired
     private DashboardService dashboardService;
+
+    // 【新增】注入 WebSocket Handler 以获取实时数据
+    @Autowired
+    private NotificationWebSocketHandler webSocketHandler;
 
     @GetMapping("/stats")
     @PreAuthorize("hasAuthority('sys:home')")
@@ -36,4 +43,14 @@ public class DashboardController {
             return Result.fail("服务器内部错误，详情请查看后端日志。");
         }
     }
+    /**
+     * 【新增】获取当前实时在线学生人数
+     */
+    @GetMapping("/online-students")
+    @PreAuthorize("hasAuthority('sys:home')")
+    public Result getOnlineStudentCount() {
+        long count = webSocketHandler.getOnlineStudentCount();
+        return Result.suc(Map.of("count", count));
+    }
+
 }

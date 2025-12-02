@@ -2,9 +2,20 @@
   <div class="dashboard-container">
     <el-row :gutter="20" class="stat-row">
       <el-col :span="24 / 5" class="stat-card-item">
+        <el-card shadow="hover" class="online-card">
+          <div class="stat-card-v2">
+            <span style="color: #67C23A; display: flex; align-items: center; gap: 5px;">
+              <span class="live-dot"></span> 在线学生
+            </span>
+            <strong>{{ onlineCount }}</strong>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="4" class="stat-card-item">
         <el-card shadow="hover">
           <div class="stat-card-v2">
-            <span>学生数量</span>
+            <span>学生总数</span>
             <strong>{{ stats.studentCount }}</strong>
           </div>
         </el-card>
@@ -121,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted , computed } from 'vue';
 import * as echarts from 'echarts';
 import { ElMessage } from 'element-plus';
 import { getDashboardStats, type DashboardStats, type ChartData } from '@/api/dashboard';
@@ -129,7 +140,13 @@ import NotificationPreviewDialog from "@/components/notification/NotificationPre
 import { fetchNotificationById, type Notification } from '@/api/notification';
 import { gsap } from "gsap";
 import { Warning } from '@element-plus/icons-vue';
+import { useNotificationSocketStore } from '@/stores/notificationSocket'; // 引入 Store
+import { fetchOnlineStudentCount } from '@/api/dashboard'; // 引入新 API
 
+
+const socketStore = useNotificationSocketStore();
+// 计算属性直接绑定 Store 中的数据，实现 WebSocket 实时更新
+const onlineCount = computed(() => socketStore.onlineStudentCount);
 const kpAndQuestionChart = ref<HTMLElement | null>(null);
 const subjectStatsChart = ref<HTMLElement | null>(null); // 【新增】为科目统计图表创建 ref
 const wrongStatsChart = ref<HTMLElement | null>(null);
@@ -293,6 +310,15 @@ onMounted(async () => {
       wrongStatsChartInstance?.resize();
     });
     resizeObserver.observe(kpAndQuestionChart.value);
+  }
+  // 【新增】组件加载时主动拉取一次在线人数（防止 WebSocket 连接延迟导致显示0）
+  try {
+    const res = await fetchOnlineStudentCount();
+    if (res.code === 200) {
+      socketStore.onlineStudentCount = res.data.count;
+    }
+  } catch (e) {
+    console.error("获取在线人数失败", e);
   }
 });
 
@@ -493,5 +519,26 @@ const handleNotificationClick = async (id: number) => {
   display: flex;
   align-items: center;
   gap: 20px;
+}
+/* 【新增】在线状态呼吸灯动画 */
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: #67C23A;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(103, 194, 58, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(103, 194, 58, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(103, 194, 58, 0);
+  }
 }
 </style>
