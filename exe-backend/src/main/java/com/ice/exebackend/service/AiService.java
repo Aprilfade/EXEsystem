@@ -2,6 +2,7 @@ package com.ice.exebackend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ice.exebackend.dto.AiAnalysisReq;
+import com.ice.exebackend.dto.AiGradingResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +33,100 @@ public class AiService {
             this.url = url;
             this.model = model;
         }
+    }
+    /**
+     * 【新增】AI 主观题智能批改
+     * @param apiKey API Key
+     * @param providerKey 模型提供商
+     * @param questionContent 题目内容
+     * @param referenceAnswer 参考答案
+     * @param studentAnswer 学生答案
+     * @param maxScore 该题满分
+     * @return 评分结果对象
+     */
+
+    public AiGradingResult gradeSubjectiveQuestion(String apiKey, String providerKey,
+                                                   String questionContent, String referenceAnswer,
+                                                   String studentAnswer, int maxScore) throws Exception {
+        // 1. 确定提供商 (复用原有逻辑)
+        AiProvider provider;
+        try {
+            provider = AiProvider.valueOf(providerKey != null ? providerKey.toUpperCase() : "DEEPSEEK");
+        } catch (IllegalArgumentException | NullPointerException e) {
+            provider = AiProvider.DEEPSEEK;
+        }
+
+        // 2. 构建 Prompt：强制要求 AI 返回 JSON 格式
+        String systemPrompt = "你是一位公正的阅卷老师。请根据题目、参考答案和学生答案进行打分。" +
+                "请务必严格只返回一个合法的 JSON 字符串，不要包含 Markdown 格式（如 ```json ... ```），也不要包含其他多余文字。\n" +
+                "JSON 格式要求：\n" +
+                "{\n" +
+                "  \"score\": (整数，0 到 " + maxScore + " 之间),\n" +
+                "  \"feedback\": \"(简短的评语，指出优点或不足)\"\n" +
+                "}";
+
+        String userPrompt = String.format(
+                "题目：%s\n" +
+                        "参考答案：%s\n" +
+                        "该题满分：%d 分\n" +
+                        "学生回答：%s",
+                questionContent, referenceAnswer, maxScore, studentAnswer
+        );
+
+        // 3. 构建请求体 (复用原有逻辑结构)
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("model", provider.model);
+        requestBody.put("messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userPrompt)
+        ));
+        requestBody.put("temperature", 0.3); // 降低随机性，使评分更稳定
+        requestBody.put("stream", false);
+        // ... (省略 HTTP 请求发送部分，与原 analyzeWrongQuestion 方法一致) ...
+
+        // 4. 发起请求并获取响应字符串 (假设你已经把发送请求的逻辑封装好了，或者直接复制 analyzeWrongQuestion 的发送代码)
+        // 为了演示清晰，这里重复一下发送逻辑，实际代码中建议抽取 sendRequest 私有方法
+        String jsonBody = objectMapper.writeValueAsString(requestBody);
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(60)).build();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(provider.url))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
+                .timeout(Duration.ofMinutes(4)) // 【新增】设置请求读取超时为 3分钟
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            // 降级处理：如果 AI 挂了，给个 0 分或满分的一半? 这里抛出异常让上层处理
+            throw new RuntimeException("AI 批改失败: " + response.statusCode());
+        }
+
+        // 5. 解析响应
+        Map<String, Object> responseMap = objectMapper.readValue(response.body(), Map.class);
+        List<Map<String, Object>> choices = (List<Map<String, Object>>) responseMap.get("choices");
+        Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+        String content = (String) message.get("content");
+
+        // 6. 清洗并解析 AI 返回的 JSON (防止 AI 有时会加 Markdown 代码块)
+        String jsonString = cleanJsonString(content);
+
+        return objectMapper.readValue(jsonString, AiGradingResult.class);
+    }
+
+    // 辅助方法：去除 Markdown 代码块标记
+    private String cleanJsonString(String input) {
+        if (input == null) return "{}";
+        String cleaned = input.trim();
+        if (cleaned.startsWith("```json")) {
+            cleaned = cleaned.substring(7);
+        } else if (cleaned.startsWith("```")) {
+            cleaned = cleaned.substring(3);
+        }
+        if (cleaned.endsWith("```")) {
+            cleaned = cleaned.substring(0, cleaned.length() - 3);
+        }
+        return cleaned.trim();
     }
 
     // 在方法签名中增加 provider 参数

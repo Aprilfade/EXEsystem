@@ -145,7 +145,14 @@ const handleReview = async (record: WrongRecordVO) => {
     const res = await fetchWrongRecordDetail(record.id);
     if (res.code === 200) {
       reviewQuestion.value = res.data;
-      currentWrongRecord.value = record;
+
+      // 【核心修复】将详情接口返回的 wrongAnswer 同步到 currentWrongRecord
+      // 因为 res.data 是后端返回的完整 VO，里面包含了 wrongAnswer
+      currentWrongRecord.value = {
+        ...record,
+        // 使用类型断言 (as any) 访问可能未在前端类型定义的字段，确保取到值
+        wrongAnswer: (res.data as any).wrongAnswer || record.wrongAnswer
+      };
       isReviewDialogVisible.value = true;
     }
   } catch (error) {

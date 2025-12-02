@@ -12,6 +12,7 @@
         q.content AS questionContent,
         p.id AS paperId,
         p.name AS paperName,
+        wr.wrong_answer AS wrongAnswer,
         wr.wrong_reason AS wrongReason,
         wr.create_time AS createTime
         FROM
@@ -29,6 +30,7 @@
             <if test="questionId != null">
                 AND wr.question_id = #{questionId}
             </if>
+            AND wr.is_mastered = 0
         </where>
         ORDER BY wr.create_time DESC
     </select>
@@ -53,4 +55,22 @@
         ORDER BY
             pq.sort_order ASC
     </select>
+
+    <select id="selectWrongRecordDetail" resultType="com.ice.exebackend.dto.WrongRecordVO">
+        SELECT
+            wr.id,
+            wr.wrong_answer AS wrongAnswer,
+            wr.wrong_reason AS wrongReason,
+            q.id as questionId,
+            q.content,
+            q.image_url AS imageUrl,
+            q.options,
+            q.answer,
+            q.answer_image_url AS answerImageUrl,
+            q.description
+        FROM biz_wrong_record wr
+                 JOIN biz_question q ON wr.question_id = q.id
+        WHERE wr.id = #{recordId} AND wr.student_id = #{studentId}
+    </select>
+
 </mapper>

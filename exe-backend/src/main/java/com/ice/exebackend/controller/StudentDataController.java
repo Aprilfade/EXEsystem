@@ -3,15 +3,10 @@ package com.ice.exebackend.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.common.Result;
-import com.ice.exebackend.dto.PracticeResultDTO;
-import com.ice.exebackend.dto.PracticeSubmissionDTO;
-import com.ice.exebackend.dto.StudentDashboardStatsDTO;
-import com.ice.exebackend.dto.WrongRecordVO;
+import com.ice.exebackend.dto.*;
 import com.ice.exebackend.entity.*;
-import com.ice.exebackend.service.BizQuestionService;
-import com.ice.exebackend.service.BizStudentService;
-import com.ice.exebackend.service.BizSubjectService;
-import com.ice.exebackend.service.BizWrongRecordService;
+import com.ice.exebackend.service.*;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,10 +15,9 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.ice.exebackend.mapper.BizQuestionMapper; // 【新增】导入 Mapper
-import com.ice.exebackend.service.BizLearningActivityService; // 【新增】
+
 import java.time.LocalDateTime; // 【新增】
 import com.ice.exebackend.entity.BizExamResult; // 【新增】
-import com.ice.exebackend.service.BizExamResultService; // 【新增】
 import com.alibaba.fastjson.JSON; // 确保引入 fastjson 或使用 Jackson
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -81,6 +75,9 @@ public class StudentDataController {
     // 1. 注入新的 Service
     @Autowired
     private BizExamResultService examResultService;
+
+    @Autowired
+    private AiService aiService; // 注入 AiService
 
     @Value("${file.upload-dir}")
     private String uploadDir;
@@ -453,14 +450,14 @@ public class StudentDataController {
         }
         return Result.suc(Map.of("paper", paperDTO));
     }
-
     /**
-     * 3. 提交试卷
+     * 3. 提交试卷 (集成 AI 批改主观题)
      */
     @PostMapping("/exam/submit")
     @PreAuthorize("hasAuthority('ROLE_STUDENT')")
     public Result submitExam(@RequestBody PracticeSubmissionDTO submission,
                              @RequestParam Long paperId,
+                             HttpServletRequest request, // 【新增】获取请求头
                              Authentication authentication) {
         String studentNo = authentication.getName();
         BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
@@ -469,23 +466,21 @@ public class StudentDataController {
         com.ice.exebackend.dto.PaperDTO paper = paperService.getPaperWithQuestionsById(paperId);
         if (paper == null) return Result.fail("试卷不存在");
 
+        // 获取 AI 配置 (从前端传来的 Header 中读取)
+        String aiKey = request.getHeader("X-Ai-Api-Key");
+        String aiProvider = request.getHeader("X-Ai-Provider");
+
         int totalScore = 0;
         int studentScore = 0;
-        // 初始化为空列表，防止后续可能的空指针
         List<PracticeResultDTO.AnswerResult> results = new ArrayList<>();
 
-        // === 核心修改：区分试卷类型 ===
+        // === 区分试卷类型 ===
         if (paper.getPaperType() != null && paper.getPaperType() == 2) {
-            // --- 图片试卷处理逻辑 ---
-            // 图片试卷没有结构化题目，无法自动判分。
-            // 直接保存前端传来的答案（例如：{"1":"A", "2":"B"}，这里的key是题号）
-            // 总分设置为试卷设定的总分，得分暂定为0
+            // --- 图片试卷处理逻辑 (保持不变) ---
             totalScore = paper.getTotalScore() != null ? paper.getTotalScore() : 100;
-            studentScore = 0;
-
-            // 注意：图片试卷的 results 列表为空，因为没有具体的题目详情可返回
+            studentScore = 0; // 图片试卷暂无法自动判分，需人工或后续处理
         } else {
-            // --- 传统试卷处理逻辑 (保持原有逻辑) ---
+            // --- 传统试卷处理逻辑 ---
 
             // 获取所有题目真实信息用于比对
             List<Long> allQIds = new ArrayList<>(submission.getAnswers().keySet());
@@ -497,34 +492,80 @@ public class StudentDataController {
                 List<BizQuestion> dbQuestions = questionService.listByIds(allQIds);
                 Map<Long, BizQuestion> dbQMap = dbQuestions.stream().collect(Collectors.toMap(BizQuestion::getId, q -> q));
 
-                // ... (原有的遍历 groups 计算分数的代码保持不变) ...
                 if (paper.getGroups() != null) {
                     for (com.ice.exebackend.dto.PaperDTO.PaperGroupDTO group : paper.getGroups()) {
                         for (com.ice.exebackend.entity.BizPaperQuestion pq : group.getQuestions()) {
-                            // ... (原有的判题逻辑) ...
-                            // 记得保留这部分原有的代码
                             BizQuestion q = dbQMap.get(pq.getQuestionId());
                             if (q == null) continue;
+
                             totalScore += pq.getScore();
                             String userAns = submission.getAnswers().get(pq.getQuestionId());
-                            // ... 判分逻辑 ...
+
                             boolean isCorrect = false;
+                            int awardedScore = 0; // 本题实际得分
+
+                            // 如果用户作答了且题目有答案
                             if (userAns != null && q.getAnswer() != null) {
-                                // ...
-                                if (q.getQuestionType() == 2) {
+
+                                // === 【核心逻辑】AI 批改主观题 ===
+                                if (q.getQuestionType() == 5) {
+                                    // 仅当配置了 Key 且用户有作答时才调用 AI
+                                    if (StringUtils.hasText(aiKey) && StringUtils.hasText(userAns)) {
+                                        try {
+                                            // 调用 AI 服务进行批改
+                                            AiGradingResult aiResult = aiService.gradeSubjectiveQuestion(
+                                                    aiKey, aiProvider,
+                                                    q.getContent(), q.getAnswer(), userAns, pq.getScore()
+                                            );
+
+                                            awardedScore = aiResult.getScore();
+                                            // 简单判定：得分超过满分60%算“正确”（用于统计正确率，可根据需求调整）
+                                            isCorrect = awardedScore >= (pq.getScore() * 0.6);
+
+                                            // 【重要】将 AI 评语追加到题目解析中，让学生在结果页能看到
+                                            String feedback = "\n\n【AI 智能点评】\n" + aiResult.getFeedback();
+                                            if (aiResult.getReason() != null) {
+                                                feedback += "\n(扣分原因: " + aiResult.getReason() + ")";
+                                            }
+                                            q.setDescription((q.getDescription() == null ? "" : q.getDescription()) + feedback);
+
+                                        } catch (Exception e) {
+                                            logger.error("AI 批改失败", e);
+                                            // AI 失败兜底策略：给 0 分或保持待批改状态
+                                            awardedScore = 0;
+                                            isCorrect = false;
+                                            q.setDescription((q.getDescription() == null ? "" : q.getDescription()) + "\n\n(AI 服务暂时不可用，请等待人工批阅)");
+                                        }
+                                    } else {
+                                        // 未配置 Key 或未作答，给 0 分
+                                        awardedScore = 0;
+                                        isCorrect = false;
+                                    }
+                                }
+                                // === 客观题判分逻辑 (保持不变) ===
+                                else if (q.getQuestionType() == 2) {
+                                    // 多选题：排序后比对
                                     String sortedUser = sortString(userAns);
                                     String sortedDb = sortString(q.getAnswer());
                                     isCorrect = sortedUser.equalsIgnoreCase(sortedDb);
+                                    if(isCorrect) awardedScore = pq.getScore();
                                 } else {
+                                    // 单选、判断、填空
                                     isCorrect = userAns.trim().equalsIgnoreCase(q.getAnswer().trim());
+                                    if(isCorrect) awardedScore = pq.getScore();
                                 }
                             }
-                            if(isCorrect) studentScore += pq.getScore();
-                            // ... 构建 results ...
+
+                            // 累加总分
+                            studentScore += awardedScore;
+
+                            // 构建结果对象
                             PracticeResultDTO.AnswerResult res = new PracticeResultDTO.AnswerResult();
-                            res.setQuestion(q);
+                            res.setQuestion(q); // 此时 q.description 可能已包含 AI 评语
                             res.setUserAnswer(userAns);
                             res.setCorrect(isCorrect);
+                            // 【新增】设置单题得分
+                            res.setEarnedScore(awardedScore);
                             results.add(res);
                         }
                     }
@@ -532,7 +573,7 @@ public class StudentDataController {
             }
         }
 
-        // --- 保存逻辑 (通用) ---
+        // --- 保存考试结果 (保持不变) ---
         BizExamResult examResult = new BizExamResult();
         examResult.setStudentId(student.getId());
         examResult.setPaperId(paperId);
@@ -542,7 +583,6 @@ public class StudentDataController {
         examResult.setViolationCount(submission.getViolationCount() != null ? submission.getViolationCount() : 0);
 
         try {
-            // 确保 answers 不为 null
             Map<Long, String> finalAnswers = submission.getAnswers() != null ? submission.getAnswers() : Map.of();
             String jsonAnswers = objectMapper.writeValueAsString(finalAnswers);
             examResult.setUserAnswers(jsonAnswers);
@@ -553,28 +593,23 @@ public class StudentDataController {
 
         examResult.setCreateTime(LocalDateTime.now());
         examResultService.save(examResult);
-        // ---------------------------------------------
 
-        // 记录学习活动
+        // --- 记录学习积分和日志 (保持不变) ---
         BizLearningActivity activity = new BizLearningActivity();
         activity.setStudentId(student.getId());
         activity.setActivityType("EXAM");
         activity.setDescription("参加了模拟考试《" + paper.getName() + "》，得分：" + studentScore + "/" + totalScore);
         activity.setCreateTime(LocalDateTime.now());
         learningActivityService.save(activity);
+
         student.setPoints((student.getPoints() == null ? 0 : student.getPoints()) + 10);
         studentService.updateById(student);
 
-        PracticeResultDTO resultDTO = new PracticeResultDTO();
-        resultDTO.setTotalQuestions(results.size()); // 这里复用字段表示得分
-        resultDTO.setCorrectCount(studentScore); // 这里复用字段表示得分
-        // 稍微hack一下，用 ResultDTO 返回分数信息
-        // 建议：ResultDTO 可以加个 score 字段，这里暂时用 msg 返回或者前端计算
-
+        // 返回结果
         return Result.suc(Map.of(
                 "score", studentScore,
                 "totalScore", totalScore,
-                "details", results
+                "details", results // 包含 AI 点评后的题目信息
         ));
     }
 

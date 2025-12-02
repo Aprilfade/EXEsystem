@@ -8,7 +8,7 @@ import { ElMessage } from 'element-plus';
 // 创建 axios 实例
 const service: AxiosInstance = axios.create({
     baseURL: '',
-    timeout: 10000,
+    timeout: 480000,
 });
 
 // 请求拦截器: 在每次请求前执行

@@ -196,9 +196,11 @@ import { fetchExamPaperDetail, submitExamPaper } from '@/api/studentAuth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Timer, Monitor, View, WarningFilled, Lock } from '@element-plus/icons-vue';
 import request from '@/utils/request';
+import { useStudentAuthStore } from '@/stores/studentAuth'; // 1. 确保导入 Store
 
 const route = useRoute();
 const router = useRouter();
+const studentStore = useStudentAuthStore(); // 2. 初始化 Store 实例
 const paperId = parseInt(route.params.paperId as string);
 
 const loading = ref(true);
@@ -379,11 +381,17 @@ const handleSubmit = (force = false) => {
         violationCount: violationCount.value
       };
 
+      // 3. 【核心修复】这里只保留这一个 const res 声明
       const res = await request({
         url: '/api/v1/student/exam/submit',
         method: 'post',
         params: { paperId },
-        data: payload
+        data: payload,
+        headers: {
+          // 传递 AI 配置
+          'X-Ai-Api-Key': studentStore.aiKey,
+          'X-Ai-Provider': studentStore.aiProvider
+        }
       });
 
       if (res.code === 200) {
@@ -396,7 +404,6 @@ const handleSubmit = (force = false) => {
       }
     } catch (err) {
       console.error(err);
-      // 如果是403，通常是后端处理图片试卷的判题逻辑抛异常被拦截了
       ElMessage.error('交卷失败，请重试或联系管理员');
     } finally {
       loading.value = false;

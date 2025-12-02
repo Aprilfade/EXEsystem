@@ -16,6 +16,19 @@ public class PracticeResultDTO {
         private String userAnswer;
         private boolean isCorrect;
 
+        // 【新增】单题实际得分
+        private Integer earnedScore;
+
+        // --- 手动添加 Getter 和 Setter ---
+
+        public Integer getEarnedScore() {
+            return earnedScore;
+        }
+
+        public void setEarnedScore(Integer earnedScore) {
+            this.earnedScore = earnedScore;
+        }
+
         public BizQuestion getQuestion() {
             return question;
         }
@@ -35,6 +48,8 @@ public class PracticeResultDTO {
             isCorrect = correct;
         }
     }
+
+    // ... (PracticeResultDTO 外部类的 Getter/Setter 保持不变) ...
     public int getTotalQuestions() {
         return totalQuestions;
     }
