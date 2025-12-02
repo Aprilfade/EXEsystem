@@ -9,12 +9,12 @@ import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.handler.NotificationWebSocketHandler;
 import com.ice.exebackend.service.SysNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate; // 1. 导入 RedisTemplate
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
-import com.ice.exebackend.handler.NotificationWebSocketHandler; // 导入 Handler
-import com.alibaba.fastjson.JSON; // 导入 JSON 工具 (确保 pom.xml 有 fastjson 或 jackson)
+import com.alibaba.fastjson.JSON;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -24,46 +24,39 @@ public class SysNotificationController {
     @Autowired
     private SysNotificationService notificationService;
 
-    // 2. 注入 RedisTemplate
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-    // 【新增】注入 WebSocket Handler
     @Autowired
     private NotificationWebSocketHandler webSocketHandler;
 
-    // 3. 定义与 Service 中一致的缓存键常量
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
     @PostMapping
     @Log(title = "通知管理", businessType = BusinessType.INSERT)
     public Result createNotification(@RequestBody SysNotification notification) {
-        // 设置默认目标为 ALL
+        // 1. 设置默认目标为 ALL
         if (notification.getTargetType() == null || notification.getTargetType().isEmpty()) {
             notification.setTargetType("ALL");
         }
 
+        // 2. 如果是立即发布，设置发布时间
         if (Boolean.TRUE.equals(notification.getIsPublished())) {
             notification.setPublishTime(LocalDateTime.now());
         }
 
         boolean success = notificationService.save(notification);
         if (success) {
-            redisTemplate.delete("dashboard:stats:all");
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
 
-            // 【修改】传递 targetType
+            // 3. 发送 WebSocket 通知
             if (Boolean.TRUE.equals(notification.getIsPublished())) {
-                String msg = JSON.toJSONString(Map.of(
-                        "type", "SYSTEM_NOTICE",
-                        "title", notification.getTitle(),
-                        "content", notification.getContent()
-                ));
-                // 传入目标类型
-                webSocketHandler.broadcast(msg, notification.getTargetType());
+                sendBroadcast(notification);
             }
         }
         return success ? Result.suc() : Result.fail();
     }
+
     @GetMapping
     public Result getNotificationList(@RequestParam(defaultValue = "1") int current,
                                       @RequestParam(defaultValue = "10") int size) {
@@ -82,42 +75,40 @@ public class SysNotificationController {
     public Result updateNotification(@PathVariable Long id, @RequestBody SysNotification notification) {
         notification.setId(id);
 
-        // 确保 targetType 不为空
-        if (notification.getTargetType() == null && notification.getIsPublished() != null && notification.getIsPublished()) {
-            // 如果没传，可能是旧数据或只需要更新状态，建议先查一下旧数据的 targetType，或者默认为 ALL
-            SysNotification old = notificationService.getById(id);
-            if (old != null && old.getTargetType() != null) {
-                notification.setTargetType(old.getTargetType());
-            } else {
-                notification.setTargetType("ALL");
-            }
+        // 1. 获取旧数据（只查一次数据库）
+        SysNotification oldNotification = notificationService.getById(id);
+        if (oldNotification == null) {
+            return Result.fail("通知不存在");
         }
 
-        // ... (原有的发布时间逻辑保持不变) ...
-        SysNotification oldNotification = notificationService.getById(id);
-        if (oldNotification != null &&
-                (oldNotification.getIsPublished() == null || !oldNotification.getIsPublished()) &&
+        // 2. 处理 TargetType：如果前端没传，沿用旧值
+        if (notification.getTargetType() == null) {
+            notification.setTargetType(oldNotification.getTargetType() != null ? oldNotification.getTargetType() : "ALL");
+        }
+
+        // 3. 处理发布时间逻辑
+        // 情况A: 从"未发布"变为"已发布" -> 设置当前时间
+        if ((oldNotification.getIsPublished() == null || !oldNotification.getIsPublished()) &&
                 (notification.getIsPublished() != null && notification.getIsPublished())) {
             notification.setPublishTime(LocalDateTime.now());
-        } else if (oldNotification != null &&
-                oldNotification.getIsPublished() &&
-                (notification.getIsPublished() != null && !notification.getIsPublished()) &&
-                notification.getPublishTime() == null) {
+        }
+        // 情况B: 从"已发布"变为"未发布"（撤回）-> 清空时间
+        else if (oldNotification.getIsPublished() != null && oldNotification.getIsPublished() &&
+                (notification.getIsPublished() != null && !notification.getIsPublished())) {
             notification.setPublishTime(null);
         }
 
         boolean success = notificationService.updateById(notification);
         if (success) {
-            redisTemplate.delete("dashboard:stats:all");
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
 
-            // 【修改】传递 targetType
+            // 4. 发送 WebSocket 通知（需要确保 title 和 content 存在）
             if (Boolean.TRUE.equals(notification.getIsPublished())) {
-                String msg = JSON.toJSONString(Map.of(
-                        "type", "SYSTEM_NOTICE",
-                        "title", notification.getTitle(),
-                        "content", notification.getContent()
-                ));
-                webSocketHandler.broadcast(msg, notification.getTargetType());
+                // 如果前端只传了状态变更，需要把旧数据的标题内容补全，否则 WebSocket 会发空消息
+                if (notification.getTitle() == null) notification.setTitle(oldNotification.getTitle());
+                if (notification.getContent() == null) notification.setContent(oldNotification.getContent());
+
+                sendBroadcast(notification);
             }
         }
         return success ? Result.suc() : Result.fail();
@@ -128,9 +119,24 @@ public class SysNotificationController {
     public Result deleteNotification(@PathVariable Long id) {
         boolean success = notificationService.removeById(id);
         if (success) {
-            // 4. 成功删除通知后，删除缓存
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
         }
         return success ? Result.suc() : Result.fail();
+    }
+
+    // 辅助方法：发送广播
+    private void sendBroadcast(SysNotification notification) {
+        try {
+            Map<String, Object> map = new HashMap<>();
+            map.put("type", "SYSTEM_NOTICE");
+            map.put("title", notification.getTitle() != null ? notification.getTitle() : "系统通知");
+            map.put("content", notification.getContent() != null ? notification.getContent() : "");
+
+            String msg = JSON.toJSONString(map);
+            webSocketHandler.broadcast(msg, notification.getTargetType());
+        } catch (Exception e) {
+            // 捕获异常，防止通知发送失败影响主业务流程
+            e.printStackTrace();
+        }
     }
 }

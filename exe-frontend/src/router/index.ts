@@ -51,6 +51,12 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('@/views/TextToQuiz.vue'),
                 meta: { permission: 'sys:question:list', title: '智能出题' }
             },
+            {
+                path: 'logs/operation',
+                name: 'OperLog',
+                component: () => import('@/views/OperLog.vue'),
+                meta: { permission: 'sys:log:oper', title: '操作日志' }
+            },
         ]
     },
     // --- 学生端路由 ---

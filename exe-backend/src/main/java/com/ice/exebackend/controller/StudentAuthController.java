@@ -3,7 +3,9 @@ package com.ice.exebackend.controller;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.entity.BizStudent;
 import com.ice.exebackend.service.BizStudentService;
+import com.ice.exebackend.service.SysLoginLogService; // 【新增导入】
 import com.ice.exebackend.utils.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest; // 【新增导入】
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -23,9 +25,47 @@ public class StudentAuthController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    // 【新增】注入日志服务
+    @Autowired
+    private SysLoginLogService loginLogService;
+
+    // 【新增】注入请求对象，用于获取IP
+    @Autowired
+    private HttpServletRequest request;
+
     @Autowired
     private JwtUtil jwtUtil;
 
+
+
+
+    /**
+     * 【新增】辅助方法：获取客户端IP
+     */
+    private String getIpAddress() {
+        String ip = request.getHeader("x-forwarded-for");
+        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("Proxy-Client-IP");
+        }
+        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("WL-Proxy-Client-IP");
+        }
+        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        // 本地开发环境处理
+        if ("0:0:0:0:0:0:0:1".equals(ip)) {
+            ip = "127.0.0.1";
+        }
+        return ip;
+    }
+
+    /**
+     * 【新增】辅助方法：获取User-Agent
+     */
+    private String getUserAgent() {
+        return request.getHeader("User-Agent");
+    }
     /**
      * 学生登录接口
      */
@@ -34,19 +74,30 @@ public class StudentAuthController {
         String studentNo = loginRequest.get("studentNo");
         String password = loginRequest.get("password");
 
+        // 获取请求信息
+        String ip = getIpAddress();
+        String ua = getUserAgent();
+
         BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
 
         if (student == null || student.getPassword() == null || !passwordEncoder.matches(password, student.getPassword())) {
+            // 【新增】记录登录失败日志
+            // 注意：如果 studentNo 不存在，也记录下来，便于发现暴力破解尝试
+            String recordName = (studentNo != null && !studentNo.isEmpty()) ? studentNo : "未知学生";
+            loginLogService.recordLoginLog(recordName, "LOGIN_FAILURE", ip, ua);
             return Result.fail("学号或密码错误");
         }
-// 【新增】简单的每日登录加分逻辑 (这里未做每日限制，生产环境建议配合 Redis 做每日一次限制)
+
+        // 每日登录加分逻辑
         student.setPoints(student.getPoints() == null ? 1 : student.getPoints() + 1);
         studentService.updateById(student);
+
+        // 【新增】记录登录成功日志
+        loginLogService.recordLoginLog(student.getStudentNo(), "LOGIN_SUCCESS", ip, ua);
 
         String token = jwtUtil.generateTokenForStudent(student.getStudentNo());
         return Result.suc(Map.of("token", token));
     }
-
     /**
      * 获取当前登录学生的信息
      */

@@ -118,6 +118,7 @@ const allMenus = [
       { path: '/users', name: '成员管理',  permission: 'sys:user:list',icon: User },
       { path: '/roles', name: '角色管理', permission: 'sys:user:list', icon: LockIcon },
       { path: '/logs/login', name: '登录日志', permission: 'sys:log:login', icon: Document },
+      { path: '/logs/operation', name: '操作日志', permission: 'sys:log:oper', icon: DataLine },
     ]
   },
 ];
