@@ -26,6 +26,8 @@
             </el-select>
           </el-form-item>
           <el-button type="primary" @click="submitRelation" style="width: 100%">添加关联</el-button>
+          <el-button type="danger" @click="handleRemoveRelation"
+                     style="width: 100%; margin-left: 0; margin-top: 10px;">解除关联</el-button>
         </el-form>
       </div>
     </div>
@@ -36,8 +38,11 @@
 import { ref, onMounted, reactive } from 'vue';
 import * as echarts from 'echarts';
 import { fetchAllSubjects } from '@/api/subject';
-import { fetchKnowledgeGraph, addKpRelation } from '@/api/knowledgePoint';
-import { ElMessage } from 'element-plus';
+import { fetchKnowledgeGraph, addKpRelation, removeKpRelation } from '@/api/knowledgePoint'; //
+import { ElMessage, ElMessageBox } from 'element-plus'; // 引入 ElMessageBox 用于确认弹窗
+
+
+
 
 const chartRef = ref<HTMLElement>();
 let myChart: echarts.ECharts | null = null;
@@ -107,6 +112,21 @@ const renderChart = () => {
     ]
   };
   myChart.setOption(option);
+  // 【新增】点击事件监听
+  myChart.on('click', (params: any) => {
+    // 如果点击的是“边”（连线）
+    if (params.dataType === 'edge') {
+      // ECharts 的 source 和 target 对应我们在 backend 组装时的 id (String类型)
+      form.parentId = Number(params.data.source);
+      form.childId = Number(params.data.target);
+      ElMessage.info('已选中关联，点击“解除关联”即可删除');
+    }
+    // 如果点击的是“节点”
+    else if (params.dataType === 'node') {
+      // 可选：点击节点自动填入“前置点”
+      form.parentId = Number(params.data.id);
+    }
+  });
 
   // 窗口大小改变时自适应
   window.addEventListener('resize', () => myChart?.resize());
@@ -125,6 +145,29 @@ const submitRelation = async () => {
     // 错误已由 request 拦截器处理
   }
 };
+
+
+const handleRemoveRelation = async () => {
+  if (!form.parentId || !form.childId) {
+    ElMessage.warning('请先选择要解除关联的前置点和后置点（或直接点击图谱上的连线）');
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm('确定要删除这两个知识点之间的关联吗？', '提示', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    });
+
+    await removeKpRelation({ parentId: form.parentId, childId: form.childId });
+    ElMessage.success('关联已解除');
+    loadGraph(); // 刷新图谱
+  } catch (e) {
+    // 用户取消或请求失败，不做处理
+  }
+};
+
 
 onMounted(async () => {
   const res = await fetchAllSubjects();
