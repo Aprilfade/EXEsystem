@@ -12,8 +12,10 @@ import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.mapper.BizQuestionKnowledgePointMapper;
 import com.ice.exebackend.service.BizKnowledgePointService;
 import com.ice.exebackend.service.BizQuestionService;
+import com.ice.exebackend.service.AiService; // 【新增】导入 AiService
+import jakarta.servlet.http.HttpServletRequest; // 【新增】导入 HttpServletRequest
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate; // 1. 导入 RedisTemplate
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -37,11 +39,13 @@ public class BizKnowledgePointController {
     @Autowired
     private BizQuestionService questionService;
 
-    // 2. 注入 RedisTemplate
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-    // 3. 定义缓存键常量
+    // 【新增】注入 AiService
+    @Autowired
+    private AiService aiService;
+
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
     @PostMapping
@@ -49,7 +53,6 @@ public class BizKnowledgePointController {
     public Result createKnowledgePoint(@RequestBody BizKnowledgePoint knowledgePoint) {
         boolean success = knowledgePointService.save(knowledgePoint);
         if (success) {
-            // 4. 当成功创建一个新知识点后，删除缓存
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
         }
         return success ? Result.suc() : Result.fail();
@@ -86,7 +89,6 @@ public class BizKnowledgePointController {
         knowledgePoint.setId(id);
         boolean success = knowledgePointService.updateById(knowledgePoint);
         if (success) {
-            // 4. 更新知识点后，清除缓存
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
         }
         return success ? Result.suc() : Result.fail();
@@ -105,7 +107,6 @@ public class BizKnowledgePointController {
 
         boolean success = knowledgePointService.removeById(id);
         if (success) {
-            // 4. 成功删除知识点后，清除缓存
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
         }
         return success ? Result.suc() : Result.fail();
@@ -128,13 +129,12 @@ public class BizKnowledgePointController {
         List<BizQuestion> questions = questionService.listByIds(questionIds);
         return Result.suc(questions);
     }
-    // 获取图谱数据
+
     @GetMapping("/graph/{subjectId}")
     public Result getGraph(@PathVariable Long subjectId) {
         return Result.suc(knowledgePointService.getKnowledgeGraph(subjectId));
     }
 
-    // 建立关联
     @PostMapping("/relation")
     @Log(title = "知识点管理", businessType = BusinessType.UPDATE)
     public Result addRelation(@RequestBody Map<String, Long> params) {
@@ -144,7 +144,6 @@ public class BizKnowledgePointController {
         return success ? Result.suc() : Result.fail("关联失败或已存在");
     }
 
-    // 删除关联
     @PostMapping("/relation/delete")
     @Log(title = "知识点管理", businessType = BusinessType.DELETE)
     public Result removeRelation(@RequestBody Map<String, Long> params) {
@@ -154,9 +153,35 @@ public class BizKnowledgePointController {
         return Result.suc();
     }
 
-    // 【给学生端用】获取某知识点的前置知识点建议
     @GetMapping("/{id}/prerequisites")
     public Result getPrerequisites(@PathVariable Long id) {
         return Result.suc(knowledgePointService.findPrerequisitePoints(id));
+    }
+
+    // 【新增】AI 智能生成知识点 (注意：这段代码必须在类的最后一个大括号之前)
+    @PostMapping("/ai-generate")
+    @Log(title = "知识点管理", businessType = BusinessType.OTHER)
+    public Result generateKnowledgePoints(@RequestBody Map<String, Object> params, HttpServletRequest request) {
+        String text = (String) params.get("text");
+        Integer count = (Integer) params.get("count");
+
+        // 从 Header 获取 Key
+        String apiKey = request.getHeader("X-Ai-Api-Key");
+        String provider = request.getHeader("X-Ai-Provider");
+
+        if (!StringUtils.hasText(apiKey)) {
+            return Result.fail("请在设置中配置 AI API Key");
+        }
+
+        try {
+            List<Map<String, String>> points = aiService.generateKnowledgePointsFromText(
+                    apiKey, provider, text,
+                    count == null ? 5 : count
+            );
+            return Result.suc(points);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.fail("生成失败: " + e.getMessage());
+        }
     }
 }

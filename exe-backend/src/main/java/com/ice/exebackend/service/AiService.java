@@ -318,7 +318,66 @@ public class AiService {
             throw new RuntimeException("解析 AI 结果失败，请重试或检查文本内容。");
         }
     }
+    /**
+     * 【新增】AI 智能提取知识点
+     */
+    public List<Map<String, String>> generateKnowledgePointsFromText(String apiKey, String providerKey, String text, int count) throws Exception {
+        // 1. 确定提供商
+        AiProvider provider;
+        try {
+            provider = AiProvider.valueOf(providerKey != null ? providerKey.toUpperCase() : "DEEPSEEK");
+        } catch (Exception e) {
+            provider = AiProvider.DEEPSEEK;
+        }
 
+        // 2. 构建 Prompt
+        String systemPrompt = "你是一位资深的教学专家。请根据用户提供的文本内容，提取出 " + count + " 个核心知识点。\n" +
+                "请务必严格只返回一个合法的 JSON 数组，不要包含 Markdown 代码块标记（如 ```json），也不要包含其他多余文字。\n" +
+                "JSON 数组中每个对象的格式如下：\n" +
+                "{\n" +
+                "  \"name\": \"知识点名称（简练准确）\",\n" +
+                "  \"description\": \"知识点详细描述或定义（50-200字）\"\n" +
+                "}";
+
+        String userPrompt = "文本内容如下：\n" + (text.length() > 3000 ? text.substring(0, 3000) : text);
+
+        // 3. 构建请求体
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("model", provider.model);
+        requestBody.put("messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userPrompt)
+        ));
+        requestBody.put("temperature", 0.5);
+        requestBody.put("stream", false);
+
+        String jsonBody = objectMapper.writeValueAsString(requestBody);
+
+        // 4. 发送请求
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(60)).build();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(provider.url))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
+                .timeout(Duration.ofMinutes(3))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("AI 请求失败: " + response.statusCode() + " " + response.body());
+        }
+
+        // 5. 解析响应
+        Map<String, Object> responseMap = objectMapper.readValue(response.body(), Map.class);
+        List<Map<String, Object>> choices = (List<Map<String, Object>>) responseMap.get("choices");
+        String content = (String) ((Map<String, Object>) choices.get(0).get("message")).get("content");
+
+        // 6. 清洗并解析 JSON
+        String cleanJson = extractJson(content);
+
+        return objectMapper.readValue(cleanJson, new TypeReference<List<Map<String, String>>>() {});
+    }
 
 
 }

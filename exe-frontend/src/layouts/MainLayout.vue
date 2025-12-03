@@ -83,7 +83,7 @@ import ProfileEditDialog from '@/components/user/ProfileEditDialog.vue';
 import {
   Management, House, Collection, Reading, Tickets, DocumentCopy, Avatar, CircleClose, DataLine,
   User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting, Fold, Expand, Document, Medal,
-  VideoPlay,DataBoard
+  VideoPlay,DataBoard ,Share
 } from '@element-plus/icons-vue';
 import { useNotificationSocketStore } from '@/stores/notificationSocket';
 
@@ -98,6 +98,7 @@ const allMenus = [
   { path: '/home', name: '工作台', permission: 'sys:home', icon: House },
   { path: '/subjects', name: '科目管理', permission: 'sys:subject:list', icon: Collection },
   { path: '/knowledge-points', name: '知识点管理', permission: 'sys:kp:list', icon: Reading },
+  { path: '/knowledge-graph', name: '知识图谱', permission: 'sys:kp:list', icon: Share },
   { path: '/questions', name: '题库管理', permission: 'sys:question:list', icon: Tickets },
   { path: '/papers', name: '试卷管理', permission: 'sys:paper:list', icon: DocumentCopy },
   { path: '/courses', name: '课程管理', permission: 'sys:course:edit', icon: VideoPlay },

@@ -123,3 +123,18 @@ export function fetchPrerequisites(id: number): Promise<ApiResult<KnowledgePoint
         method: 'get'
     });
 }
+// 【新增】AI 智能生成知识点
+export function generateKnowledgePointsFromText(data: { text: string; count: number }): Promise<ApiResult<any[]>> {
+    const apiKey = localStorage.getItem('student_ai_key') || ''; // 复用之前存的 Key，或者新建 admin_ai_key
+    const provider = localStorage.getItem('student_ai_provider') || 'DEEPSEEK';
+
+    return request({
+        url: '/api/v1/knowledge-points/ai-generate',
+        method: 'post',
+        data,
+        headers: {
+            'X-Ai-Api-Key': apiKey,
+            'X-Ai-Provider': provider
+        }
+    });
+}

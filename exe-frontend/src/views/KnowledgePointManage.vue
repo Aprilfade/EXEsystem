@@ -37,6 +37,69 @@
 
     <el-card shadow="never" class="content-card">
       <div class="content-header">
+        <el-button type="success" :icon="MagicStick" size="large" @click="openAiDialog" style="margin-right: 12px;">
+          AI 智能提取
+        </el-button>
+
+        <el-dialog
+            v-model="aiDialogVisible"
+            title="AI 智能提取知识点"
+            width="600px"
+            :close-on-click-modal="false"
+            append-to-body
+        >
+          <div v-if="step === 1">
+            <el-alert title="粘贴课文、教案或笔记，AI将自动提取核心知识点" type="info" :closable="false" style="margin-bottom: 15px;" />
+            <el-input
+                v-model="aiForm.text"
+                type="textarea"
+                :rows="10"
+                placeholder="请输入文本内容..."
+            />
+            <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+              <span>提取数量：</span>
+              <el-input-number v-model="aiForm.count" :min="1" :max="20" />
+            </div>
+          </div>
+
+          <div v-else-if="step === 2" v-loading="generating">
+            <el-form label-position="top">
+              <el-form-item label="选择所属科目">
+                <el-select v-model="aiSaveConfig.subjectId" placeholder="请选择" style="width: 100%">
+                  <el-option v-for="s in allSubjects" :key="s.id" :label="s.name" :value="s.id" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="适用年级">
+                <el-select v-model="aiSaveConfig.grade" placeholder="请选择" style="width: 100%">
+                  <el-option v-for="g in ['七年级','八年级','九年级','高一','高二','高三']" :key="g" :label="g" :value="g" />
+                </el-select>
+              </el-form-item>
+            </el-form>
+
+            <div class="generated-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 4px;">
+              <div v-for="(kp, index) in generatedPoints" :key="index" style="margin-bottom: 15px; border-bottom: 1px dashed #eee; padding-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                  <el-input v-model="kp.name" placeholder="知识点名称" style="width: 70%; font-weight: bold;" />
+                  <el-button type="danger" icon="Delete" circle size="small" @click="removeGenerated(index)" />
+                </div>
+                <el-input v-model="kp.description" type="textarea" :rows="2" placeholder="描述" />
+              </div>
+            </div>
+          </div>
+
+          <template #footer>
+            <div v-if="step === 1">
+              <el-button @click="aiDialogVisible = false">取消</el-button>
+              <el-button type="primary" @click="handleAiGenerate" :loading="generating">开始提取</el-button>
+            </div>
+            <div v-else>
+              <el-button @click="step = 1">返回修改</el-button>
+              <el-button type="success" @click="batchSaveAiPoints" :loading="saving">确认入库</el-button>
+            </div>
+          </template>
+        </el-dialog>
+
+        <ai-key-dialog v-model:visible="keyDialogVisible" />
         <el-input v-model="searchQuery" placeholder="输入知识点名称、编码或标签搜索" size="large" style="width: 300px;"/>
         <div>
           <el-button-group>
@@ -116,6 +179,23 @@ import { Plus, Edit, Delete, Search, Refresh, Grid, Menu, MoreFilled } from '@el
 import KnowledgePointEditDialog from '@/components/knowledge-point/KnowledgePointEditDialog.vue';
 // 【新增】导入新的详情弹窗组件
 import KnowledgePointDetailDialog from '@/components/knowledge-point/KnowledgePointDetailDialog.vue';
+import { MagicStick } from '@element-plus/icons-vue'; // 引入图标
+import { generateKnowledgePointsFromText, createKnowledgePoint } from '@/api/knowledgePoint';
+import AiKeyDialog from '@/components/student/AiKeyDialog.vue'; // 假设你已将此组件注册为全局或局部
+
+
+
+// AI 相关变量
+const aiDialogVisible = ref(false);
+const keyDialogVisible = ref(false);
+const step = ref(1);
+const generating = ref(false);
+const saving = ref(false);
+const aiForm = reactive({ text: '', count: 5 });
+const aiSaveConfig = reactive({ subjectId: undefined as number | undefined, grade: '' });
+const generatedPoints = ref<any[]>([]);
+
+
 
 
 const knowledgePointList = ref<KnowledgePoint[]>([]);
@@ -132,6 +212,62 @@ const isDetailDialogVisible = ref(false);
 const selectedKpId = ref<number | null>(null);
 
 
+
+const openAiDialog = () => {
+  // 检查 Key
+  if (!localStorage.getItem('student_ai_key')) {
+    ElMessage.warning('请先配置 AI API Key');
+    keyDialogVisible.value = true;
+    return;
+  }
+  step.value = 1;
+  aiForm.text = '';
+  generatedPoints.value = [];
+  aiDialogVisible.value = true;
+};
+
+const handleAiGenerate = async () => {
+  if (!aiForm.text) return ElMessage.warning('请输入文本');
+  generating.value = true;
+  try {
+    const res = await generateKnowledgePointsFromText(aiForm);
+    if (res.code === 200) {
+      generatedPoints.value = res.data;
+      step.value = 2; // 进入预览/保存步骤
+    }
+  } catch(e) {
+    // error
+  } finally {
+    generating.value = false;
+  }
+};
+
+const removeGenerated = (index: number) => {
+  generatedPoints.value.splice(index, 1);
+};
+
+const batchSaveAiPoints = async () => {
+  if (!aiSaveConfig.subjectId) return ElMessage.warning('请选择科目');
+  saving.value = true;
+  try {
+    for (const kp of generatedPoints.value) {
+      await createKnowledgePoint({
+        name: kp.name,
+        description: kp.description,
+        subjectId: aiSaveConfig.subjectId,
+        grade: aiSaveConfig.grade,
+        code: 'AI-' + Math.floor(Math.random() * 10000) // 简单的自动编码
+      });
+    }
+    ElMessage.success(`成功入库 ${generatedPoints.value.length} 个知识点`);
+    aiDialogVisible.value = false;
+    getList(); // 刷新列表
+  } catch(e) {
+    ElMessage.error('保存部分失败，请检查');
+  } finally {
+    saving.value = false;
+  }
+};
 // 计算关联试题总数
 const totalAssociatedQuestions = computed(() => {
   return knowledgePointList.value.reduce((sum, kp) => sum + (kp.questionCount || 0), 0);

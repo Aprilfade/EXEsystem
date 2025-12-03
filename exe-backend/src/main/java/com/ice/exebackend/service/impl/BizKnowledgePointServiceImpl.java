@@ -68,32 +68,36 @@ public class BizKnowledgePointServiceImpl extends ServiceImpl<BizKnowledgePointM
 
     @Override
     public Map<String, Object> getKnowledgeGraph(Long subjectId) {
-        // 1. 获取该科目下所有知识点 (Nodes)
+        // 1. 获取该科目下所有知识点
         List<BizKnowledgePoint> points = this.list(new QueryWrapper<BizKnowledgePoint>().eq("subject_id", subjectId));
-
         if (points.isEmpty()) return Map.of("nodes", List.of(), "links", List.of());
-
         List<Long> pointIds = points.stream().map(BizKnowledgePoint::getId).collect(Collectors.toList());
 
-        // 2. 获取这些知识点之间的关系 (Links)
+        // 2. 获取关系
         List<BizKnowledgePointRelation> relations = relationMapper.selectList(
                 new QueryWrapper<BizKnowledgePointRelation>()
                         .in("parent_id", pointIds)
                         .in("child_id", pointIds)
         );
 
-        // 3. 组装成 ECharts 需要的格式
+        // 3. 【核心修改】组装 Nodes
         List<Map<String, Object>> nodes = points.stream().map(p -> {
             Map<String, Object> map = new HashMap<>();
+            // 关键修复：name 必须唯一且与 links 中的 source/target 一致，这里使用 ID
+            map.put("name", String.valueOf(p.getId()));
             map.put("id", String.valueOf(p.getId()));
-            map.put("name", p.getName());
+            // 新增 realName 用于前端显示真实的中文名称
+            map.put("realName", p.getName());
             map.put("value", p.getCode());
             map.put("symbolSize", 20);
+            map.put("draggable", true); // 允许拖拽
             return map;
         }).collect(Collectors.toList());
 
+        // 4. 组装 Links
         List<Map<String, Object>> links = relations.stream().map(r -> {
             Map<String, Object> map = new HashMap<>();
+            // 这里的值现在能正确对应上面的 map.get("name")
             map.put("source", String.valueOf(r.getParentId()));
             map.put("target", String.valueOf(r.getChildId()));
             return map;
@@ -110,6 +114,11 @@ public class BizKnowledgePointServiceImpl extends ServiceImpl<BizKnowledgePointM
                 .eq("parent_id", childId).eq("child_id", parentId));
         if (reverseCount > 0) throw new RuntimeException("存在循环引用，无法添加");
 
+        // 检查是否已存在
+        Long exists = relationMapper.selectCount(new QueryWrapper<BizKnowledgePointRelation>()
+                .eq("parent_id", parentId).eq("child_id", childId));
+        if(exists > 0) return true;
+
         try {
             BizKnowledgePointRelation rel = new BizKnowledgePointRelation();
             rel.setParentId(parentId);
@@ -120,7 +129,6 @@ public class BizKnowledgePointServiceImpl extends ServiceImpl<BizKnowledgePointM
             return false;
         }
     }
-
     @Override
     public boolean removeRelation(Long parentId, Long childId) {
         return relationMapper.delete(new QueryWrapper<BizKnowledgePointRelation>()
