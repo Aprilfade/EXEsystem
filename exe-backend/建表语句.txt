@@ -507,3 +507,60 @@ VALUES ('操作日志', 'sys:log:oper', 1, 1);
 -- SELECT id FROM sys_permission WHERE code = 'sys:log:oper';
 -- 假设查出来的 ID 是 31
 INSERT INTO `sys_role_permission` (`role_id`, `permission_id`) VALUES (2, 31);
+
+
+-- ----------------------------
+-- 1. 班级表
+-- ----------------------------
+CREATE TABLE `biz_class` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL COMMENT '班级名称',
+  `grade` varchar(50) DEFAULT NULL COMMENT '年级',
+  `teacher_id` bigint NOT NULL COMMENT '班主任/创建教师ID (关联 sys_user)',
+  `code` varchar(20) NOT NULL COMMENT '6位邀请码，用于学生加入',
+  `description` varchar(500) DEFAULT NULL,
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='班级表';
+
+-- ----------------------------
+-- 2. 班级学生关联表
+-- ----------------------------
+CREATE TABLE `biz_class_student` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `class_id` bigint NOT NULL,
+  `student_id` bigint NOT NULL,
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_class_student` (`class_id`,`student_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='班级成员表';
+
+-- ----------------------------
+-- 3. 作业表 (关联试卷)
+-- ----------------------------
+CREATE TABLE `biz_homework` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `class_id` bigint NOT NULL COMMENT '所属班级',
+  `title` varchar(200) NOT NULL COMMENT '作业标题',
+  `paper_id` bigint NOT NULL COMMENT '关联的试卷ID',
+  `deadline` datetime DEFAULT NULL COMMENT '截止时间',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_class` (`class_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='班级作业表';
+
+-- ----------------------------
+-- 4. 作业提交记录表
+-- ----------------------------
+CREATE TABLE `biz_homework_record` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `homework_id` bigint NOT NULL,
+  `student_id` bigint NOT NULL,
+  `status` int DEFAULT 0 COMMENT '0:未完成, 1:已完成',
+  `score` int DEFAULT NULL COMMENT '得分',
+  `exam_result_id` bigint DEFAULT NULL COMMENT '关联的考试结果ID',
+  `submit_time` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_hw_student` (`homework_id`,`student_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='作业提交记录';
