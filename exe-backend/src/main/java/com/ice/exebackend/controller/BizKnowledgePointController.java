@@ -65,12 +65,18 @@ public class BizKnowledgePointController {
                                         @RequestParam(required = false) String name) {
         Page<BizKnowledgePoint> page = new Page<>(current, size);
         QueryWrapper<BizKnowledgePoint> queryWrapper = new QueryWrapper<>();
+
         if (subjectId != null) {
             queryWrapper.eq("subject_id", subjectId);
         }
+
+        // 【核心修改】支持名称、编码、标签的综合模糊搜索
         if (StringUtils.hasText(name)) {
-            queryWrapper.like("name", name);
+            queryWrapper.and(w -> w.like("name", name)
+                    .or().like("code", name)
+                    .or().like("tags", name));
         }
+
         queryWrapper.orderByDesc("create_time");
 
         Page<KnowledgePointStatsDTO> statsPage = knowledgePointService.getKnowledgePointStatsPage(page, queryWrapper);

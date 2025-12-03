@@ -100,7 +100,21 @@
         </el-dialog>
 
         <ai-key-dialog v-model:visible="keyDialogVisible" />
-        <el-input v-model="searchQuery" placeholder="输入知识点名称、编码或标签搜索" size="large" style="width: 300px;"/>
+
+        <el-input
+            v-model="queryParams.name"
+            placeholder="输入知识点名称、编码或标签搜索"
+            size="large"
+            style="width: 300px;"
+            clearable
+            @keyup.enter="handleQuery"
+            @clear="handleQuery"
+        >
+          <template #append>
+            <el-button :icon="Search" @click="handleQuery" />
+          </template>
+        </el-input>
+
         <div>
           <el-button-group>
             <el-button :icon="Grid" :type="viewMode === 'grid' ? 'primary' : 'default'" @click="viewMode = 'grid'"/>
@@ -108,8 +122,9 @@
           </el-button-group>
         </div>
       </div>
+
       <div v-if="viewMode === 'grid'" class="card-grid">
-        <div v-for="kp in filteredList" :key="kp.id" class="knowledge-point-card" @click="handlePreview(kp.id)">
+        <div v-for="kp in knowledgePointList" :key="kp.id" class="knowledge-point-card" @click="handlePreview(kp.id)">
           <div class="card-header">
             <div>
               <el-tag size="small">{{ getSubjectName(kp.subjectId) }}</el-tag>
@@ -136,7 +151,8 @@
           </div>
         </div>
       </div>
-      <el-table v-if="viewMode === 'list'" :data="filteredList" v-loading="loading" style="width: 100%; margin-top: 20px;">
+
+      <el-table v-if="viewMode === 'list'" :data="knowledgePointList" v-loading="loading" style="width: 100%; margin-top: 20px;">
         <el-table-column type="index" label="序号" width="80" align="center" />
         <el-table-column prop="name" label="知识点名称" />
         <el-table-column prop="grade" label="年级" width="120" /> <el-table-column prop="code" label="编码" />
@@ -151,6 +167,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <el-pagination
+          class="pagination"
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="total"
+          v-model:current-page="queryParams.current"
+          v-model:page-size="queryParams.size"
+          :page-sizes="[12, 24, 36, 48]"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+          style="margin-top: 20px; justify-content: flex-end; display: flex;"
+      />
     </el-card>
 
     <knowledge-point-edit-dialog
@@ -168,22 +197,17 @@
 </template>
 
 <script lang="ts" setup>
-// ... script 部分无需改动 ...
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue'; // 确保导入 watch
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchKnowledgePointList, deleteKnowledgePoint } from '@/api/knowledgePoint';
 import type { KnowledgePoint, KnowledgePointPageParams } from '@/api/knowledgePoint';
 import { fetchAllSubjects } from '@/api/subject';
 import type { Subject } from '@/api/subject';
-import { Plus, Edit, Delete, Search, Refresh, Grid, Menu, MoreFilled } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, Refresh, Grid, Menu, MoreFilled, MagicStick } from '@element-plus/icons-vue';
 import KnowledgePointEditDialog from '@/components/knowledge-point/KnowledgePointEditDialog.vue';
-// 【新增】导入新的详情弹窗组件
 import KnowledgePointDetailDialog from '@/components/knowledge-point/KnowledgePointDetailDialog.vue';
-import { MagicStick } from '@element-plus/icons-vue'; // 引入图标
 import { generateKnowledgePointsFromText, createKnowledgePoint } from '@/api/knowledgePoint';
-import AiKeyDialog from '@/components/student/AiKeyDialog.vue'; // 假设你已将此组件注册为全局或局部
-
-
+import AiKeyDialog from '@/components/student/AiKeyDialog.vue';
 
 // AI 相关变量
 const aiDialogVisible = ref(false);
@@ -195,9 +219,6 @@ const aiForm = reactive({ text: '', count: 5 });
 const aiSaveConfig = reactive({ subjectId: undefined as number | undefined, grade: '' });
 const generatedPoints = ref<any[]>([]);
 
-
-
-
 const knowledgePointList = ref<KnowledgePoint[]>([]);
 const allSubjects = ref<Subject[]>([]);
 const total = ref(0);
@@ -206,15 +227,21 @@ const loading = ref(true);
 const isDialogVisible = ref(false);
 const editingId = ref<number | undefined>(undefined);
 const viewMode = ref<'grid' | 'list'>('grid');
-const searchQuery = ref('');
-// 【新增】为详情弹窗创建 ref
+// const searchQuery = ref(''); // 移除旧的搜索变量，合并入 queryParams
+
+// 【新增】分页和查询参数
+const queryParams = reactive<KnowledgePointPageParams>({
+  current: 1,
+  size: 12, // 默认一页12个，适合卡片布局
+  subjectId: undefined,
+  name: ''
+});
+
 const isDetailDialogVisible = ref(false);
 const selectedKpId = ref<number | null>(null);
 
-
-
+// AI 相关方法保持不变 ...
 const openAiDialog = () => {
-  // 检查 Key
   if (!localStorage.getItem('student_ai_key')) {
     ElMessage.warning('请先配置 AI API Key');
     keyDialogVisible.value = true;
@@ -233,10 +260,10 @@ const handleAiGenerate = async () => {
     const res = await generateKnowledgePointsFromText(aiForm);
     if (res.code === 200) {
       generatedPoints.value = res.data;
-      step.value = 2; // 进入预览/保存步骤
+      step.value = 2;
     }
   } catch(e) {
-    // error
+    // error handled by request
   } finally {
     generating.value = false;
   }
@@ -256,53 +283,61 @@ const batchSaveAiPoints = async () => {
         description: kp.description,
         subjectId: aiSaveConfig.subjectId,
         grade: aiSaveConfig.grade,
-        code: 'AI-' + Math.floor(Math.random() * 10000) // 简单的自动编码
+        code: 'AI-' + Math.floor(Math.random() * 10000)
       });
     }
     ElMessage.success(`成功入库 ${generatedPoints.value.length} 个知识点`);
     aiDialogVisible.value = false;
-    getList(); // 刷新列表
+    getList();
   } catch(e) {
     ElMessage.error('保存部分失败，请检查');
   } finally {
     saving.value = false;
   }
 };
-// 计算关联试题总数
+
+// 计算属性保持不变，但在分页模式下，这些统计只能反映当前页
+// 为了准确性，可以考虑后端返回统计概览，或者在前端提示 "当前页统计"
 const totalAssociatedQuestions = computed(() => {
   return knowledgePointList.value.reduce((sum, kp) => sum + (kp.questionCount || 0), 0);
 });
 
-// 计算未关联试题的知识点占比
 const unassociatedPercentage = computed(() => {
-  if (total.value === 0) {
-    return 0;
-  }
+  if (knowledgePointList.value.length === 0) return 0;
   const unassociatedCount = knowledgePointList.value.filter(kp => !kp.questionCount || kp.questionCount === 0).length;
-  return ((unassociatedCount / total.value) * 100).toFixed(0);
+  return ((unassociatedCount / knowledgePointList.value.length) * 100).toFixed(0);
 });
 
-const filteredList = computed(() => {
-  if (!searchQuery.value) {
-    return knowledgePointList.value;
-  }
-  const query = searchQuery.value.toLowerCase();
-  return knowledgePointList.value.filter(item =>
-      item.name.toLowerCase().includes(query) ||
-      item.code.toLowerCase().includes(query) ||
-      (item.tags && item.tags.toLowerCase().includes(query))
-  );
-});
-
+// 【修改】核心数据加载方法：使用 queryParams 调用后端接口
 const getList = async () => {
   loading.value = true;
   try {
-    const response = await fetchKnowledgePointList({ current: 1, size: 9999 }); // 获取所有数据
+    // 直接透传分页参数和搜索条件
+    const response = await fetchKnowledgePointList(queryParams);
     knowledgePointList.value = response.data;
     total.value = response.total;
   } finally {
     loading.value = false;
   }
+};
+
+// 【新增】处理搜索
+const handleQuery = () => {
+  queryParams.current = 1; // 搜索时重置为第一页
+  getList();
+};
+
+// 【新增】处理分页页码变化
+const handleCurrentChange = (val: number) => {
+  queryParams.current = val;
+  getList();
+};
+
+// 【新增】处理每页条数变化
+const handleSizeChange = (val: number) => {
+  queryParams.size = val;
+  queryParams.current = 1; // 重置到第一页
+  getList();
 };
 
 const getAllSubjects = async () => {
@@ -336,12 +371,16 @@ const handleDelete = (id: number) => {
       });
 };
 
-// 【新增】处理卡片点击事件的函数
 const handlePreview = (id: number) => {
   selectedKpId.value = id;
   isDetailDialogVisible.value = true;
 };
 
+// 监听视图模式切换，自动重置分页到第一页并刷新
+watch(viewMode, () => {
+  queryParams.current = 1;
+  getList();
+});
 
 onMounted(() => {
   getAllSubjects().then(getList);
@@ -349,89 +388,32 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* ... style 部分无需改动 ... */
-.page-container {
-  padding: 24px;
-}
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
+/* 样式保持不变 */
+.page-container { padding: 24px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { font-size: 24px; font-weight: 600; }
 .page-header p { color: var(--text-color-regular); margin-top: 4px; font-size: 14px; }
 .stats-cards { margin-bottom: 20px; }
 .stat-item { padding: 8px; }
 .stat-item .label { color: var(--text-color-regular); font-size: 14px; margin-bottom: 8px;}
 .stat-item .value { font-size: 28px; font-weight: bold; display: flex; align-items: center; }
-.stat-item .change { font-size: 14px; margin-left: 8px; }
-.stat-item .change.up { color: #67c23a; }
-.stat-item .change.down { color: #f56c6c; }
 .content-card { background-color: var(--bg-color-container); }
-.content-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
-}
+.content-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
 .knowledge-point-card {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 20px;
   background-color: var(--bg-color);
   transition: all 0.3s;
-  cursor: pointer; /* 【新增】添加鼠标手型，提示用户可点击 */
-}
-.knowledge-point-card:hover {
-  box-shadow: var(--card-shadow);
-  transform: translateY(-5px);
-}
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.el-dropdown-link {
   cursor: pointer;
-  color: var(--text-color-regular);
 }
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-.card-desc {
-  font-size: 14px;
-  color: var(--text-color-regular);
-  height: 40px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  margin-bottom: 16px;
-}
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid var(--border-color);
-  padding-top: 12px;
-}
-.card-code {
-  font-size: 12px;
-  color: var(--text-color-regular);
-}
-.card-tags {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
+.knowledge-point-card:hover { box-shadow: var(--card-shadow); transform: translateY(-5px); }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.el-dropdown-link { cursor: pointer; color: var(--text-color-regular); }
+.card-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.card-desc { font-size: 14px; color: var(--text-color-regular); height: 40px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-bottom: 16px; }
+.card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 12px; }
+.card-code { font-size: 12px; color: var(--text-color-regular); }
+.card-tags { display: flex; gap: 6px; align-items: center; }
 </style>
