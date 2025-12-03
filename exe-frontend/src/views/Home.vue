@@ -1,5 +1,10 @@
 <template>
   <div class="dashboard-container">
+    <div style="text-align: right; margin-bottom: 15px;">
+      <el-button type="primary" color="#626aef" :icon="DataLine" @click="$router.push('/data-screen')">
+        进入数据大屏模式
+      </el-button>
+    </div>
     <el-row :gutter="20" class="stat-row">
       <el-col :span="24 / 5" class="stat-card-item">
         <el-card shadow="hover" class="online-card">
@@ -139,7 +144,7 @@ import { getDashboardStats, type DashboardStats, type ChartData } from '@/api/da
 import NotificationPreviewDialog from "@/components/notification/NotificationPreviewDialog.vue";
 import { fetchNotificationById, type Notification } from '@/api/notification';
 import { gsap } from "gsap";
-import { Warning } from '@element-plus/icons-vue';
+import { DataLine, Warning } from '@element-plus/icons-vue';
 import { useNotificationSocketStore } from '@/stores/notificationSocket'; // 引入 Store
 import { fetchOnlineStudentCount } from '@/api/dashboard'; // 引入新 API
 

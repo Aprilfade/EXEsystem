@@ -19,6 +19,16 @@ const routes: Array<RouteRecordRaw> = [
         meta: { title: '系统导航' } // <-- 新增 meta.title
     },
     {
+        path: '/data-screen',
+        name: 'DataScreen',
+        component: () => import('@/views/DataScreen.vue'),
+        meta: {
+            title: '数据大屏',
+            requiresAuth: true,
+            permission: 'sys:home' // 只有有权限的用户才能看，或者去掉此行对所有登录用户开放
+        }
+    },
+    {
         path: '/',
         component: MainLayout,
         redirect: '/portal',
