@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletResponse; // 导入 HttpServletResponse
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate; // 1. 导入 RedisTemplate
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -46,20 +47,30 @@ public class BizStudentController {
     @Autowired
     private BizLearningActivityService learningActivityService;
 
+    // 2. 【新增】注入 PasswordEncoder
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     // 3. 定义缓存键常量
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
     @PostMapping
-    @Log(title = "学生管理", businessType = BusinessType.INSERT) // 新增
+    @Log(title = "学生管理", businessType = BusinessType.INSERT)
     public Result createStudent(@RequestBody BizStudent student) {
+        // 3. 【核心修复】如果密码不为空，进行加密处理
+        // 如果前端没传密码，可以设置一个默认密码（如 123456）
+        if (student.getPassword() == null || student.getPassword().isEmpty()) {
+            student.setPassword("123"); // 默认密码
+        }
+        // 对密码进行 BCrypt 加密
+        student.setPassword(passwordEncoder.encode(student.getPassword()));
+
         boolean success = studentService.save(student);
         if (success) {
-            // 4. 数据变更成功后，删除缓存
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
         }
         return success ? Result.suc() : Result.fail("学号已存在");
     }
-
     @GetMapping
     public Result getStudentList(@RequestParam(defaultValue = "1") int current,
                                  @RequestParam(defaultValue = "10") int size,

@@ -110,6 +110,5 @@ if __name__ == "__main__":
 
         # 执行生成任务
         generator.create_students()
-        generator.create_questions()
 
     print("\n✅ 所有任务执行完毕！")
