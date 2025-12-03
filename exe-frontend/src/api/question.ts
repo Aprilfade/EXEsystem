@@ -147,3 +147,13 @@ export function generateQuestionsFromText(data: { text: string; count: number; t
         }
     });
 }
+/**
+ * 【新增】批量删除试题
+ */
+export function batchDeleteQuestions(ids: number[]): Promise<ApiResult<null>> {
+    return request({
+        url: '/api/v1/questions/batch',
+        method: 'delete',
+        data: ids
+    });
+}

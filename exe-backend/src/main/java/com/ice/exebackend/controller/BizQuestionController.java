@@ -214,4 +214,20 @@ public class BizQuestionController {
             return Result.fail("生成失败: " + e.getMessage());
         }
     }
+    /**
+     * 【新增】批量删除试题
+     */
+    @DeleteMapping("/batch")
+    @Log(title = "题库管理", businessType = BusinessType.DELETE)
+    public Result batchDeleteQuestions(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Result.fail("请选择要删除的试题");
+        }
+        boolean success = questionService.removeByIds(ids);
+        if (success) {
+            // 清除缓存
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+        }
+        return success ? Result.suc("批量删除成功") : Result.fail("删除失败");
+    }
 }

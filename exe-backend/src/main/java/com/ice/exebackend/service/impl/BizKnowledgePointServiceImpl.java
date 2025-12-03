@@ -83,14 +83,15 @@ public class BizKnowledgePointServiceImpl extends ServiceImpl<BizKnowledgePointM
         // 3. 【核心修改】组装 Nodes
         List<Map<String, Object>> nodes = points.stream().map(p -> {
             Map<String, Object> map = new HashMap<>();
-            // 关键修复：name 必须唯一且与 links 中的 source/target 一致，这里使用 ID
+            // name 必须唯一且与 links 中的 source/target 一致，这里使用 ID 字符串
             map.put("name", String.valueOf(p.getId()));
             map.put("id", String.valueOf(p.getId()));
             // 新增 realName 用于前端显示真实的中文名称
             map.put("realName", p.getName());
             map.put("value", p.getCode());
+            // symbolSize 在前端根据度数动态计算，这里给个默认值即可
             map.put("symbolSize", 20);
-            map.put("draggable", true); // 允许拖拽
+            map.put("draggable", true);
             return map;
         }).collect(Collectors.toList());
 

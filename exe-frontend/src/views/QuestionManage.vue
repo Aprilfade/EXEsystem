@@ -58,6 +58,18 @@
           >
             批量修改
           </el-button>
+
+          <el-button
+              type="danger"
+              :icon="Delete"
+              size="large"
+              :disabled="selectedQuestionIds.length === 0"
+              @click="handleBatchDelete"
+              style="margin-left: 12px;"
+          >
+            批量删除
+          </el-button>
+
           <el-upload
               :action="''"
               :show-file-list="false"
@@ -189,7 +201,14 @@
 <script lang="ts" setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { fetchQuestionList, deleteQuestion, fetchQuestionById, importQuestions, exportQuestions } from '@/api/question';
+import {
+  fetchQuestionList,
+  deleteQuestion,
+  fetchQuestionById,
+  importQuestions,
+  exportQuestions,
+  batchDeleteQuestions // <--- 新增引入
+} from '@/api/question';
 import type { Question, QuestionPageParams } from '@/api/question';
 import { fetchAllSubjects } from '@/api/subject';
 import type { Subject } from '@/api/subject';
@@ -358,6 +377,39 @@ const handleExport = async () => {
   } catch (error) {
     ElMessage.error('导出失败，请稍后重试。');
   }
+};
+
+// 【新增】批量删除处理逻辑
+const handleBatchDelete = () => {
+  if (selectedQuestionIds.value.length === 0) return;
+
+  ElMessageBox.confirm(
+      `确定要批量删除选中的 ${selectedQuestionIds.value.length} 道试题吗? 此操作不可恢复。`,
+      '高危操作提示',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
+      }
+  ).then(async () => {
+    loading.value = true;
+    try {
+      await batchDeleteQuestions(selectedQuestionIds.value);
+      ElMessage.success('批量删除成功');
+      // 清空选中状态
+      selectedQuestionIds.value = [];
+      // 重新加载列表
+      getList();
+    } catch (error) {
+      // 错误已由 request 拦截器处理，此处可留空或打印日志
+      console.error(error);
+    } finally {
+      loading.value = false;
+    }
+  }).catch(() => {
+    // 用户取消删除
+  });
 };
 
 const handleSelectionChange = (selectedRows: Question[]) => {
