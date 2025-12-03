@@ -25,6 +25,8 @@ public class StudentClassController {
     @Autowired private BizHomeworkMapper homeworkMapper;
     @Autowired private BizStudentService studentService;
     @Autowired private BizPaperMapper paperMapper;
+    // 【新增】注入考试结果 Mapper，用于检查是否已完成
+    @Autowired private BizExamResultMapper examResultMapper;
 
     private Long getCurrentStudentId(Authentication auth) {
         String studentNo = auth.getName();
@@ -81,21 +83,29 @@ public class StudentClassController {
         return Result.suc(classes);
     }
 
-    // 3. 获取班级作业
+    // 3. 获取班级作业 (修改了这个方法)
     @GetMapping("/{classId}/homework")
-    public Result getClassHomework(@PathVariable Long classId) {
+    public Result getClassHomework(@PathVariable Long classId, Authentication auth) { // 【修改】增加 Authentication 参数
+        Long studentId = getCurrentStudentId(auth); // 获取当前学生ID
+
         List<BizHomework> homeworks = homeworkMapper.selectList(new QueryWrapper<BizHomework>()
                 .eq("class_id", classId)
                 .orderByDesc("create_time"));
 
-        // 填充试卷名称
+        // 填充试卷名称和完成状态
         for (BizHomework hw : homeworks) {
-            // 【修复】这里之前报错 getPaperId 找不到，现在 BizHomework 加了 Getter 后就正常了
             BizPaper paper = paperMapper.selectById(hw.getPaperId());
             if (paper != null) {
-                // 【修复】这里之前报错 setPaperName 找不到
                 hw.setPaperName(paper.getName());
             }
+
+            // 【核心修复逻辑】检查该学生是否已经提交过这张试卷
+            Long count = examResultMapper.selectCount(new QueryWrapper<BizExamResult>()
+                    .eq("paper_id", hw.getPaperId())
+                    .eq("student_id", studentId));
+
+            // 如果 count > 0，说明已考过，状态设为 1 (已完成)，否则为 0
+            hw.setStatus(count > 0 ? 1 : 0);
         }
         return Result.suc(homeworks);
     }

@@ -36,6 +36,23 @@
         </div>
         <el-empty v-else description="正在思考中..." />
       </div>
+      <div v-if="prerequisitePoints.length > 0" class="prerequisite-box">
+        <div class="box-title">💡 知识链溯源</div>
+        <p>检测到该题涉及的知识点 <strong>{{ currentKpName }}</strong> 掌握不牢。</p>
+        <p>建议优先复习其前置基础：</p>
+        <div class="tag-group">
+          <el-tag
+              v-for="kp in prerequisitePoints"
+              :key="kp.id"
+              type="warning"
+              effect="dark"
+              @click="goToKpReview(kp)"
+              style="cursor: pointer; margin-right: 8px;"
+          >
+            {{ kp.name }} <el-icon><Right /></el-icon>
+          </el-tag>
+        </div>
+      </div>
     </el-dialog>
 
     <ai-key-dialog
@@ -98,9 +115,36 @@ import { useStudentAuthStore } from '@/stores/studentAuth';
 import AiKeyDialog from '@/components/student/AiKeyDialog.vue';
 import { analyzeQuestion } from '@/api/ai';
 import MarkdownIt from 'markdown-it';
+import { fetchPrerequisites } from '@/api/knowledgePoint';
+
+
+
 const md = new MarkdownIt();
+const prerequisitePoints = ref<any[]>([]);
+const currentKpName = ref('');
+// 当打开错题详情时调用
+// 【修改】完整的加载前置知识点逻辑
+const loadPrerequisites = async () => {
+  // 1. 从当前详情中的题目对象获取关联知识点
+  // reviewQuestion 是我们在 handleReview 中赋值的题目详情
+  if (!reviewQuestion.value?.knowledgePointIds || reviewQuestion.value.knowledgePointIds.length === 0) {
+    return;
+  }
 
+  // 2. 取第一个知识点ID作为主知识点进行溯源
+  const kpId = reviewQuestion.value.knowledgePointIds[0];
 
+  if (!kpId) return;
+
+  try {
+    const res = await fetchPrerequisites(kpId);
+    if (res.code === 200) {
+      prerequisitePoints.value = res.data;
+    }
+  } catch (e) {
+    console.error("加载知识图谱失败", e);
+  }
+};
 
 
 const wrongRecords = ref<WrongRecordVO[]>([]);
@@ -146,13 +190,15 @@ const handleReview = async (record: WrongRecordVO) => {
     if (res.code === 200) {
       reviewQuestion.value = res.data;
 
-      // 【核心修复】将详情接口返回的 wrongAnswer 同步到 currentWrongRecord
-      // 因为 res.data 是后端返回的完整 VO，里面包含了 wrongAnswer
       currentWrongRecord.value = {
         ...record,
-        // 使用类型断言 (as any) 访问可能未在前端类型定义的字段，确保取到值
         wrongAnswer: (res.data as any).wrongAnswer || record.wrongAnswer
       };
+
+      // 【新增】在这里调用加载前置知识点
+      prerequisitePoints.value = []; // 先清空旧数据
+      await loadPrerequisites();
+
       isReviewDialogVisible.value = true;
     }
   } catch (error) {

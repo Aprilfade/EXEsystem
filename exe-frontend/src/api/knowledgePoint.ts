@@ -90,3 +90,36 @@ export function fetchQuestionsForKnowledgePoint(id: number): Promise<ApiResult<a
         method: 'get'
     });
 }
+// 获取图谱数据
+export function fetchKnowledgeGraph(subjectId: number): Promise<ApiResult<any>> {
+    return request({
+        url: `/api/v1/knowledge-points/graph/${subjectId}`,
+        method: 'get'
+    });
+}
+
+// 添加关联
+export function addKpRelation(data: { parentId: number; childId: number }): Promise<ApiResult<null>> {
+    return request({
+        url: '/api/v1/knowledge-points/relation',
+        method: 'post',
+        data
+    });
+}
+
+// 删除关联
+export function removeKpRelation(data: { parentId: number; childId: number }): Promise<ApiResult<null>> {
+    return request({
+        url: '/api/v1/knowledge-points/relation/delete',
+        method: 'post',
+        data
+    });
+}
+
+// 获取前置知识点
+export function fetchPrerequisites(id: number): Promise<ApiResult<KnowledgePoint[]>> {
+    return request({
+        url: `/api/v1/knowledge-points/${id}/prerequisites`,
+        method: 'get'
+    });
+}

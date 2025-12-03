@@ -84,7 +84,10 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
 
                 if (shouldSend) {
                     try {
-                        session.sendMessage(new TextMessage(message));
+                        // 【关键修改】加锁，防止多线程并发写入同一个 Session 导致 TEXT_PARTIAL_WRITING 错误
+                        synchronized (session) {
+                            session.sendMessage(new TextMessage(message));
+                        }
                     } catch (IOException e) {
                         logger.error("发送消息失败", e);
                     }

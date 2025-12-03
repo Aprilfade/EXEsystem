@@ -23,7 +23,17 @@
               <el-table-column prop="deadline" label="截止时间" />
               <el-table-column label="操作" align="right">
                 <template #default="{ row }">
-                  <el-button type="primary" size="small" @click="doHomework(row)">去完成</el-button>
+                  <el-tag type="success" v-if="row.status === 1">
+                    <el-icon><Check /></el-icon> 已完成
+                  </el-tag>
+                  <el-button
+                      v-else
+                      type="primary"
+                      size="small"
+                      @click="doHomework(row)"
+                  >
+                    去完成
+                  </el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -40,6 +50,7 @@ import { ref, onMounted } from 'vue';
 import { fetchMyClasses, joinClass, fetchClassHomework } from '@/api/class';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
+import { Check } from '@element-plus/icons-vue';
 
 const router = useRouter();
 const inviteCode = ref('');

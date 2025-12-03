@@ -73,6 +73,13 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('@/views/ClassManage.vue'),
                 meta: { permission: 'sys:user:list', title: '班级管理' } // 暂时复用用户管理权限
             },
+            // 在 children 数组中添加 (仅限管理员/教师访问)
+            {
+                path: 'knowledge-graph',
+                name: 'KnowledgeGraph',
+                component: () => import('@/views/KnowledgeGraphEditor.vue'), // 确保您创建了这个文件
+                meta: { permission: 'sys:kp:list', title: '知识图谱' }
+            }
         ]
     },
     // --- 学生端路由 ---

@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -126,5 +127,36 @@ public class BizKnowledgePointController {
 
         List<BizQuestion> questions = questionService.listByIds(questionIds);
         return Result.suc(questions);
+    }
+    // 获取图谱数据
+    @GetMapping("/graph/{subjectId}")
+    public Result getGraph(@PathVariable Long subjectId) {
+        return Result.suc(knowledgePointService.getKnowledgeGraph(subjectId));
+    }
+
+    // 建立关联
+    @PostMapping("/relation")
+    @Log(title = "知识点管理", businessType = BusinessType.UPDATE)
+    public Result addRelation(@RequestBody Map<String, Long> params) {
+        Long parentId = params.get("parentId");
+        Long childId = params.get("childId");
+        boolean success = knowledgePointService.addRelation(parentId, childId);
+        return success ? Result.suc() : Result.fail("关联失败或已存在");
+    }
+
+    // 删除关联
+    @PostMapping("/relation/delete")
+    @Log(title = "知识点管理", businessType = BusinessType.DELETE)
+    public Result removeRelation(@RequestBody Map<String, Long> params) {
+        Long parentId = params.get("parentId");
+        Long childId = params.get("childId");
+        knowledgePointService.removeRelation(parentId, childId);
+        return Result.suc();
+    }
+
+    // 【给学生端用】获取某知识点的前置知识点建议
+    @GetMapping("/{id}/prerequisites")
+    public Result getPrerequisites(@PathVariable Long id) {
+        return Result.suc(knowledgePointService.findPrerequisitePoints(id));
     }
 }

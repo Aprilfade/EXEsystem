@@ -564,3 +564,16 @@ CREATE TABLE `biz_homework_record` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_hw_student` (`homework_id`,`student_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='作业提交记录';
+
+
+-- ----------------------------
+-- 知识点关联表 (构建知识图谱)
+-- ----------------------------
+CREATE TABLE `biz_knowledge_point_relation` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `parent_id` bigint NOT NULL COMMENT '前置知识点ID (父节点)',
+  `child_id` bigint NOT NULL COMMENT '后置知识点ID (子节点)',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_relation` (`parent_id`, `child_id`) COMMENT '防止重复关联'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识点关系表';

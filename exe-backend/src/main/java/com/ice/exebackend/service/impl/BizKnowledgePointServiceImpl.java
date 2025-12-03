@@ -5,8 +5,10 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ice.exebackend.dto.KnowledgePointStatsDTO;
 import com.ice.exebackend.entity.BizKnowledgePoint;
+import com.ice.exebackend.entity.BizKnowledgePointRelation; // 新增导入
 import com.ice.exebackend.entity.BizQuestionKnowledgePoint;
 import com.ice.exebackend.mapper.BizKnowledgePointMapper;
+import com.ice.exebackend.mapper.BizKnowledgePointRelationMapper; // 新增导入
 import com.ice.exebackend.mapper.BizQuestionKnowledgePointMapper;
 import com.ice.exebackend.service.BizKnowledgePointService;
 import org.springframework.beans.BeanUtils;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import java.util.Collections;
+import java.util.HashMap; // 新增导入
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -22,10 +25,14 @@ import java.util.stream.Collectors;
 @Service
 public class BizKnowledgePointServiceImpl extends ServiceImpl<BizKnowledgePointMapper, BizKnowledgePoint> implements BizKnowledgePointService {
 
-    // 【新增】注入关联表 Mapper
     @Autowired
     private BizQuestionKnowledgePointMapper questionKnowledgePointMapper;
 
+    // 【新增】注入知识图谱关系 Mapper
+    @Autowired
+    private BizKnowledgePointRelationMapper relationMapper;
+
+    // ================== 原有方法：分页获取统计数据 ==================
     @Override
     public Page<KnowledgePointStatsDTO> getKnowledgePointStatsPage(Page<BizKnowledgePoint> pageRequest, QueryWrapper<BizKnowledgePoint> queryWrapper) {
         // 1. 正常分页查询知识点
@@ -55,5 +62,80 @@ public class BizKnowledgePointServiceImpl extends ServiceImpl<BizKnowledgePointM
             dto.setQuestionCount(questionCounts.getOrDefault(kp.getId(), 0L));
             return dto;
         });
+    }
+
+    // ================== 新增方法：知识图谱相关 ==================
+
+    @Override
+    public Map<String, Object> getKnowledgeGraph(Long subjectId) {
+        // 1. 获取该科目下所有知识点 (Nodes)
+        List<BizKnowledgePoint> points = this.list(new QueryWrapper<BizKnowledgePoint>().eq("subject_id", subjectId));
+
+        if (points.isEmpty()) return Map.of("nodes", List.of(), "links", List.of());
+
+        List<Long> pointIds = points.stream().map(BizKnowledgePoint::getId).collect(Collectors.toList());
+
+        // 2. 获取这些知识点之间的关系 (Links)
+        List<BizKnowledgePointRelation> relations = relationMapper.selectList(
+                new QueryWrapper<BizKnowledgePointRelation>()
+                        .in("parent_id", pointIds)
+                        .in("child_id", pointIds)
+        );
+
+        // 3. 组装成 ECharts 需要的格式
+        List<Map<String, Object>> nodes = points.stream().map(p -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", String.valueOf(p.getId()));
+            map.put("name", p.getName());
+            map.put("value", p.getCode());
+            map.put("symbolSize", 20);
+            return map;
+        }).collect(Collectors.toList());
+
+        List<Map<String, Object>> links = relations.stream().map(r -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("source", String.valueOf(r.getParentId()));
+            map.put("target", String.valueOf(r.getChildId()));
+            return map;
+        }).collect(Collectors.toList());
+
+        return Map.of("nodes", nodes, "links", links);
+    }
+
+    @Override
+    public boolean addRelation(Long parentId, Long childId) {
+        if (parentId.equals(childId)) throw new RuntimeException("不能关联自己");
+
+        Long reverseCount = relationMapper.selectCount(new QueryWrapper<BizKnowledgePointRelation>()
+                .eq("parent_id", childId).eq("child_id", parentId));
+        if (reverseCount > 0) throw new RuntimeException("存在循环引用，无法添加");
+
+        try {
+            BizKnowledgePointRelation rel = new BizKnowledgePointRelation();
+            rel.setParentId(parentId);
+            rel.setChildId(childId);
+            relationMapper.insert(rel);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @Override
+    public boolean removeRelation(Long parentId, Long childId) {
+        return relationMapper.delete(new QueryWrapper<BizKnowledgePointRelation>()
+                .eq("parent_id", parentId).eq("child_id", childId)) > 0;
+    }
+
+    @Override
+    public List<BizKnowledgePoint> findPrerequisitePoints(Long pointId) {
+        List<BizKnowledgePointRelation> parents = relationMapper.selectList(
+                new QueryWrapper<BizKnowledgePointRelation>().eq("child_id", pointId)
+        );
+
+        if (parents.isEmpty()) return Collections.emptyList();
+
+        List<Long> parentIds = parents.stream().map(BizKnowledgePointRelation::getParentId).collect(Collectors.toList());
+        return this.listByIds(parentIds);
     }
 }
