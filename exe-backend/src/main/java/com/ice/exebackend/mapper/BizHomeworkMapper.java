@@ -1,4 +1,9 @@
 package com.ice.exebackend.mapper;
 
-public class BizHomeworkMapper {
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.ice.exebackend.entity.BizHomework;
+import org.apache.ibatis.annotations.Mapper;
+
+@Mapper
+public interface BizHomeworkMapper extends BaseMapper<BizHomework> {
 }

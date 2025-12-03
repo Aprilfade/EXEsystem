@@ -22,3 +22,7 @@ export function fetchMyClasses(): Promise<ApiResult<any>> {
 export function fetchClassHomework(classId: number): Promise<ApiResult<any>> {
     return request({ url: `/api/v1/student/classes/${classId}/homework`, method: 'get' });
 }
+// 【新增】获取班级下的学生列表（教师端）
+export function fetchClassStudents(classId: number): Promise<ApiResult<any>> {
+    return request({ url: `/api/v1/classes/${classId}/students`, method: 'get' });
+}

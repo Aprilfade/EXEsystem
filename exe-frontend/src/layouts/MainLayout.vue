@@ -83,7 +83,7 @@ import ProfileEditDialog from '@/components/user/ProfileEditDialog.vue';
 import {
   Management, House, Collection, Reading, Tickets, DocumentCopy, Avatar, CircleClose, DataLine,
   User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting, Fold, Expand, Document, Medal,
-  VideoPlay
+  VideoPlay,DataBoard
 } from '@element-plus/icons-vue';
 import { useNotificationSocketStore } from '@/stores/notificationSocket';
 
@@ -102,6 +102,7 @@ const allMenus = [
   { path: '/papers', name: '试卷管理', permission: 'sys:paper:list', icon: DocumentCopy },
   { path: '/courses', name: '课程管理', permission: 'sys:course:edit', icon: VideoPlay },
   { path: '/students', name: '学生管理', permission: 'sys:student:list', icon: Avatar },
+  { path: '/classes', name: '班级管理', permission: 'sys:user:list', icon: DataBoard },
   { path: '/score-manage', name: '成绩管理', permission: 'sys:stats:list', icon: Medal }, // 【修改】新增成绩管理菜单
   {
     path: '/error-management', name: '错题管理', permission: 'sys:wrong:list', icon: CircleClose,

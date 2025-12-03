@@ -57,6 +57,12 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('@/views/OperLog.vue'),
                 meta: { permission: 'sys:log:oper', title: '操作日志' }
             },
+            {
+                path: 'classes',
+                name: 'ClassManage',
+                component: () => import('@/views/ClassManage.vue'),
+                meta: { permission: 'sys:user:list', title: '班级管理' } // 暂时复用用户管理权限
+            },
         ]
     },
     // --- 学生端路由 ---
@@ -132,6 +138,12 @@ const routes: Array<RouteRecordRaw> = [
                 name: 'StudentSmartReview',
                 component: () => import('@/views/student/SmartReview.vue'),
                 meta: { title: '智能复习' }
+            },
+            {
+                path: 'classes',
+                name: 'StudentMyClasses',
+                component: () => import('@/views/student/MyClasses.vue'),
+                meta: { title: '我的班级' }
             },
 
 
