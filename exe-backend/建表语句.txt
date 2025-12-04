@@ -577,3 +577,40 @@ CREATE TABLE `biz_knowledge_point_relation` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_relation` (`parent_id`, `child_id`) COMMENT '防止重复关联'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识点关系表';
+
+
+
+-- ----------------------------
+-- 23. 成就定义表
+-- ----------------------------
+CREATE TABLE `biz_achievement` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL COMMENT '成就名称',
+  `description` varchar(255) COMMENT '达成条件描述',
+  `icon_url` varchar(500) COMMENT '徽章图标URL (可以是图片或Emoji)',
+  `type` varchar(50) NOT NULL COMMENT '类型: SIGN_IN_STREAK(连签), TOTAL_QUESTIONS(刷题数), PERFECT_PAPER(满分试卷)',
+  `threshold` int NOT NULL COMMENT '达成阈值 (如 7, 100, 1)',
+  `reward_points` int DEFAULT 0 COMMENT '奖励积分',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成就规则表';
+
+-- ----------------------------
+-- 24. 用户成就记录表
+-- ----------------------------
+CREATE TABLE `biz_user_achievement` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `student_id` bigint NOT NULL COMMENT '学生ID',
+  `achievement_id` bigint NOT NULL COMMENT '成就ID',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_student_ach` (`student_id`, `achievement_id`) COMMENT '每个成就每人只能获得一次'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户成就表';
+
+-- 初始化一些基础成就
+INSERT INTO `biz_achievement` (`name`, `description`, `icon_url`, `type`, `threshold`, `reward_points`) VALUES
+('初出茅庐', '累计完成 10 道题目', '🥉', 'TOTAL_QUESTIONS', 10, 20),
+('题海战术', '累计完成 100 道题目', '🥈', 'TOTAL_QUESTIONS', 100, 100),
+('持之以恒', '连续签到 7 天', '📅', 'SIGN_IN_STREAK', 7, 50),
+('月度模范', '连续签到 30 天', '🌕', 'SIGN_IN_STREAK', 30, 200),
+('完美主义', '获得 1 次试卷满分', '💯', 'PERFECT_PAPER', 1, 50);

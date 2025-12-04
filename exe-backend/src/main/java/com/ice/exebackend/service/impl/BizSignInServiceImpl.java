@@ -2,10 +2,12 @@ package com.ice.exebackend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ice.exebackend.entity.BizAchievement;
 import com.ice.exebackend.entity.BizLearningActivity;
 import com.ice.exebackend.entity.BizSignIn;
 import com.ice.exebackend.entity.BizStudent;
 import com.ice.exebackend.mapper.BizSignInMapper;
+import com.ice.exebackend.service.BizAchievementService;
 import com.ice.exebackend.service.BizLearningActivityService;
 import com.ice.exebackend.service.BizSignInService;
 import com.ice.exebackend.service.BizStudentService;
@@ -28,6 +30,9 @@ public class BizSignInServiceImpl extends ServiceImpl<BizSignInMapper, BizSignIn
     private BizStudentService studentService;
     @Autowired
     private BizLearningActivityService activityService;
+
+    @Autowired
+    private BizAchievementService achievementService; // 注入
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -84,6 +89,15 @@ public class BizSignInServiceImpl extends ServiceImpl<BizSignInMapper, BizSignIn
         log.setDescription("每日签到 (连续 " + streak + " 天)");
         log.setCreateTime(LocalDateTime.now());
         activityService.save(log);
+
+        // 7. 检查连签成就
+        // streak 是前面逻辑计算出来的连续签到天数
+        List<BizAchievement> newAchievements = achievementService.checkAndAward(studentId, "SIGN_IN_STREAK", streak);
+
+        // 如果有新成就，放入 result 返回给前端弹窗
+        if (!newAchievements.isEmpty()) {
+            result.put("newAchievements", newAchievements);
+        }
 
         Map<String, Object> result = new HashMap<>();
         result.put("points", points);

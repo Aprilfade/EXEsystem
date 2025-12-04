@@ -103,6 +103,14 @@
           </div>
         </el-card>
       </el-col>
+      <el-col :span="24" style="margin-top: 20px;">
+        <el-card shadow="never">
+          <template #header>
+            <div class="card-header"><span>🏅 我的成就墙</span></div>
+          </template>
+          <AchievementList :list="achievements" />
+        </el-card>
+      </el-col>
     </el-row>
 
     <el-row :gutter="20">
@@ -209,9 +217,12 @@ import PointsMallDialog from '@/components/student/PointsMallDialog.vue';
 import { Present } from '@element-plus/icons-vue'; // 引入礼品图标
 import UserAvatar from '@/components/UserAvatar.vue';
 import SignInCalendar from '@/components/student/SignInCalendar.vue';
+import AchievementList from '@/components/student/AchievementList.vue'; // 引入组件
+import { fetchMyAchievements } from '@/api/student'; // 引入API
 
 
 
+const achievements = ref([]);
 const studentAuth = useStudentAuthStore();
 const router = useRouter();
 const isMallVisible = ref(false);
@@ -333,6 +344,10 @@ onMounted(async () => {
     console.error("获取数据失败:", error);
   } finally {
     loading.value = false;
+  }
+  const achRes = await fetchMyAchievements();
+  if (achRes.code === 200) {
+    achievements.value = achRes.data;
   }
 });
 </script>

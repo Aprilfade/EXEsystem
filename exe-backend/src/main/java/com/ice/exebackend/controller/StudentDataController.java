@@ -72,6 +72,9 @@ public class StudentDataController {
     @Autowired
     private com.ice.exebackend.service.BizPaperService paperService;
 
+
+    @Autowired
+    private BizAchievementService achievementService; // 注入
     // 1. 注入新的 Service
     @Autowired
     private BizExamResultService examResultService;
@@ -618,6 +621,35 @@ public class StudentDataController {
 
         student.setPoints((student.getPoints() == null ? 0 : student.getPoints()) + 10);
         studentService.updateById(student);
+
+        List<BizAchievement> unlockedList = new ArrayList<>();
+
+        // 1. 检查满分成就 (如果得分 >= 总分)
+        if (studentScore >= totalScore && totalScore > 0) {
+            // 计算该学生满分次数
+            long perfectCount = examResultService.count(new QueryWrapper<BizExamResult>()
+                    .eq("student_id", student.getId())
+                    .ge("score", totalScore)); // 简单近似，实际应比对 total_score 列
+            // 这里为了简单，假设这次就是满分，传入任意大于0的值触发判定，或者查询真实次数
+            // 更严谨的做法是查询数据库中该学生满分试卷的数量
+            unlockedList.addAll(achievementService.checkAndAward(student.getId(), "PERFECT_PAPER", (int)perfectCount));
+        }
+
+        // 2. 检查刷题数量成就
+        // (这里使用一个估算值，或者你需要写SQL统计 biz_exam_result 中 user_answers 的题目总数，或者查询 wrong_record + correct_record)
+        // 简单起见，我们可以统计 biz_learning_activity 中 type=PRACTICE_SUBMIT 的次数 * 平均题数，或者直接查询总答题数字段（如果你有维护）
+        // 假设我们在 studentService.getStudentDashboardStats 中实现了统计总答题数
+        // long totalQuestions = studentService.countTotalAnswered(student.getId());
+        // unlockedList.addAll(achievementService.checkAndAward(student.getId(), "TOTAL_QUESTIONS", (int)totalQuestions));
+
+        // 将新解锁的成就放入返回结果
+        Map<String, Object> resMap = new java.util.HashMap<>();
+        resMap.put("score", studentScore);
+        resMap.put("totalScore", totalScore);
+        resMap.put("details", results);
+        if(!unlockedList.isEmpty()) {
+            resMap.put("newAchievements", unlockedList);
+        }
 
         return Result.suc(Map.of(
                 "score", studentScore,

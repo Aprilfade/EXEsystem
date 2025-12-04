@@ -87,3 +87,10 @@ export function addStudentPoints(id: number, data: { points: number; remark?: st
         data
     });
 }
+// 获取我的成就
+export function fetchMyAchievements(): Promise<ApiResult<any[]>> {
+    return request({
+        url: '/api/v1/student/achievements',
+        method: 'get'
+    });
+}
