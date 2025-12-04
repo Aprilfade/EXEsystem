@@ -10,6 +10,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
+import com.ice.exebackend.entity.BizStudent;
+import com.ice.exebackend.service.BizStudentService;
+
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,6 +25,10 @@ public class BattleGameManager {
     private BizQuestionService questionService; // 复用你现有的题库服务
     @Autowired
     private ObjectMapper objectMapper;
+
+    // 【新增】注入学生服务，用于查询用户信息
+    @Autowired
+    private BizStudentService studentService;
 
     // 等待队列 (存放 WebSocketSession)
     private final CopyOnWriteArrayList<WebSocketSession> waitingQueue = new CopyOnWriteArrayList<>();
@@ -108,15 +115,48 @@ public class BattleGameManager {
         playerRoomMap.put(p1.getId(), roomId);
         playerRoomMap.put(p2.getId(), roomId);
 
-        // 通知双方匹配成功
-        sendMessage(p1, BattleMessage.of("MATCH_SUCCESS", "对手已就位"));
-        sendMessage(p2, BattleMessage.of("MATCH_SUCCESS", "对手已就位"));
+        // 【核心修改开始】 获取双方用户信息并交叉发送
+        // 从 session 中获取学号 (在 JwtHandshakeInterceptor 中放入的 "username")
+        String p1No = (String) p1.getAttributes().get("username");
+        String p2No = (String) p2.getAttributes().get("username");
 
+        // 查询数据库获取详细信息
+        // 注意：lambdaQuery() 需要 MyBatis-Plus 支持，确保 BizStudentService 继承了 IService
+        BizStudent s1 = studentService.lambdaQuery().eq(BizStudent::getStudentNo, p1No).one();
+        BizStudent s2 = studentService.lambdaQuery().eq(BizStudent::getStudentNo, p2No).one();
+
+        // 构造发给 P1 的消息 (包含 P2 的信息)
+        Map<String, Object> dataForP1 = new HashMap<>();
+        dataForP1.put("message", "匹配成功");
+        dataForP1.put("opponent", buildStudentInfoMap(s2)); // 封装对手信息
+        sendMessage(p1, BattleMessage.of("MATCH_SUCCESS", dataForP1));
+
+        // 构造发给 P2 的消息 (包含 P1 的信息)
+        Map<String, Object> dataForP2 = new HashMap<>();
+        dataForP2.put("message", "匹配成功");
+        dataForP2.put("opponent", buildStudentInfoMap(s1)); // 封装对手信息
+        sendMessage(p2, BattleMessage.of("MATCH_SUCCESS", dataForP2));
+        // 【核心修改结束】
         // 延迟 1秒 发送第一题
         try { Thread.sleep(1000); } catch (InterruptedException e) {}
         sendQuestion(room);
     }
 
+
+
+    // 【新增】辅助方法：构建脱敏的学生信息 Map
+    private Map<String, Object> buildStudentInfoMap(BizStudent s) {
+        Map<String, Object> info = new HashMap<>();
+        if (s != null) {
+            info.put("name", s.getName());
+            info.put("avatar", s.getAvatar());
+            info.put("avatarFrameStyle", s.getAvatarFrameStyle());
+        } else {
+            info.put("name", "神秘对手");
+            info.put("avatar", null);
+        }
+        return info;
+    }
     private void sendQuestion(BattleRoom room) {
         BizQuestion q = room.getCurrentQuestion();
         // 脱敏，不发答案
@@ -131,25 +171,40 @@ public class BattleGameManager {
         sendMessage(room.p2, msg);
     }
 
+    // 【修改后】修复后的代码
     private void sendRoundResult(BattleRoom room) {
-        // 计算本轮得分逻辑
-        // 简单逻辑：答对得20分
+        // 1. 计算本轮得分（保持原逻辑）
         BizQuestion q = room.getCurrentQuestion();
-        boolean p1Correct = room.p1Answer.equalsIgnoreCase(q.getAnswer());
-        boolean p2Correct = room.p2Answer.equalsIgnoreCase(q.getAnswer());
+
+        // 简单的判分逻辑：如果不区分单选多选，假设全匹配才给分
+        // 注意：这里使用了 equalsIgnoreCase，实际生产中可能需要更复杂的判分（如多选少选）
+        boolean p1Correct = room.p1Answer != null && room.p1Answer.equalsIgnoreCase(q.getAnswer());
+        boolean p2Correct = room.p2Answer != null && room.p2Answer.equalsIgnoreCase(q.getAnswer());
 
         if (p1Correct) room.p1Score += 20;
         if (p2Correct) room.p2Score += 20;
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("correctAnswer", q.getAnswer());
-        result.put("p1Answer", room.p1Answer);
-        result.put("p2Answer", room.p2Answer);
-        result.put("p1Score", room.p1Score);
-        result.put("p2Score", room.p2Score);
+        // 2. 为 P1 构建数据 (P1 是 "我", P2 是 "对手")
+        Map<String, Object> dataForP1 = new HashMap<>();
+        dataForP1.put("correctAnswer", q.getAnswer());
+        dataForP1.put("myAnswer", room.p1Answer);      // P1 的答案是 "myAnswer"
+        dataForP1.put("oppAnswer", room.p2Answer);     // P2 的答案是 "oppAnswer"
+        dataForP1.put("myScore", room.p1Score);        // P1 的分是 "myScore"
+        dataForP1.put("oppScore", room.p2Score);       // P2 的分是 "oppScore"
+        dataForP1.put("isCorrect", p1Correct);         // 方便前端展示对错
 
-        sendMessage(room.p1, BattleMessage.of("ROUND_RESULT", result));
-        sendMessage(room.p2, BattleMessage.of("ROUND_RESULT", result));
+        sendMessage(room.p1, BattleMessage.of("ROUND_RESULT", dataForP1));
+
+        // 3. 为 P2 构建数据 (P2 是 "我", P1 是 "对手")
+        Map<String, Object> dataForP2 = new HashMap<>();
+        dataForP2.put("correctAnswer", q.getAnswer());
+        dataForP2.put("myAnswer", room.p2Answer);      // P2 的答案是 "myAnswer"
+        dataForP2.put("oppAnswer", room.p1Answer);     // P1 的答案是 "oppAnswer"
+        dataForP2.put("myScore", room.p2Score);        // P2 的分是 "myScore"
+        dataForP2.put("oppScore", room.p1Score);       // P1 的分是 "oppScore"
+        dataForP2.put("isCorrect", p2Correct);         // 方便前端展示对错
+
+        sendMessage(room.p2, BattleMessage.of("ROUND_RESULT", dataForP2));
     }
 
     private void sendGameOver(BattleRoom room) {

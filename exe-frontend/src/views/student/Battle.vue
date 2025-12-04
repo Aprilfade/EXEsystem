@@ -12,16 +12,28 @@
     <div v-else-if="gameState === 'PLAYING' || gameState === 'ROUND_RESULT'" class="game-box">
       <div class="players-bar">
         <div class="player me">
-          <el-avatar :size="60" src="https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png" />
+          <UserAvatar
+              :src="store.student?.avatar"
+              :name="store.studentName"
+              :size="60"
+              :frame-style="store.student?.avatarFrameStyle"
+          />
           <div class="score">{{ myScore }} 分</div>
           <div class="name">我</div>
         </div>
+
         <div class="vs-icon">VS</div>
         <div class="player opponent">
-          <el-avatar :size="60" icon="UserFilled" />
+          <UserAvatar
+              :src="opponentInfo.avatar"
+              :name="opponentInfo.name"
+              :size="60"
+              :frame-style="opponentInfo.avatarFrameStyle"
+          />
           <div class="score">{{ oppScore }} 分</div>
-          <div class="name">对手</div>
+          <div class="name">{{ opponentInfo.name }}</div>
         </div>
+
       </div>
 
       <div class="question-card">
@@ -69,6 +81,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useStudentAuthStore } from '@/stores/studentAuth';
 import { ElMessage } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
+import UserAvatar from '@/components/UserAvatar.vue'; // 确保引入头像组件
 
 const store = useStudentAuthStore();
 const socket = ref<WebSocket | null>(null);
@@ -109,10 +122,23 @@ const connect = () => {
   };
 };
 
+// 【新增】对手信息状态
+const opponentInfo = ref({
+  name: '匹配中...',
+  avatar: '',
+  avatarFrameStyle: ''
+});
+
+
 const handleMessage = (msg: any) => {
   if (msg.type === 'MATCH_SUCCESS') {
     gameState.value = 'PLAYING'; // 准备开始，实际等待题目
     ElMessage.success('匹配成功！准备开始');
+    // 【核心修改】更新对手信息
+    if (msg.data && msg.data.opponent) {
+      opponentInfo.value = msg.data.opponent;
+    }
+
     myScore.value = 0;
     oppScore.value = 0;
   } else if (msg.type === 'QUESTION') {
@@ -123,28 +149,37 @@ const handleMessage = (msg: any) => {
     myAnswer.value = '';
     roundResult.value = null;
   } else if (msg.type === 'ROUND_RESULT') {
+    // 【修改开始】
     gameState.value = 'ROUND_RESULT';
     roundResult.value = msg.data;
-    // 更新分数
-    myScore.value = msg.data.p1Score; // 这里简化了，后端其实需要区分谁是p1谁是p2，或者后端直接发"myScore"
-    // 为简化逻辑，假设后端发回来的 p1Score 就是我的，p2Score 是对手的。
-    // *实际生产代码：后端应根据session判断谁是me，谁是opp，然后返回 {myScore: xx, oppScore: yy}*
-    // 按照上方后端代码逻辑，后端已经区分发送了 BattleMessage，所以这里的 data 里如果是 GAME_OVER 已经区分了
-    // 但 ROUND_RESULT 我偷懒了没区分。
-    // **修正方案**：在前端只能看到更新后的分数，这里假设后端 ROUND_RESULT 也能像 GAME_OVER 那样区分更好。
-    // 暂时用简单的动画效果等待下一题。
+
+    // 核心修复：直接使用后端转换好的相对分数
+    myScore.value = msg.data.myScore;
+    oppScore.value = msg.data.oppScore;
+
+    // 可选：增加一些动画或提示，例如：
+    if (msg.data.isCorrect) {
+      ElMessage.success('回答正确 +20分！');
+    } else {
+      ElMessage.error('回答错误');
+    }
+    // 【修改结束】
+
   } else if (msg.type === 'GAME_OVER') {
     gameState.value = 'GAME_OVER';
     finalResult.value = msg.data.result;
     myScore.value = msg.data.myScore;
     oppScore.value = msg.data.oppScore;
   } else if (msg.type === 'OPPONENT_LEFT') {
-    ElMessage.warning('对手已离开，游戏结束');
-    gameState.value = 'IDLE';
+    // 对手离开时，重置信息
+    opponentInfo.value.name = '对手已离开';
   }
 };
 
+// 在 startMatch 或重置时，记得重置 opponentInfo
 const startMatch = () => {
+  // 重置显示的对手信息
+  opponentInfo.value = { name: '寻找对手...', avatar: '', avatarFrameStyle: '' };
   gameState.value = 'MATCHING';
   socket.value?.send(JSON.stringify({ type: 'MATCH' }));
 };
