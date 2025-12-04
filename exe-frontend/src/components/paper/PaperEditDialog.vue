@@ -82,8 +82,19 @@
     </div>
     <el-dialog v-model="showSmartDialog" title="智能组卷配置" width="480px" append-to-body>
       <el-form :model="smartForm" label-width="100px">
-        <el-alert title="系统将根据当前选择的科目和年级随机抽取题目" type="info" :closable="false" style="margin-bottom: 20px;" />
+        <el-alert title="系统将根据当前选择的科目和年级，结合遗传算法生成最优试卷" type="info" :closable="false" style="margin-bottom: 20px;" />
 
+        <el-form-item label="期望难度">
+          <div style="width: 90%; padding-left: 6px;"> <el-slider
+              v-model="smartForm.targetDifficulty"
+              :min="0.1"
+              :max="1.0"
+              :step="0.1"
+              show-stops
+              :marks="difficultyMarks"
+          />
+          </div>
+        </el-form-item>
         <el-form-item label="单选题数量">
           <el-input-number v-model="smartForm.singleCount" :min="0" :max="50" style="width: 100%;" />
         </el-form-item>
@@ -102,7 +113,9 @@
       </el-form>
       <template #footer>
         <el-button @click="showSmartDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleSmartGenerate" :loading="generating">开始生成</el-button>
+        <el-button type="primary" @click="handleSmartGenerate" :loading="generating">
+          开始进化生成
+        </el-button>
       </template>
     </el-dialog>
 
@@ -218,6 +231,14 @@ const handleImageSuccess: UploadProps['onSuccess'] = (response, uploadFile, uplo
     fileList.value = uploadFiles;
   }
 }
+// 【新增】定义滑块的刻度标记
+const difficultyMarks = {
+  0.1: '极易',
+  0.3: '简单',
+  0.5: '中等',
+  0.7: '较难',
+  0.9: '极难'
+};
 // 3. 新增排序处理函数 (其实 draggable 会自动更新数组，这里主要是为了确保 sortOrder 字段正确)
 const handleImageSort = () => {
   if (form.value.paperImages) {
@@ -302,7 +323,8 @@ const smartForm = reactive<SmartPaperReq>({
   multiCount: 2,
   judgeCount: 2,
   fillCount: 2,
-  subjectiveCount: 1
+  subjectiveCount: 1,
+  targetDifficulty: 0.5 // 【新增】默认难度设为 0.5 (中等)
 });
 
 // 打开智能组卷弹窗

@@ -15,6 +15,7 @@ import com.ice.exebackend.mapper.BizPaperMapper;
 import com.ice.exebackend.mapper.BizPaperQuestionMapper;
 import com.ice.exebackend.service.BizPaperService;
 import com.ice.exebackend.service.BizQuestionService;
+import com.ice.exebackend.utils.GeneticPaperUtil;
 import org.apache.poi.util.Units;
 import org.apache.poi.xwpf.usermodel.*;
 import org.springframework.beans.BeanUtils;
@@ -30,16 +31,17 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
+import java.util.HashMap;  // 解决 "找不到符号 类 HashMap"
+import com.ice.exebackend.utils.GeneticPaperUtil; // 解决 "找不到符号 变量 GeneticPaperUtil"
+
+
 
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -66,73 +68,91 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
 
     @Override
     public List<PaperDTO.PaperGroupDTO> generateSmartPaper(SmartPaperReq req) {
-        List<PaperDTO.PaperGroupDTO> groups = new ArrayList<>();
-        int sortOrder = 0;
+        // 1. 准备组卷约束
+        Map<Integer, Integer> typeCountMap = new HashMap<>();
+        typeCountMap.put(1, req.getSingleCount());
+        typeCountMap.put(2, req.getMultiCount());
+        typeCountMap.put(3, req.getFillCount());
+        typeCountMap.put(4, req.getJudgeCount());
+        typeCountMap.put(5, req.getSubjectiveCount());
 
-        // 辅助方法：生成指定题型的分组
-        generateGroup(groups, req, 1, "一、单选题", req.getSingleCount(), sortOrder++);
-        generateGroup(groups, req, 2, "二、多选题", req.getMultiCount(), sortOrder++);
-        generateGroup(groups, req, 4, "三、判断题", req.getJudgeCount(), sortOrder++); // 注意顺序
-        generateGroup(groups, req, 3, "四、填空题", req.getFillCount(), sortOrder++);
-        generateGroup(groups, req, 5, "五、主观题", req.getSubjectiveCount(), sortOrder++);
+        // 2. 准备候选池 (Candidate Pool)
+        // 为了保证 GA 有选择空间，我们按需求的 2-3 倍数量去数据库拉取题目
+        Map<Integer, List<BizQuestion>> candidatePool = new HashMap<>();
 
-        return groups;
+        for (Map.Entry<Integer, Integer> entry : typeCountMap.entrySet()) {
+            if (entry.getValue() <= 0) continue;
+
+            // 需求 N 道，我们查 3N 道，保证随机性和优化空间
+            int fetchSize = entry.getValue() * 3;
+
+            QueryWrapper<BizQuestion> query = new QueryWrapper<>();
+            query.eq("subject_id", req.getSubjectId())
+                    .eq("question_type", entry.getKey());
+
+            if (StringUtils.hasText(req.getGrade())) {
+                query.eq("grade", req.getGrade());
+            }
+            // 这里还是用 rand 随机取一部分作为候选池，避免把整个库加载进内存
+            query.last("ORDER BY RAND() LIMIT " + fetchSize);
+
+            List<BizQuestion> pool = questionService.list(query);
+            candidatePool.put(entry.getKey(), pool);
+        }
+
+        // 3. 运行遗传算法
+        // 假设目标难度来自前端 req.getTargetDifficulty()，如果没有则默认 0.5
+        double targetDiff = req.getTargetDifficulty() != null ? req.getTargetDifficulty() : 0.5;
+
+        List<BizQuestion> finalQuestions = GeneticPaperUtil.evolution(
+                candidatePool,
+                typeCountMap,
+                targetDiff,
+                100.0 // 暂时忽略总分约束，由算法自动计算
+        );
+
+        // 4. 将扁平的题目列表转换为前端需要的分组结构 (GroupDTO)
+        return convertToGroups(finalQuestions);
     }
 
-    private void generateGroup(List<PaperDTO.PaperGroupDTO> groups, SmartPaperReq req,
-                               int questionType, String groupName, Integer count, int groupSort) {
-        if (count == null || count <= 0) return;
+    // 辅助方法：将 List<Question> 转为 List<GroupDTO>
+    private List<PaperDTO.PaperGroupDTO> convertToGroups(List<BizQuestion> questions) {
+        Map<Integer, List<BizQuestion>> groupedMap = questions.stream()
+                .collect(Collectors.groupingBy(BizQuestion::getQuestionType));
 
-        // 1. 随机查询指定数量的题目
-        QueryWrapper<BizQuestion> query = new QueryWrapper<>();
-        query.eq("subject_id", req.getSubjectId())
-                .eq("question_type", questionType);
+        List<PaperDTO.PaperGroupDTO> result = new ArrayList<>();
 
-        if (StringUtils.hasText(req.getGrade())) {
-            query.eq("grade", req.getGrade());
+        // 按照标准顺序添加分组
+        addGroupIfPresent(result, groupedMap, 1, "一、单选题");
+        addGroupIfPresent(result, groupedMap, 2, "二、多选题");
+        addGroupIfPresent(result, groupedMap, 4, "三、判断题");
+        addGroupIfPresent(result, groupedMap, 3, "四、填空题");
+        addGroupIfPresent(result, groupedMap, 5, "五、主观题");
+
+        return result;
+    }
+
+    private void addGroupIfPresent(List<PaperDTO.PaperGroupDTO> result, Map<Integer, List<BizQuestion>> map, int type, String name) {
+        List<BizQuestion> list = map.get(type);
+        if (list != null && !list.isEmpty()) {
+            PaperDTO.PaperGroupDTO group = new PaperDTO.PaperGroupDTO();
+            group.setName(name);
+            group.setSortOrder(result.size());
+
+            List<BizPaperQuestion> pqs = new ArrayList<>();
+            for (int i = 0; i < list.size(); i++) {
+                BizQuestion q = list.get(i);
+                BizPaperQuestion pq = new BizPaperQuestion();
+                pq.setQuestionId(q.getId());
+                // 这里使用之前工具类里的逻辑或默认分值
+                pq.setScore(type == 2 ? 4 : (type == 5 ? 10 : 2));
+                pq.setSortOrder(i);
+                pq.setQuestionDetail(q); // 确保前端能显示
+                pqs.add(pq);
+            }
+            group.setQuestions(pqs);
+            result.add(group);
         }
-
-        // 核心：随机排序并限制数量
-        query.last("ORDER BY RAND() LIMIT " + count);
-        List<BizQuestion> questions = questionService.list(query);
-
-        if (questions.isEmpty()) return;
-
-        // 2. 组装分组对象
-        PaperDTO.PaperGroupDTO groupDTO = new PaperDTO.PaperGroupDTO();
-        groupDTO.setName(groupName);
-        groupDTO.setSortOrder(groupSort);
-
-        List<BizPaperQuestion> paperQuestions = new ArrayList<>();
-
-        // 3. 设置默认分值 (可根据需求调整)
-        int defaultScore = switch (questionType) {
-            case 1, 3, 4 -> 2; // 单选、填空、判断 2分
-            case 2 -> 4;       // 多选 4分
-            case 5 -> 10;      // 主观 10分
-            default -> 5;
-        };
-
-        for (int i = 0; i < questions.size(); i++) {
-            BizQuestion q = questions.get(i);
-            BizPaperQuestion pq = new BizPaperQuestion();
-            pq.setQuestionId(q.getId());
-            pq.setScore(defaultScore);
-            pq.setSortOrder(i);
-            // 这是一个非数据库字段，用于前端显示题目详情 (需要在 BizPaperQuestion 实体中确认有此字段或通过 Map 返回)
-            // 在你的 PaperDTO 定义中，PaperGroupDTO 的 questions 列表是 BizPaperQuestion 类型
-            // 前端 PaperQuestionManager 需要 questionDetail 属性来显示题干
-            // 我们可以利用 MyBatisPlus 的 @TableField(exist=false) 或者直接在 Controller 层处理
-            // 这里为了简单，假设你已经处理好了前端需要的结构
-            // *注意：为了让前端能显示题干，这里必须把 BizQuestion 信息塞进去*
-            // 你需要在 BizPaperQuestion.java 实体中加一个 @TableField(exist=false) private BizQuestion questionDetail;
-            pq.setQuestionDetail(q);
-
-            paperQuestions.add(pq);
-        }
-
-        groupDTO.setQuestions(paperQuestions);
-        groups.add(groupDTO);
     }
 
 

@@ -616,3 +616,5 @@ INSERT INTO `biz_achievement` (`name`, `description`, `icon_url`, `type`, `thres
 ('完美主义', '获得 1 次试卷满分', '💯', 'PERFECT_PAPER', 1, 50);
 
 ALTER TABLE biz_student ADD COLUMN total_answered INT DEFAULT 0 COMMENT '累计答题数';
+
+ALTER TABLE `biz_question` ADD COLUMN `difficulty` DOUBLE DEFAULT 0.5 COMMENT '难度系数(0.1-1.0)';

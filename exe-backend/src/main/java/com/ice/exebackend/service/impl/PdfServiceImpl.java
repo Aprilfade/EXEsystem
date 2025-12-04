@@ -38,7 +38,8 @@ import com.itextpdf.layout.borders.SolidBorder;
 import com.itextpdf.layout.element.Cell;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.UnitValue;
-
+import com.itextpdf.io.font.PdfEncodings;
+import java.io.File;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
@@ -71,10 +72,9 @@ public class PdfServiceImpl implements PdfService {
             PdfDocument pdf = new PdfDocument(writer);
             Document document = new Document(pdf, PageSize.A4);
 
-            // 2. 加载中文字体
-            PdfFont font = PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H", PdfFontFactory.EmbeddingStrategy.PREFER_NOT_EMBEDDED);
+            // 【修改】使用更安全的字体加载方法
+            PdfFont font = createChineseFont();
             document.setFont(font);
-
             // 3. 注册水印
             pdf.addEventHandler(PdfDocumentEvent.END_PAGE, new WatermarkHandler(watermarkText, font));
 
@@ -204,8 +204,8 @@ public class PdfServiceImpl implements PdfService {
             PdfDocument pdf = new PdfDocument(writer);
             Document document = new Document(pdf, PageSize.A4);
 
-            // 2. 加载中文字体
-            PdfFont font = PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H", PdfFontFactory.EmbeddingStrategy.PREFER_NOT_EMBEDDED);
+            // 【修改】使用更安全的字体加载方法
+            PdfFont font = createChineseFont();
             document.setFont(font);
 
             // 3. 获取试卷数据
@@ -371,6 +371,35 @@ public class PdfServiceImpl implements PdfService {
                 }
             }
             canvas.close();
+        }
+    }
+    // 【新增】封装字体加载逻辑，解决 STSong-Light 空指针问题
+    private PdfFont createChineseFont() {
+        try {
+            // 1. 优先尝试加载 Windows 系统黑体 (SimHei)，支持字符集广，且无版权问题（本地使用）
+            String winFontPath = "C:/Windows/Fonts/simhei.ttf";
+            if (new File(winFontPath).exists()) {
+                // 使用 Identity-H 编码，支持生僻字
+                return PdfFontFactory.createFont(winFontPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+            }
+
+            // 2. 尝试加载 Windows 宋体
+            String winSongPath = "C:/Windows/Fonts/simsun.ttc,1"; // ttc集合中的第1个
+            if (new File("C:/Windows/Fonts/simsun.ttc").exists()) {
+                return PdfFontFactory.createFont(winSongPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+            }
+
+            // 3. Linux/Mac 环境或无系统字体时，回退到 iText 自带的 STSong-Light
+            // 注意：这里仍可能遇到 NPE，但作为兜底方案
+            return PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H", PdfFontFactory.EmbeddingStrategy.PREFER_NOT_EMBEDDED);
+        } catch (Exception e) {
+            e.printStackTrace();
+            try {
+                // 最后的最后，回退到默认
+                return PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H", PdfFontFactory.EmbeddingStrategy.PREFER_NOT_EMBEDDED);
+            } catch (Exception ex) {
+                throw new RuntimeException("字体加载失败", ex);
+            }
         }
     }
 }

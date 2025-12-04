@@ -30,6 +30,11 @@ public class BizQuestion {
 
     private String description; // 题目解析
 
+    private Double difficulty;
+    // 记得添加 Getter/Setter
+    public Double getDifficulty() { return difficulty; }
+    public void setDifficulty(Double difficulty) { this.difficulty = difficulty; }
+
 
     // 【新增】为 grade 字段添加 Getter 和 Setter
     public String getGrade() {

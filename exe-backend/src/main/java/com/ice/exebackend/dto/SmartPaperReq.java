@@ -11,8 +11,17 @@ public class SmartPaperReq {
     private Integer judgeCount = 0;    // 判断题数量
     private Integer subjectiveCount = 0; // 主观题数量
 
+    private Double targetDifficulty = 0.5; // 默认难度 0.5
+
     // --- 手动添加 Getter 和 Setter ---
 
+    public Double getTargetDifficulty() {
+        return targetDifficulty;
+    }
+
+    public void setTargetDifficulty(Double targetDifficulty) {
+        this.targetDifficulty = targetDifficulty;
+    }
     public Long getSubjectId() {
         return subjectId;
     }

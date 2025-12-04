@@ -49,6 +49,19 @@ export interface PaperGroup { // 【新增】
     questions: PaperQuestion[];
 }
 
+// 新增请求参数接口
+export interface SmartPaperReq {
+    subjectId: number;
+    grade?: string;
+    singleCount?: number;
+    multiCount?: number;
+    fillCount?: number;
+    judgeCount?: number;
+    subjectiveCount?: number;
+    targetDifficulty?: number; // 【新增】目标难度系数 (0.1 - 1.0)
+}
+
+
 export function fetchPaperList(params: PaperPageParams): Promise<ApiResult<Paper[]>> {
     return request({
         url: '/api/v1/papers',
@@ -112,16 +125,6 @@ export function updatePaperStatus(id: number, status: number): Promise<ApiResult
         method: 'put',
         params: { status }
     });
-}
-// 新增请求参数接口
-export interface SmartPaperReq {
-    subjectId: number;
-    grade?: string;
-    singleCount?: number;
-    multiCount?: number;
-    fillCount?: number;
-    judgeCount?: number;
-    subjectiveCount?: number;
 }
 
 // 新增 API 方法
