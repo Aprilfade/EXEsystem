@@ -9,7 +9,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
-
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import com.ice.exebackend.entity.BizStudent;
 import com.ice.exebackend.service.BizStudentService;
 
@@ -25,6 +28,11 @@ public class BattleGameManager {
     private BizQuestionService questionService; // 复用你现有的题库服务
     @Autowired
     private ObjectMapper objectMapper;
+    // 【新增】定义一个单线程的调度线程池，用于处理所有房间的倒计时
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+
+    // 【新增】每题倒计时时间（秒）
+    private static final int ROUND_TIMEOUT_SECONDS = 20;
 
     // 【新增】注入学生服务，用于查询用户信息
     @Autowired
@@ -64,11 +72,18 @@ public class BattleGameManager {
         if (roomId != null) {
             BattleRoom room = rooms.get(roomId);
             if (room != null) {
-                // 通知对手，游戏强制结束
-                WebSocketSession opponent = room.p1.equals(session) ? room.p2 : room.p1;
-                sendMessage(opponent, BattleMessage.of("OPPONENT_LEFT", null));
-                rooms.remove(roomId);
-                playerRoomMap.remove(opponent.getId());
+                synchronized (room) {
+                    // 【新增】取消定时任务
+                    if (room.timeoutTask != null) {
+                        room.timeoutTask.cancel(true);
+                    }
+
+                    // 通知对手
+                    WebSocketSession opponent = room.p1.equals(session) ? room.p2 : room.p1;
+                    sendMessage(opponent, BattleMessage.of("OPPONENT_LEFT", null));
+                    rooms.remove(roomId);
+                    playerRoomMap.remove(opponent.getId());
+                }
             }
         }
     }
@@ -81,22 +96,32 @@ public class BattleGameManager {
         if (roomId == null) return;
 
         BattleRoom room = rooms.get(roomId);
-        room.submitAnswer(session, answerStr);
 
-        // 检查是否双方都已作答
-        if (room.isRoundComplete()) {
-            // 发送本轮结果
-            sendRoundResult(room);
-            // 准备下一题
-            if (room.hasNextQuestion()) {
-                room.nextRound();
-                sendQuestion(room); // 发送新题目
-            } else {
-                sendGameOver(room); // 游戏结束
+        // 【修改】加锁，保证线程安全
+        synchronized (room) {
+            room.submitAnswer(session, answerStr);
+
+            // 检查是否双方都已作答
+            if (room.isRoundComplete()) {
+                // 【新增】双方都答了，立即取消当前的倒计时任务
+                if (room.timeoutTask != null) {
+                    room.timeoutTask.cancel(false);
+                }
+
+                // 发送本轮结果
+                sendRoundResult(room);
+
+                // 准备下一题
+                if (room.hasNextQuestion()) {
+                    room.nextRound();
+                    sendQuestion(room); // 发送新题目
+                    startRoundTimer(room); // 【新增】启动下一轮倒计时
+                } else {
+                    sendGameOver(room); // 游戏结束
+                }
             }
         }
     }
-
     // --- 内部逻辑 ---
 
     private void createRoom(WebSocketSession p1, WebSocketSession p2) {
@@ -140,6 +165,7 @@ public class BattleGameManager {
         // 延迟 1秒 发送第一题
         try { Thread.sleep(1000); } catch (InterruptedException e) {}
         sendQuestion(room);
+        startRoundTimer(room); // <--- 新增这一行
     }
 
 
@@ -254,6 +280,9 @@ public class BattleGameManager {
         int p1Score = 0;
         int p2Score = 0;
 
+        // 【新增】持有当前回合的超时任务，以便取消
+        ScheduledFuture<?> timeoutTask;
+
         public BattleRoom(String roomId, WebSocketSession p1, WebSocketSession p2, List<BizQuestion> questions) {
             this.roomId = roomId;
             this.p1 = p1;
@@ -284,4 +313,51 @@ public class BattleGameManager {
             p2Answer = null;
         }
     }
+
+    /**
+     * 【新增】开启回合倒计时
+     */
+    private void startRoundTimer(BattleRoom room) {
+        // 先取消旧任务（防御性编程）
+        if (room.timeoutTask != null && !room.timeoutTask.isDone()) {
+            room.timeoutTask.cancel(false);
+        }
+
+        // 记录当前回合数，用于在回调时校验（防止上一题的延迟任务影响下一题）
+        int roundAtStart = room.currentRoundIndex;
+
+        // 调度任务：ROUND_TIMEOUT_SECONDS 后执行
+        room.timeoutTask = scheduler.schedule(() -> {
+            // 必须加锁，防止和 handleAnswer 冲突
+            synchronized (room) {
+                // 再次检查：如果已经进入下一轮了，或者房间已销毁，则忽略
+                if (room.currentRoundIndex != roundAtStart) {
+                    return;
+                }
+
+                // 触发超时结算逻辑
+                handleRoundTimeout(room);
+            }
+        }, ROUND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    }
+
+    /**
+     * 【新增】处理超时逻辑
+     */
+    private void handleRoundTimeout(BattleRoom room) {
+        // 1. 强制结算当前回合
+        // (此时未答题的玩家 answer 字段为 null，sendRoundResult 会判错，符合预期)
+        sendRoundResult(room);
+
+        // 2. 进入下一轮或结束
+        if (room.hasNextQuestion()) {
+            room.nextRound();
+            sendQuestion(room);
+            // 递归启动下一轮计时
+            startRoundTimer(room);
+        } else {
+            sendGameOver(room);
+        }
+    }
+
 }
