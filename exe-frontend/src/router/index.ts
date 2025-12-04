@@ -162,6 +162,12 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('@/views/student/MyClasses.vue'),
                 meta: { title: '我的班级' }
             },
+            {
+                path: 'battle',
+                name: 'StudentBattle',
+                component: () => import('@/views/student/Battle.vue'),
+                meta: { title: '知识对战' }
+            }
 
 
 

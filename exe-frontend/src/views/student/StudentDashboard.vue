@@ -170,6 +170,15 @@
               <span class="desc">重点难题一键回顾</span>
             </div>
 
+
+            <div class="access-item item-purple" @click="navigateTo('/student/battle')">
+              <div class="icon-wrapper">
+                <el-icon><Lightning /></el-icon>
+              </div>
+              <span class="title">知识对战</span>
+              <span class="desc">1V1 实时竞技 PK</span>
+            </div>
+
             <div class="access-item item-gold" @click="isMallVisible = true">
               <div class="icon-wrapper">
                 <el-icon><Present /></el-icon>
@@ -177,6 +186,8 @@
               <span class="title">积分商城</span>
               <span class="desc">兑换专属奖励</span>
             </div>
+
+
             <points-mall-dialog v-model:visible="isMallVisible" />
           </div>
         </el-card>
@@ -206,7 +217,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStudentAuthStore } from '@/stores/studentAuth';
 // 【修复】添加 Star 图标导入
-import { Tickets, Select, CloseBold, Clock, EditPen, Memo, DataLine, Finished, Star , AlarmClock} from '@element-plus/icons-vue';
+import { Tickets, Select, CloseBold, Clock, EditPen, Memo, DataLine, Finished, Star, AlarmClock, Lightning } from '@element-plus/icons-vue';
 import { fetchStudentDashboardStats, type StudentDashboardStats } from '@/api/studentAuth';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';

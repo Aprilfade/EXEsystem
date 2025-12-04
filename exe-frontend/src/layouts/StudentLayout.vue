@@ -12,6 +12,8 @@
           <el-menu-item index="/student/classes">我的班级</el-menu-item>
           <el-menu-item index="/student/wrong-records">我的错题本</el-menu-item>
           <el-menu-item index="/student/practice">在线练习</el-menu-item>
+          <el-menu-item index="/student/battle">
+            <el-icon><Lightning /></el-icon> 知识对战</el-menu-item>
           <el-menu-item index="/student/exams">模拟考试</el-menu-item>
           <el-menu-item index="/student/favorites">我的收藏</el-menu-item>
         </el-menu>
@@ -52,7 +54,7 @@
 import { ref } from 'vue'; // 【修改】导入 ref
 import { computed } from 'vue';
 import { useStudentAuthStore } from '@/stores/studentAuth';
-import { School, ArrowDown } from '@element-plus/icons-vue';
+import { School, ArrowDown, Lightning } from '@element-plus/icons-vue';
 import { onMounted, onUnmounted } from 'vue';
 import { useNotificationSocketStore } from '@/stores/notificationSocket';
 // 【新增】导入我们新创建的弹窗组件
