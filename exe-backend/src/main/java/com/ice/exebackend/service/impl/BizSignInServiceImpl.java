@@ -90,19 +90,20 @@ public class BizSignInServiceImpl extends ServiceImpl<BizSignInMapper, BizSignIn
         log.setCreateTime(LocalDateTime.now());
         activityService.save(log);
 
-        // 7. 检查连签成就
-        // streak 是前面逻辑计算出来的连续签到天数
-        List<BizAchievement> newAchievements = achievementService.checkAndAward(studentId, "SIGN_IN_STREAK", streak);
-
-        // 如果有新成就，放入 result 返回给前端弹窗
-        if (!newAchievements.isEmpty()) {
-            result.put("newAchievements", newAchievements);
-        }
-
+        // 【修复】先定义 result Map，然后再进行成就检查
         Map<String, Object> result = new HashMap<>();
         result.put("points", points);
         result.put("streak", streak);
         result.put("message", tip);
+
+        // 7. 检查连签成就
+        List<BizAchievement> newAchievements = achievementService.checkAndAward(studentId, "SIGN_IN_STREAK", streak);
+
+        // 如果有新成就，放入 result 返回给前端弹窗
+        if (!newAchievements.isEmpty()) {
+            result.put("newAchievements", newAchievements); // 现在 result 已经定义了，不会报错
+        }
+
         return result;
     }
 

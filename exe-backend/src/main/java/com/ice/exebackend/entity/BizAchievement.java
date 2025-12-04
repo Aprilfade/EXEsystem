@@ -27,4 +27,35 @@ public class BizAchievement {
     // 辅助字段：获得时间
     @TableField(exist = false)
     private LocalDateTime unlockTime;
+
+    // === 【修复】手动添加 Getter 和 Setter ===
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public String getIconUrl() { return iconUrl; }
+    public void setIconUrl(String iconUrl) { this.iconUrl = iconUrl; }
+
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
+
+    public Integer getThreshold() { return threshold; }
+    public void setThreshold(Integer threshold) { this.threshold = threshold; }
+
+    public Integer getRewardPoints() { return rewardPoints; }
+    public void setRewardPoints(Integer rewardPoints) { this.rewardPoints = rewardPoints; }
+
+    public LocalDateTime getCreateTime() { return createTime; }
+    public void setCreateTime(LocalDateTime createTime) { this.createTime = createTime; }
+
+    public Boolean getIsUnlocked() { return isUnlocked; }
+    public void setIsUnlocked(Boolean isUnlocked) { this.isUnlocked = isUnlocked; }
+
+    public LocalDateTime getUnlockTime() { return unlockTime; }
+    public void setUnlockTime(LocalDateTime unlockTime) { this.unlockTime = unlockTime; }
 }

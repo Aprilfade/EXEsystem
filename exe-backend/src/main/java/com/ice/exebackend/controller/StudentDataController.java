@@ -624,23 +624,39 @@ public class StudentDataController {
 
         List<BizAchievement> unlockedList = new ArrayList<>();
 
-        // 1. 检查满分成就 (如果得分 >= 总分)
+        // =========================
+        // 【修复 1】满分成就判定逻辑
+        // =========================
+        // 只有当本次确实满分时，才去查询历史次数，减少数据库压力
         if (studentScore >= totalScore && totalScore > 0) {
-            // 计算该学生满分次数
+            // 使用 apply 拼接 SQL，确保比较的是每一行记录自己的 score 和 total_score
             long perfectCount = examResultService.count(new QueryWrapper<BizExamResult>()
                     .eq("student_id", student.getId())
-                    .ge("score", totalScore)); // 简单近似，实际应比对 total_score 列
-            // 这里为了简单，假设这次就是满分，传入任意大于0的值触发判定，或者查询真实次数
-            // 更严谨的做法是查询数据库中该学生满分试卷的数量
+                    .apply("score = total_score") // 关键修复：只有得分等于该次考试总分才算
+                    .gt("total_score", 0));       // 排除总分为0的异常数据
+
             unlockedList.addAll(achievementService.checkAndAward(student.getId(), "PERFECT_PAPER", (int)perfectCount));
         }
 
-        // 2. 检查刷题数量成就
-        // (这里使用一个估算值，或者你需要写SQL统计 biz_exam_result 中 user_answers 的题目总数，或者查询 wrong_record + correct_record)
-        // 简单起见，我们可以统计 biz_learning_activity 中 type=PRACTICE_SUBMIT 的次数 * 平均题数，或者直接查询总答题数字段（如果你有维护）
-        // 假设我们在 studentService.getStudentDashboardStats 中实现了统计总答题数
-        // long totalQuestions = studentService.countTotalAnswered(student.getId());
-        // unlockedList.addAll(achievementService.checkAndAward(student.getId(), "TOTAL_QUESTIONS", (int)totalQuestions));
+        // =========================
+        // 【修复 2】启用刷题数统计 (基于 BizExamResult 计算)
+        // =========================
+        // 注意：这需要 MySQL 5.7+ 支持 JSON_LENGTH 函数。
+        // 如果你的 MySQL 版本较低，或者 user_answers 存的是非标准 JSON，这步可能会报错。
+        try {
+            // 统计该学生所有考试记录中 user_answers JSON 数组的长度之和
+            // 假设 user_answers 格式为 {"101":"A", "102":"B"}，则 JSON_LENGTH 返回题目数量
+            Map<String, Object> map = examResultService.getMap(new QueryWrapper<BizExamResult>()
+                    .select("SUM(JSON_LENGTH(user_answers)) as total")
+                    .eq("student_id", student.getId()));
+
+            if (map != null && map.get("total") != null) {
+                int totalQuestions = ((Number) map.get("total")).intValue();
+                unlockedList.addAll(achievementService.checkAndAward(student.getId(), "TOTAL_QUESTIONS", totalQuestions));
+            }
+        } catch (Exception e) {
+            logger.warn("统计刷题数失败，可能是数据库版本不支持 JSON_LENGTH: {}", e.getMessage());
+        }
 
         // 将新解锁的成就放入返回结果
         Map<String, Object> resMap = new java.util.HashMap<>();
@@ -651,11 +667,7 @@ public class StudentDataController {
             resMap.put("newAchievements", unlockedList);
         }
 
-        return Result.suc(Map.of(
-                "score", studentScore,
-                "totalScore", totalScore,
-                "details", results // 包含 AI 点评后的题目信息
-        ));
+        return Result.suc(resMap); // 注意：这里返回类型变了，前端也需要对应处理 res.data.newAchievements
     }
 
     // 3. 【新增】 获取历史考试记录列表
