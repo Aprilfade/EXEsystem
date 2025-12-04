@@ -11,4 +11,10 @@ public interface PdfService {
      * @return PDF 文件字节流
      */
     ByteArrayOutputStream generatePaperPdf(Long paperId, boolean includeAnswers, String watermarkText);
+    /**
+     * 【新增】生成 PDF 答题卡
+     * @param paperId 试卷ID
+     * @return PDF 字节流
+     */
+    ByteArrayOutputStream generateAnswerSheetPdf(Long paperId);
 }

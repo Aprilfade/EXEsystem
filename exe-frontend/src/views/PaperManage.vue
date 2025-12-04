@@ -106,6 +106,9 @@
                   <el-dropdown-item @click="handleExport(paper.id, false, 'word')">导出 Word</el-dropdown-item>
                   <el-dropdown-item @click="handleExport(paper.id, true, 'word')">导出 Word(含答案)</el-dropdown-item>
                   <el-dropdown-item divided @click="handleExport(paper.id, false, 'pdf')">导出 PDF (预览)</el-dropdown-item>
+                  <el-dropdown-item @click="handleExportAnswerSheet(paper.id)" style="color: #626aef;">
+                    <el-icon><Printer /></el-icon> 导出答题卡
+                  </el-dropdown-item>
                   <el-dropdown-item @click="handleDelete(paper.id)" divided style="color: #f56c6c;">删除</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -181,8 +184,13 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { fetchPaperList, deletePaper, downloadPaper, updatePaperStatus, downloadPaperPdf } from '@/api/paper';
 import type { Paper, PaperPageParams } from '@/api/paper';
 import { fetchAllSubjects, type Subject } from '@/api/subject';
-import { Plus, Edit, Delete, Grid, Menu, MoreFilled, Download, VideoPlay, VideoPause } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Grid, Menu, MoreFilled, Download, VideoPlay, VideoPause, Printer } from '@element-plus/icons-vue';
 import PaperEditDialog from '@/components/paper/PaperEditDialog.vue';
+// 导入新API
+import { downloadAnswerSheet } from '@/api/paper';
+
+
+
 
 const allPaperList = ref<Paper[]>([]); // 用于前端搜索
 const paperListForTable = ref<Paper[]>([]); // 用于表格分页
@@ -316,6 +324,45 @@ const handleExport = async (id: number, includeAnswers: boolean, type: 'word' | 
     ElMessage.error('文件导出失败，请稍后重试。');
   }
 };
+
+// 新增处理函数
+const handleExportAnswerSheet = async (id: number) => {
+  try {
+    ElMessage.info('正在生成答题卡，请稍候...');
+    const response = await downloadAnswerSheet(id);
+
+    // 处理下载
+    const contentDisposition = response.headers['content-disposition'];
+    let fileName = '答题卡.pdf';
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="(.+)"/);
+      if (match && match.length > 1) {
+        fileName = decodeURIComponent(match[1]);
+      }
+    }
+
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+
+    // 在新窗口预览
+    window.open(url);
+
+    // 或者直接下载 (根据需求二选一，这里演示直接下载)
+    // const link = document.createElement('a');
+    // link.href = url;
+    // link.setAttribute('download', fileName);
+    // document.body.appendChild(link);
+    // link.click();
+    // document.body.removeChild(link);
+
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    console.error('答题卡导出失败:', error);
+    ElMessage.error('答题卡导出失败');
+  }
+};
+
+
 
 const handleStatusChange = async (row: Paper, newStatus: number) => {
   const actionName = newStatus === 1 ? '发布' : '下架';

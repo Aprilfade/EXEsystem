@@ -187,5 +187,29 @@ public class BizPaperController {
             return ResponseEntity.status(500).build();
         }
     }
+    /**
+     * 【新增】导出答题卡 PDF
+     */
+    @GetMapping("/export/answer-sheet/{id}")
+    @Log(title = "试卷管理", businessType = BusinessType.EXPORT)
+    public ResponseEntity<byte[]> exportAnswerSheet(@PathVariable Long id) {
+        try (ByteArrayOutputStream out = pdfService.generateAnswerSheetPdf(id)) {
+
+            PaperDTO paper = paperService.getPaperWithQuestionsById(id);
+            String fileName = URLEncoder.encode(paper.getName() + "_答题卡.pdf", StandardCharsets.UTF_8.toString());
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
+            headers.add(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE);
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(out.toByteArray());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
+    }
 
 }

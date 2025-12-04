@@ -33,6 +33,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import com.itextpdf.layout.borders.Border;
+import com.itextpdf.layout.borders.SolidBorder;
+import com.itextpdf.layout.element.Cell;
+import com.itextpdf.layout.element.Table;
+import com.itextpdf.layout.properties.UnitValue;
+
 
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
@@ -187,6 +193,129 @@ public class PdfServiceImpl implements PdfService {
         }
 
         return out;
+    }
+    @Override
+    public ByteArrayOutputStream generateAnswerSheetPdf(Long paperId) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        try {
+            // 1. 初始化 PDF 文档
+            PdfWriter writer = new PdfWriter(out);
+            PdfDocument pdf = new PdfDocument(writer);
+            Document document = new Document(pdf, PageSize.A4);
+
+            // 2. 加载中文字体
+            PdfFont font = PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H", PdfFontFactory.EmbeddingStrategy.PREFER_NOT_EMBEDDED);
+            document.setFont(font);
+
+            // 3. 获取试卷数据
+            PaperDTO paper = paperService.getPaperWithQuestionsById(paperId);
+            if (paper == null) throw new RuntimeException("试卷不存在");
+
+            // --- 页面头部 ---
+            document.add(new Paragraph(paper.getName() + " — 答题卡")
+                    .setFontSize(18).setBold().setTextAlignment(TextAlignment.CENTER).setMarginBottom(10));
+
+            // 学生信息栏 (使用无边框表格布局)
+            Table headerTable = new Table(UnitValue.createPercentArray(new float[]{1, 1, 1, 1}));
+            headerTable.setWidth(UnitValue.createPercentValue(100));
+            headerTable.addCell(createNoBorderCell("班级：_______________", font));
+            headerTable.addCell(createNoBorderCell("姓名：_______________", font));
+            headerTable.addCell(createNoBorderCell("学号：_______________", font));
+            headerTable.addCell(createNoBorderCell("成绩：_______________", font));
+            document.add(headerTable);
+
+            // 分割线
+            document.add(new Paragraph("\n----------------------------------------------------------------------------------------------------------------------------------\n"));
+            document.add(new Paragraph("注意事项：\n1. 请在指定区域内作答，超出黑色矩形边框限定区域的答案无效。\n2. 选择题请使用2B铅笔填涂，非选择题请使用黑色签字笔书写。")
+                    .setFontSize(9).setFontColor(ColorConstants.DARK_GRAY).setMarginBottom(10));
+
+
+            // --- 区分试卷类型 ---
+            if (paper.getPaperType() != null && paper.getPaperType() == 2) {
+                // 图片试卷：生成通用答题卡 (20个填空位)
+                document.add(new Paragraph("一、通用答题区").setFontSize(12).setBold().setBackgroundColor(ColorConstants.LIGHT_GRAY));
+                Table genTable = new Table(UnitValue.createPercentArray(new float[]{1, 4, 1, 4})); // 两列展示
+                genTable.setWidth(UnitValue.createPercentValue(100));
+
+                for (int i = 1; i <= 20; i++) {
+                    genTable.addCell(new Cell().add(new Paragraph(i + ".")).setBorder(Border.NO_BORDER));
+                    genTable.addCell(new Cell().setBorderBottom(new SolidBorder(1)).setHeight(20)); // 下划线
+                }
+                document.add(genTable);
+
+            } else {
+                // 题库试卷：根据题目结构生成
+                // 预加载题目信息
+                Map<Long, BizQuestion> questionMap = loadQuestionMap(paper);
+
+                int qIndex = 1;
+                if (!CollectionUtils.isEmpty(paper.getGroups())) {
+                    for (PaperDTO.PaperGroupDTO group : paper.getGroups()) {
+                        // 检查该分组下的第一题类型，判断是客观题还是主观题
+                        if (group.getQuestions().isEmpty()) continue;
+
+                        BizQuestion firstQ = questionMap.get(group.getQuestions().get(0).getQuestionId());
+                        if (firstQ == null) continue;
+
+                        // 标题栏
+                        document.add(new Paragraph(group.getName())
+                                .setFontSize(11).setBold().setBackgroundColor(ColorConstants.LIGHT_GRAY).setMarginTop(5).setPaddingLeft(5));
+
+                        // 判断题型布局
+                        int type = firstQ.getQuestionType();
+                        if (type == 1 || type == 2 || type == 4) {
+                            // === 客观题 (单选/多选/判断) ===
+                            // 使用 5列 布局
+                            Table objTable = new Table(UnitValue.createPercentArray(5)).useAllAvailableWidth();
+
+                            for (BizPaperQuestion pq : group.getQuestions()) {
+                                // 构造单元格内容： "1. [A] [B] [C] [D]"
+                                String optionsStr;
+                                if (type == 4) {
+                                    optionsStr = "[ T ]   [ F ]";
+                                } else {
+                                    optionsStr = "[ A ]   [ B ]   [ C ]   [ D ]";
+                                }
+
+                                Paragraph p = new Paragraph()
+                                        .add(new com.itextpdf.layout.element.Text(qIndex++ + ".  ").setBold())
+                                        .add(new com.itextpdf.layout.element.Text(optionsStr).setFontSize(10));
+
+                                objTable.addCell(new Cell().add(p).setBorder(Border.NO_BORDER).setPadding(5));
+                            }
+                            document.add(objTable);
+
+                        } else {
+                            // === 主观题/填空题 ===
+                            for (BizPaperQuestion pq : group.getQuestions()) {
+                                Paragraph qTitle = new Paragraph()
+                                        .add(new com.itextpdf.layout.element.Text(String.valueOf(qIndex++)).setBold().setFontSize(12))
+                                        .add(new com.itextpdf.layout.element.Text(" (" + pq.getScore() + "分)").setFontSize(10));
+
+                                // 创建一个大的书写框
+                                Table boxTable = new Table(UnitValue.createPercentArray(1)).useAllAvailableWidth();
+                                Cell boxCell = new Cell().add(qTitle).setHeight(100); // 高度100
+                                boxTable.addCell(boxCell);
+
+                                document.add(boxTable.setMarginBottom(5));
+                            }
+                        }
+                    }
+                }
+            }
+
+            document.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("答题卡生成失败: " + e.getMessage());
+        }
+        return out;
+    }
+
+    // 辅助：创建无边框单元格
+    private Cell createNoBorderCell(String text, PdfFont font) {
+        return new Cell().add(new Paragraph(text).setFont(font)).setBorder(Border.NO_BORDER);
     }
 
     // 辅助：加载题目Map

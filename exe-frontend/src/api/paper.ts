@@ -143,3 +143,13 @@ export function downloadPaperPdf(id: number, includeAnswers: boolean): Promise<a
         responseType: 'blob' // 必须设置为 blob
     });
 }
+/**
+ * 【新增】下载答题卡 PDF
+ */
+export function downloadAnswerSheet(id: number): Promise<any> {
+    return request({
+        url: `/api/v1/papers/export/answer-sheet/${id}`,
+        method: 'get',
+        responseType: 'blob' // 必须设置为 blob
+    });
+}
