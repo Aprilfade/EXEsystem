@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper; // 确保引入 QueryWrapper
+
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
@@ -368,26 +370,93 @@ public class BattleGameManager {
         sendMessage(room.p2, BattleMessage.of("ROUND_RESULT", dataP2));
     }
 
+    /**
+     * 发送游戏结束消息并结算积分
+     */
     private void sendGameOver(BattleRoom room) {
-        // 这里可以扩展：更新数据库中的用户积分 (points)
-        String winner = room.p1Score > room.p2Score ? "YOU" : (room.p1Score < room.p2Score ? "OPPONENT" : "DRAW");
+        // 1. 判定胜负
+        String resultP1, resultP2;
+        if (room.p1Score > room.p2Score) {
+            resultP1 = "YOU";
+            resultP2 = "OPPONENT";
+        } else if (room.p1Score < room.p2Score) {
+            resultP1 = "OPPONENT";
+            resultP2 = "YOU";
+        } else {
+            resultP1 = "DRAW";
+            resultP2 = "DRAW";
+        }
 
+        // 2. 【核心修复】更新数据库积分
+        updatePlayerPoints(room.p1, resultP1);
+        updatePlayerPoints(room.p2, resultP2);
+
+        // 3. 发送消息给 P1
         Map<String, Object> res1 = new HashMap<>();
-        res1.put("result", winner);
+        res1.put("result", resultP1);
         res1.put("myScore", room.p1Score);
         res1.put("oppScore", room.p2Score);
         sendMessage(room.p1, BattleMessage.of("GAME_OVER", res1));
 
-        String winner2 = winner.equals("YOU") ? "OPPONENT" : (winner.equals("DRAW") ? "DRAW" : "YOU");
+        // 4. 发送消息给 P2
         Map<String, Object> res2 = new HashMap<>();
-        res2.put("result", winner2);
+        res2.put("result", resultP2);
         res2.put("myScore", room.p2Score);
         res2.put("oppScore", room.p1Score);
         sendMessage(room.p2, BattleMessage.of("GAME_OVER", res2));
 
+        // 5. 清理房间
         rooms.remove(room.roomId);
         playerRoomMap.remove(room.p1.getId());
         playerRoomMap.remove(room.p2.getId());
+    }
+
+
+    /**
+     * 【新增】更新玩家积分到数据库
+     * @param session 玩家的 WebSocket 会话
+     * @param result 比赛结果 (YOU:胜, OPPONENT:负, DRAW:平)
+     */
+    private void updatePlayerPoints(WebSocketSession session, String result) {
+        try {
+            // 从 Session 获取学号 (在握手拦截器或 joinQueue 时放入的)
+            String studentNo = (String) session.getAttributes().get("username");
+            if (studentNo == null) return;
+
+            // 查询当前学生信息
+            BizStudent student = studentService.getOne(
+                    new QueryWrapper<BizStudent>().eq("student_no", studentNo)
+            );
+
+            if (student != null) {
+                int currentPoints = student.getPoints() != null ? student.getPoints() : 0;
+                int delta = 0;
+
+                // 积分规则
+                switch (result) {
+                    case "YOU":
+                        delta = 20; // 胜利 +20
+                        break;
+                    case "DRAW":
+                        delta = 5;  // 平局 +5
+                        break;
+                    case "OPPONENT":
+                        delta = -10; // 失败 -10
+                        break;
+                }
+
+                int newPoints = currentPoints + delta;
+                if (newPoints < 0) newPoints = 0; // 积分保底为0
+
+                student.setPoints(newPoints);
+                studentService.updateById(student);
+
+                System.out.println("更新积分: " + studentNo + " " + currentPoints + " -> " + newPoints + " (" + result + ")");
+            }
+        } catch (Exception e) {
+            System.err.println("更新积分失败: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     private Map<String, Object> buildStudentInfoMap(BizStudent s) {
