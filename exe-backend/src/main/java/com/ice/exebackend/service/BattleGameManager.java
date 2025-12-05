@@ -2,157 +2,216 @@ package com.ice.exebackend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ice.exebackend.dto.BattleMessage;
-import com.ice.exebackend.dto.QuestionDTO;
 import com.ice.exebackend.entity.BizQuestion;
-import org.springframework.beans.BeanUtils;
+import com.ice.exebackend.entity.BizStudent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import com.ice.exebackend.entity.BizStudent;
-import com.ice.exebackend.service.BizStudentService;
 
+import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.*;
 
 @Component
 public class BattleGameManager {
 
     @Autowired
-    private BizQuestionService questionService; // 复用你现有的题库服务
+    private BizQuestionService questionService;
     @Autowired
     private ObjectMapper objectMapper;
-    // 【新增】定义一个单线程的调度线程池，用于处理所有房间的倒计时
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(4);
-    // 【新增】每题倒计时时间（秒）
-    private static final int ROUND_TIMEOUT_SECONDS = 20;
-
-    // 【新增】注入学生服务，用于查询用户信息
     @Autowired
     private BizStudentService studentService;
 
-    // 等待队列 (存放 WebSocketSession)
-    private final CopyOnWriteArrayList<WebSocketSession> waitingQueue = new CopyOnWriteArrayList<>();
+    // 线程池：用于倒计时和匹配轮询
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(4);
 
-    // 房间映射: SessionID -> RoomID
+    // 常量定义
+    private static final int ROUND_TIMEOUT_SECONDS = 20; // 每题限时
+    private static final int ROUND_RESULT_VIEW_TIME = 3; // 结果展示时间
+
+    // 段位常量
+    private static final String TIER_BRONZE = "BRONZE"; // < 200
+    private static final String TIER_SILVER = "SILVER"; // 200 - 500
+    private static final String TIER_GOLD = "GOLD";     // > 500
+
+    // --- 新增：ELO 匹配相关结构 ---
+
+    // 内部类：封装等待的玩家信息
+    private static class WaitingPlayer {
+        WebSocketSession session;
+        BizStudent student;
+        String tier;
+        long joinTime;
+
+        public WaitingPlayer(WebSocketSession session, BizStudent student, String tier) {
+            this.session = session;
+            this.student = student;
+            this.tier = tier;
+            this.joinTime = System.currentTimeMillis();
+        }
+    }
+
+    // 分段位的等待队列 (Key: 段位名, Value: 等待玩家列表)
+    private final Map<String, CopyOnWriteArrayList<WaitingPlayer>> tierQueues = new ConcurrentHashMap<>();
+
+    // 快速查找映射：SessionID -> WaitingPlayer (用于处理离开)
+    private final Map<String, WaitingPlayer> sessionWaitingMap = new ConcurrentHashMap<>();
+
+    // 正在进行的房间映射
     private final Map<String, String> playerRoomMap = new ConcurrentHashMap<>();
-
-    // 房间存储: RoomID -> RoomObj
     private final Map<String, BattleRoom> rooms = new ConcurrentHashMap<>();
 
-    // 观看结果的缓冲时间（秒）
-    private static final int ROUND_RESULT_VIEW_TIME = 3;
+    // 初始化
+    @PostConstruct
+    public void init() {
+        // 初始化各段位队列
+        tierQueues.put(TIER_BRONZE, new CopyOnWriteArrayList<>());
+        tierQueues.put(TIER_SILVER, new CopyOnWriteArrayList<>());
+        tierQueues.put(TIER_GOLD, new CopyOnWriteArrayList<>());
 
-    /**
-     * 用户申请匹配
-     */
-    public synchronized void joinQueue(WebSocketSession session) {
-        if (waitingQueue.contains(session)) return;
-
-        waitingQueue.add(session);
-
-        // 如果队列有2人，立即开始
-        if (waitingQueue.size() >= 2) {
-            WebSocketSession p1 = waitingQueue.remove(0);
-            WebSocketSession p2 = waitingQueue.remove(0);
-            createRoom(p1, p2);
-        }
+        // 启动匹配扫描任务：每 1 秒执行一次
+        scheduler.scheduleAtFixedRate(this::processMatchMaking, 1, 1, TimeUnit.SECONDS);
     }
 
     /**
-     * 用户取消匹配或断开
+     * 用户申请匹配（进入对应段位的队列）
      */
-    public void leave(WebSocketSession session) {
-        waitingQueue.remove(session);
-        String roomId = playerRoomMap.remove(session.getId());
-        if (roomId != null) {
-            BattleRoom room = rooms.get(roomId);
-            if (room != null) {
-                synchronized (room) {
-                    // 【新增】取消定时任务
-                    if (room.timeoutTask != null) {
-                        room.timeoutTask.cancel(true);
-                    }
+    public void joinQueue(WebSocketSession session) {
+        if (sessionWaitingMap.containsKey(session.getId()) || playerRoomMap.containsKey(session.getId())) {
+            return; // 已经在队列或游戏中
+        }
 
-                    // 通知对手
-                    WebSocketSession opponent = room.p1.equals(session) ? room.p2 : room.p1;
-                    sendMessage(opponent, BattleMessage.of("OPPONENT_LEFT", null));
-                    rooms.remove(roomId);
-                    playerRoomMap.remove(opponent.getId());
+        // 1. 获取用户信息和积分
+        String studentNo = (String) session.getAttributes().get("username");
+        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
+
+        // 判空保护
+        int points = (student != null && student.getPoints() != null) ? student.getPoints() : 0;
+
+        // 2. 计算段位
+        String tier = calculateTier(points);
+
+        // 3. 加入队列
+        WaitingPlayer player = new WaitingPlayer(session, student, tier);
+        tierQueues.get(tier).add(player);
+        sessionWaitingMap.put(session.getId(), player);
+
+        System.out.println("玩家加入匹配队列: " + studentNo + " 段位: " + tier + " 积分: " + points);
+    }
+
+    /**
+     * 核心逻辑：定时扫描匹配
+     */
+    private void processMatchMaking() {
+        // 遍历所有段位的队列
+        for (String tier : tierQueues.keySet()) {
+            List<WaitingPlayer> queue = tierQueues.get(tier);
+
+            // 遍历该队列中的玩家（作为匹配发起者）
+            // 使用迭代器防止并发修改异常，CopyOnWriteArrayList 支持安全遍历
+            for (WaitingPlayer p1 : queue) {
+                // 如果玩家已经匹配成功（可能在别的线程被移除了），跳过
+                if (!sessionWaitingMap.containsKey(p1.session.getId())) continue;
+
+                // 计算等待时间
+                long waitTime = System.currentTimeMillis() - p1.joinTime;
+
+                // 确定搜索范围
+                List<String> targetTiers = new ArrayList<>();
+                targetTiers.add(p1.tier); // 首先搜同段位
+
+                if (waitTime > 5000) {
+                    // 等待 > 5秒，扩大到相邻段位
+                    addAdjacentTiers(targetTiers, p1.tier);
+                }
+                if (waitTime > 10000) {
+                    // 等待 > 10秒，全服匹配
+                    targetTiers.add(TIER_BRONZE);
+                    targetTiers.add(TIER_SILVER);
+                    targetTiers.add(TIER_GOLD);
+                }
+
+                // 尝试寻找对手
+                WaitingPlayer opponent = findOpponent(p1, targetTiers);
+
+                if (opponent != null) {
+                    // 找到对手，创建房间
+                    createRoom(p1, opponent);
                 }
             }
         }
     }
 
     /**
-     * 处理用户提交答案
+     * 在指定段位列表中寻找对手
      */
-    public void handleAnswer(WebSocketSession session, String answerStr) {
-        String roomId = playerRoomMap.get(session.getId());
-        if (roomId == null) return;
+    private WaitingPlayer findOpponent(WaitingPlayer p1, List<String> targetTiers) {
+        for (String targetTier : targetTiers) {
+            List<WaitingPlayer> targetQueue = tierQueues.get(targetTier);
+            if (targetQueue == null) continue;
 
-        BattleRoom room = rooms.get(roomId);
+            for (WaitingPlayer p2 : targetQueue) {
+                // 不能匹配自己
+                if (p2.session.getId().equals(p1.session.getId())) continue;
 
-        synchronized (room) {
-            room.submitAnswer(session, answerStr);
-
-            // 检查是否双方都已作答
-            if (room.isRoundComplete()) {
-                // 1. 双方都答了，取消当前的倒计时任务
-                if (room.timeoutTask != null) {
-                    room.timeoutTask.cancel(false);
+                // 确保对手也还在等待中
+                if (sessionWaitingMap.containsKey(p2.session.getId())) {
+                    return p2;
                 }
-
-                // 2. 【修改点】调用过渡方法，不再直接调用 nextRound
-                processRoundTransition(room);
             }
+        }
+        return null;
+    }
+
+    /**
+     * 辅助：计算段位
+     */
+    private String calculateTier(int points) {
+        if (points >= 500) return TIER_GOLD;
+        if (points >= 200) return TIER_SILVER;
+        return TIER_BRONZE;
+    }
+
+    /**
+     * 辅助：添加相邻段位
+     */
+    private void addAdjacentTiers(List<String> tiers, String currentTier) {
+        if (TIER_BRONZE.equals(currentTier)) {
+            tiers.add(TIER_SILVER);
+        } else if (TIER_SILVER.equals(currentTier)) {
+            tiers.add(TIER_BRONZE);
+            tiers.add(TIER_GOLD);
+        } else if (TIER_GOLD.equals(currentTier)) {
+            tiers.add(TIER_SILVER);
         }
     }
 
     /**
-     * 【新增】统一处理回合过渡：发送结果 -> 延迟 -> 下一题/结束
+     * 创建房间并开始游戏 (加锁保证原子性，防止两人同时被别人匹配)
      */
-    private void processRoundTransition(BattleRoom room) {
-        // 1. 立即发送本轮结果（前端收到后展示结果页）
-        sendRoundResult(room);
+    private synchronized void createRoom(WaitingPlayer wp1, WaitingPlayer wp2) {
+        // 双重检查：确保两人都还在等待映射中
+        if (!sessionWaitingMap.containsKey(wp1.session.getId()) ||
+                !sessionWaitingMap.containsKey(wp2.session.getId())) {
+            return;
+        }
 
-        // 2. 利用线程池调度延迟任务，3秒后执行下一阶段
-        scheduler.schedule(() -> {
-            // 必须加锁，确保操作房间状态时的线程安全
-            synchronized (room) {
-                // 再次检查房间状态（防止房间在等待期间被意外销毁）
-                if (rooms.get(room.roomId) == null) {
-                    return;
-                }
+        // 1. 从队列移除
+        removeFromQueue(wp1);
+        removeFromQueue(wp2);
 
-                if (room.hasNextQuestion()) {
-                    // 有下一题：切换状态 -> 发题 -> 启动新倒计时
-                    room.nextRound();
-                    sendQuestion(room);
-                    startRoundTimer(room);
-                } else {
-                    // 没有下一题：发送游戏结束结算
-                    sendGameOver(room);
-                }
-            }
-        }, ROUND_RESULT_VIEW_TIME, TimeUnit.SECONDS);
-    }
-    // --- 内部逻辑 ---
+        WebSocketSession p1 = wp1.session;
+        WebSocketSession p2 = wp2.session;
 
-    private void createRoom(WebSocketSession p1, WebSocketSession p2) {
+        // 2. 创建房间逻辑 (复用原有逻辑，稍作修改使用已查询到的 student 信息)
         String roomId = UUID.randomUUID().toString();
 
-        // 随机抽取 5 道题
-        // 注意：这里使用 MyBatis Plus 的随机查询
+        // 随机抽题
         List<BizQuestion> questions = questionService.list(
                 new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<BizQuestion>()
-                        .eq("question_type", 1) // 仅限单选题比较适合PK
+                        .eq("question_type", 1)
                         .last("ORDER BY RAND() LIMIT 5")
         );
 
@@ -161,52 +220,100 @@ public class BattleGameManager {
         playerRoomMap.put(p1.getId(), roomId);
         playerRoomMap.put(p2.getId(), roomId);
 
-        // 【核心修改开始】 获取双方用户信息并交叉发送
-        // 从 session 中获取学号 (在 JwtHandshakeInterceptor 中放入的 "username")
-        String p1No = (String) p1.getAttributes().get("username");
-        String p2No = (String) p2.getAttributes().get("username");
+        // 3. 发送匹配成功消息 (使用 WaitingPlayer 中缓存的 student 信息，避免重复查库)
+        sendMatchSuccess(p1, wp2.student);
+        sendMatchSuccess(p2, wp1.student);
 
-        // 查询数据库获取详细信息
-        // 注意：lambdaQuery() 需要 MyBatis-Plus 支持，确保 BizStudentService 继承了 IService
-        BizStudent s1 = studentService.lambdaQuery().eq(BizStudent::getStudentNo, p1No).one();
-        BizStudent s2 = studentService.lambdaQuery().eq(BizStudent::getStudentNo, p2No).one();
-
-        // 构造发给 P1 的消息 (包含 P2 的信息)
-        Map<String, Object> dataForP1 = new HashMap<>();
-        dataForP1.put("message", "匹配成功");
-        dataForP1.put("opponent", buildStudentInfoMap(s2)); // 封装对手信息
-        sendMessage(p1, BattleMessage.of("MATCH_SUCCESS", dataForP1));
-
-        // 构造发给 P2 的消息 (包含 P1 的信息)
-        Map<String, Object> dataForP2 = new HashMap<>();
-        dataForP2.put("message", "匹配成功");
-        dataForP2.put("opponent", buildStudentInfoMap(s1)); // 封装对手信息
-        sendMessage(p2, BattleMessage.of("MATCH_SUCCESS", dataForP2));
-        // 【核心修改结束】
-        // 延迟 1秒 发送第一题
-        try { Thread.sleep(1000); } catch (InterruptedException e) {}
-        sendQuestion(room);
-        startRoundTimer(room); // <--- 新增这一行
+        // 4. 延迟发题
+        scheduler.schedule(() -> {
+            sendQuestion(room);
+            startRoundTimer(room);
+        }, 1, TimeUnit.SECONDS);
     }
 
-
-
-    // 【新增】辅助方法：构建脱敏的学生信息 Map
-    private Map<String, Object> buildStudentInfoMap(BizStudent s) {
-        Map<String, Object> info = new HashMap<>();
-        if (s != null) {
-            info.put("name", s.getName());
-            info.put("avatar", s.getAvatar());
-            info.put("avatarFrameStyle", s.getAvatarFrameStyle());
-        } else {
-            info.put("name", "神秘对手");
-            info.put("avatar", null);
+    /**
+     * 从队列和映射中移除玩家
+     */
+    private void removeFromQueue(WaitingPlayer wp) {
+        sessionWaitingMap.remove(wp.session.getId());
+        List<WaitingPlayer> queue = tierQueues.get(wp.tier);
+        if (queue != null) {
+            queue.remove(wp);
         }
-        return info;
     }
+
+    /**
+     * 用户取消匹配或断开
+     */
+    public void leave(WebSocketSession session) {
+        // 1. 尝试从等待队列移除
+        WaitingPlayer wp = sessionWaitingMap.get(session.getId());
+        if (wp != null) {
+            removeFromQueue(wp);
+            return; // 如果在等待队列中，移除后直接返回
+        }
+
+        // 2. 如果在游戏中，处理游戏退出逻辑
+        String roomId = playerRoomMap.remove(session.getId());
+        if (roomId != null) {
+            BattleRoom room = rooms.get(roomId);
+            if (room != null) {
+                synchronized (room) {
+                    if (room.timeoutTask != null) room.timeoutTask.cancel(true);
+
+                    WebSocketSession opponent = room.p1.equals(session) ? room.p2 : room.p1;
+                    sendMessage(opponent, BattleMessage.of("OPPONENT_LEFT", null));
+
+                    rooms.remove(roomId);
+                    playerRoomMap.remove(opponent.getId());
+                }
+            }
+        }
+    }
+
+    // --- 以下为游戏进行中的逻辑 (保持原有逻辑基本不变，适配新结构) ---
+
+    private void sendMatchSuccess(WebSocketSession session, BizStudent opponent) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("message", "匹配成功");
+        data.put("opponent", buildStudentInfoMap(opponent));
+        sendMessage(session, BattleMessage.of("MATCH_SUCCESS", data));
+    }
+
+    public void handleAnswer(WebSocketSession session, String answerStr) {
+        String roomId = playerRoomMap.get(session.getId());
+        if (roomId == null) return;
+
+        BattleRoom room = rooms.get(roomId);
+        if (room == null) return;
+
+        synchronized (room) {
+            room.submitAnswer(session, answerStr);
+            if (room.isRoundComplete()) {
+                if (room.timeoutTask != null) room.timeoutTask.cancel(false);
+                processRoundTransition(room);
+            }
+        }
+    }
+
+    private void processRoundTransition(BattleRoom room) {
+        sendRoundResult(room);
+        scheduler.schedule(() -> {
+            synchronized (room) {
+                if (rooms.get(room.roomId) == null) return;
+                if (room.hasNextQuestion()) {
+                    room.nextRound();
+                    sendQuestion(room);
+                    startRoundTimer(room);
+                } else {
+                    sendGameOver(room);
+                }
+            }
+        }, ROUND_RESULT_VIEW_TIME, TimeUnit.SECONDS);
+    }
+
     private void sendQuestion(BattleRoom room) {
         BizQuestion q = room.getCurrentQuestion();
-        // 脱敏，不发答案
         Map<String, Object> qData = new HashMap<>();
         qData.put("content", q.getContent());
         qData.put("options", q.getOptions());
@@ -218,53 +325,59 @@ public class BattleGameManager {
         sendMessage(room.p2, msg);
     }
 
-    // 【修改后】修复后的代码
-    private void sendRoundResult(BattleRoom room) {
-        // 1. 计算本轮得分（保持原逻辑）
-        BizQuestion q = room.getCurrentQuestion();
+    private void startRoundTimer(BattleRoom room) {
+        if (room.timeoutTask != null && !room.timeoutTask.isDone()) {
+            room.timeoutTask.cancel(false);
+        }
+        int roundAtStart = room.currentRoundIndex;
+        room.timeoutTask = scheduler.schedule(() -> {
+            synchronized (room) {
+                if (room.currentRoundIndex != roundAtStart) return;
+                processRoundTransition(room);
+            }
+        }, ROUND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    }
 
-        // 简单的判分逻辑：如果不区分单选多选，假设全匹配才给分
-        // 注意：这里使用了 equalsIgnoreCase，实际生产中可能需要更复杂的判分（如多选少选）
+    private void sendRoundResult(BattleRoom room) {
+        BizQuestion q = room.getCurrentQuestion();
         boolean p1Correct = room.p1Answer != null && room.p1Answer.equalsIgnoreCase(q.getAnswer());
         boolean p2Correct = room.p2Answer != null && room.p2Answer.equalsIgnoreCase(q.getAnswer());
 
         if (p1Correct) room.p1Score += 20;
         if (p2Correct) room.p2Score += 20;
 
-        // 2. 为 P1 构建数据 (P1 是 "我", P2 是 "对手")
-        Map<String, Object> dataForP1 = new HashMap<>();
-        dataForP1.put("correctAnswer", q.getAnswer());
-        dataForP1.put("myAnswer", room.p1Answer);      // P1 的答案是 "myAnswer"
-        dataForP1.put("oppAnswer", room.p2Answer);     // P2 的答案是 "oppAnswer"
-        dataForP1.put("myScore", room.p1Score);        // P1 的分是 "myScore"
-        dataForP1.put("oppScore", room.p2Score);       // P2 的分是 "oppScore"
-        dataForP1.put("isCorrect", p1Correct);         // 方便前端展示对错
+        Map<String, Object> baseData = new HashMap<>();
+        baseData.put("correctAnswer", q.getAnswer());
 
-        sendMessage(room.p1, BattleMessage.of("ROUND_RESULT", dataForP1));
+        // 发给 P1
+        Map<String, Object> dataP1 = new HashMap<>(baseData);
+        dataP1.put("myAnswer", room.p1Answer);
+        dataP1.put("oppAnswer", room.p2Answer);
+        dataP1.put("myScore", room.p1Score);
+        dataP1.put("oppScore", room.p2Score);
+        dataP1.put("isCorrect", p1Correct);
+        sendMessage(room.p1, BattleMessage.of("ROUND_RESULT", dataP1));
 
-        // 3. 为 P2 构建数据 (P2 是 "我", P1 是 "对手")
-        Map<String, Object> dataForP2 = new HashMap<>();
-        dataForP2.put("correctAnswer", q.getAnswer());
-        dataForP2.put("myAnswer", room.p2Answer);      // P2 的答案是 "myAnswer"
-        dataForP2.put("oppAnswer", room.p1Answer);     // P1 的答案是 "oppAnswer"
-        dataForP2.put("myScore", room.p2Score);        // P2 的分是 "myScore"
-        dataForP2.put("oppScore", room.p1Score);       // P1 的分是 "oppScore"
-        dataForP2.put("isCorrect", p2Correct);         // 方便前端展示对错
-
-        sendMessage(room.p2, BattleMessage.of("ROUND_RESULT", dataForP2));
+        // 发给 P2
+        Map<String, Object> dataP2 = new HashMap<>(baseData);
+        dataP2.put("myAnswer", room.p2Answer);
+        dataP2.put("oppAnswer", room.p1Answer);
+        dataP2.put("myScore", room.p2Score);
+        dataP2.put("oppScore", room.p1Score);
+        dataP2.put("isCorrect", p2Correct);
+        sendMessage(room.p2, BattleMessage.of("ROUND_RESULT", dataP2));
     }
 
     private void sendGameOver(BattleRoom room) {
+        // 这里可以扩展：更新数据库中的用户积分 (points)
         String winner = room.p1Score > room.p2Score ? "YOU" : (room.p1Score < room.p2Score ? "OPPONENT" : "DRAW");
 
-        // 发送给 P1
         Map<String, Object> res1 = new HashMap<>();
         res1.put("result", winner);
         res1.put("myScore", room.p1Score);
         res1.put("oppScore", room.p2Score);
         sendMessage(room.p1, BattleMessage.of("GAME_OVER", res1));
 
-        // 发送给 P2 (反转结果)
         String winner2 = winner.equals("YOU") ? "OPPONENT" : (winner.equals("DRAW") ? "DRAW" : "YOU");
         Map<String, Object> res2 = new HashMap<>();
         res2.put("result", winner2);
@@ -272,10 +385,23 @@ public class BattleGameManager {
         res2.put("oppScore", room.p1Score);
         sendMessage(room.p2, BattleMessage.of("GAME_OVER", res2));
 
-        // 清理
         rooms.remove(room.roomId);
         playerRoomMap.remove(room.p1.getId());
         playerRoomMap.remove(room.p2.getId());
+    }
+
+    private Map<String, Object> buildStudentInfoMap(BizStudent s) {
+        Map<String, Object> info = new HashMap<>();
+        if (s != null) {
+            info.put("name", s.getName());
+            info.put("avatar", s.getAvatar());
+            info.put("avatarFrameStyle", s.getAvatarFrameStyle());
+            info.put("points", s.getPoints()); // 可以展示对手的段位分
+        } else {
+            info.put("name", "神秘对手");
+            info.put("avatar", null);
+        }
+        return info;
     }
 
     private void sendMessage(WebSocketSession session, BattleMessage msg) {
@@ -288,20 +414,14 @@ public class BattleGameManager {
         }
     }
 
-    // --- 内部类：房间 ---
+    // 内部房间类
     private static class BattleRoom {
         String roomId;
-        WebSocketSession p1;
-        WebSocketSession p2;
+        WebSocketSession p1, p2;
         List<BizQuestion> questions;
         int currentRoundIndex = 0;
-
-        String p1Answer = null;
-        String p2Answer = null;
-        int p1Score = 0;
-        int p2Score = 0;
-
-        // 【新增】持有当前回合的超时任务，以便取消
+        String p1Answer, p2Answer;
+        int p1Score = 0, p2Score = 0;
         ScheduledFuture<?> timeoutTask;
 
         public BattleRoom(String roomId, WebSocketSession p1, WebSocketSession p2, List<BizQuestion> questions) {
@@ -310,67 +430,13 @@ public class BattleGameManager {
             this.p2 = p2;
             this.questions = questions;
         }
-
-        public BizQuestion getCurrentQuestion() {
-            return questions.get(currentRoundIndex);
+        public BizQuestion getCurrentQuestion() { return questions.get(currentRoundIndex); }
+        public void submitAnswer(WebSocketSession s, String a) {
+            if (s.equals(p1)) p1Answer = a;
+            if (s.equals(p2)) p2Answer = a;
         }
-
-        public void submitAnswer(WebSocketSession session, String answer) {
-            if (session.equals(p1)) p1Answer = answer;
-            if (session.equals(p2)) p2Answer = answer;
-        }
-
-        public boolean isRoundComplete() {
-            return p1Answer != null && p2Answer != null;
-        }
-
-        public boolean hasNextQuestion() {
-            return currentRoundIndex < questions.size() - 1;
-        }
-
-        public void nextRound() {
-            currentRoundIndex++;
-            p1Answer = null;
-            p2Answer = null;
-        }
+        public boolean isRoundComplete() { return p1Answer != null && p2Answer != null; }
+        public boolean hasNextQuestion() { return currentRoundIndex < questions.size() - 1; }
+        public void nextRound() { currentRoundIndex++; p1Answer = null; p2Answer = null; }
     }
-
-    /**
-     * 【新增】开启回合倒计时
-     */
-    private void startRoundTimer(BattleRoom room) {
-        // 先取消旧任务（防御性编程）
-        if (room.timeoutTask != null && !room.timeoutTask.isDone()) {
-            room.timeoutTask.cancel(false);
-        }
-
-        // 记录当前回合数，用于在回调时校验（防止上一题的延迟任务影响下一题）
-        int roundAtStart = room.currentRoundIndex;
-
-        // 调度任务：ROUND_TIMEOUT_SECONDS 后执行
-        room.timeoutTask = scheduler.schedule(() -> {
-            // 必须加锁，防止和 handleAnswer 冲突
-            synchronized (room) {
-                // 再次检查：如果已经进入下一轮了，或者房间已销毁，则忽略
-                if (room.currentRoundIndex != roundAtStart) {
-                    return;
-                }
-
-                // 触发超时结算逻辑
-                handleRoundTimeout(room);
-            }
-        }, ROUND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-    }
-
-    /**
-     * 【新增】处理超时逻辑
-     */
-    private void handleRoundTimeout(BattleRoom room) {
-        // 超时触发时，逻辑和双方作答完成类似
-        // 此时未作答玩家的 answer 字段为 null，sendRoundResult 会自动判错
-
-        // 【修改点】直接调用过渡方法
-        processRoundTransition(room);
-    }
-
 }
