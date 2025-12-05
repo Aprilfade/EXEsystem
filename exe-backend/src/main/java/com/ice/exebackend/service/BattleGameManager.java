@@ -2,6 +2,7 @@ package com.ice.exebackend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ice.exebackend.dto.BattleMessage;
+import com.ice.exebackend.entity.BizBattleRecord;
 import com.ice.exebackend.entity.BizQuestion;
 import com.ice.exebackend.entity.BizStudent;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper; // 确保引入 QueryWrapper
+
+import java.time.LocalDateTime;
 import java.util.concurrent.ThreadLocalRandom; // 用于生成随机延迟和概率
 import com.alibaba.fastjson.JSON; // 或者使用你项目里的 Jackson/Fastjson 解析选项
 
@@ -30,6 +33,10 @@ public class BattleGameManager {
     @Autowired
     private BizStudentService studentService;
 
+    // 【新增】注入对战记录服务
+    @Autowired
+    private BizBattleRecordService battleRecordService;
+
     // 线程池：用于倒计时和匹配轮询
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(4);
 
@@ -44,6 +51,17 @@ public class BattleGameManager {
 
     // --- 新增：ELO 匹配相关结构 ---
 
+
+
+    /**
+     * 【新增】根据 WebSocket Session 获取学生实体
+     */
+    private BizStudent getStudentBySession(WebSocketSession session) {
+        if (session == null) return null; // 机器人 session 为 null
+        String studentNo = (String) session.getAttributes().get("username");
+        if (studentNo == null) return null;
+        return studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
+    }
     // 内部类：封装等待的玩家信息
     private static class WaitingPlayer {
         WebSocketSession session;
@@ -434,41 +452,65 @@ public class BattleGameManager {
      * 发送游戏结束消息并结算积分
      */
     private void sendGameOver(BattleRoom room) {
-        // 1. 判定胜负
-        String resultP1, resultP2;
+        // 1. 判定胜负 (保持原有逻辑)
+        String resultP1, resultP2; // 前端展示用的状态 (YOU/OPPONENT/DRAW)
+        String dbResultP1, dbResultP2; // 【新增】数据库存储用的状态 (WIN/LOSE/DRAW)
+        int scoreP1, scoreP2; // 【新增】积分变动值
+
         if (room.p1Score > room.p2Score) {
-            resultP1 = "YOU";
-            resultP2 = "OPPONENT";
+            resultP1 = "YOU";      dbResultP1 = "WIN";  scoreP1 = 20;
+            resultP2 = "OPPONENT"; dbResultP2 = "LOSE"; scoreP2 = -10;
         } else if (room.p1Score < room.p2Score) {
-            resultP1 = "OPPONENT";
-            resultP2 = "YOU";
+            resultP1 = "OPPONENT"; dbResultP1 = "LOSE"; scoreP1 = -10;
+            resultP2 = "YOU";      dbResultP2 = "WIN";  scoreP2 = 20;
         } else {
-            resultP1 = "DRAW";
-            resultP2 = "DRAW";
+            resultP1 = "DRAW";     dbResultP1 = "DRAW"; scoreP1 = 5;
+            resultP2 = "DRAW";     dbResultP2 = "DRAW"; scoreP2 = 5;
         }
 
-        // 2. 【核心修复】更新数据库积分
+        // 2. 更新数据库积分 (原有逻辑，保持不变)
         updatePlayerPoints(room.p1, resultP1);
         updatePlayerPoints(room.p2, resultP2);
 
-        // 3. 发送消息给 P1
+        // ==========================================
+        // 【新增】 3. 保存对战记录到数据库
+        // ==========================================
+        // 获取双方学生实体
+        BizStudent s1 = getStudentBySession(room.p1);
+        BizStudent s2 = getStudentBySession(room.p2); // 如果是机器人，s2 为 null
+
+        // 保存 P1 的记录
+        saveBattleRecord(s1, s2, dbResultP1, scoreP1);
+
+        // 保存 P2 的记录 (仅当 P2 是真人时)
+        if (s2 != null) {
+            saveBattleRecord(s2, s1, dbResultP2, scoreP2);
+        }
+        // ==========================================
+
+        // 4. 发送消息给 P1 (原有逻辑)
         Map<String, Object> res1 = new HashMap<>();
         res1.put("result", resultP1);
         res1.put("myScore", room.p1Score);
         res1.put("oppScore", room.p2Score);
+        // 可选：把积分变动也发给前端显示
+        res1.put("scoreChange", scoreP1);
         sendMessage(room.p1, BattleMessage.of("GAME_OVER", res1));
 
-        // 4. 发送消息给 P2
+        // 5. 发送消息给 P2 (原有逻辑)
         Map<String, Object> res2 = new HashMap<>();
         res2.put("result", resultP2);
         res2.put("myScore", room.p2Score);
         res2.put("oppScore", room.p1Score);
+        res2.put("scoreChange", scoreP2);
         sendMessage(room.p2, BattleMessage.of("GAME_OVER", res2));
 
-        // 5. 清理房间
+        // 6. 清理房间 (原有逻辑)
         rooms.remove(room.roomId);
         playerRoomMap.remove(room.p1.getId());
-        playerRoomMap.remove(room.p2.getId());
+        if (room.p2 != null) {
+            playerRoomMap.remove(room.p2.getId());
+        }
     }
 
 
@@ -625,5 +667,36 @@ public class BattleGameManager {
         }, 1, TimeUnit.SECONDS);
 
         System.out.println("创建机器人对局: " + wp1.student.getName() + " vs AI");
+    }
+    /**
+     * 【新增】保存单条对战记录
+     * @param player 本方玩家
+     * @param opponent 对手玩家 (可能为 null，表示机器人)
+     * @param result 结果 (WIN/LOSE/DRAW)
+     * @param scoreChange 积分变动
+     */
+    private void saveBattleRecord(BizStudent player, BizStudent opponent, String result, int scoreChange) {
+        if (player == null) return;
+
+        try {
+            BizBattleRecord record = new BizBattleRecord();
+            record.setPlayerId(player.getId());
+
+            // 如果对手是真人，存ID；如果是机器人，存 -1
+            if (opponent != null) {
+                record.setOpponentId(opponent.getId());
+            } else {
+                record.setOpponentId(-1L);
+            }
+
+            record.setResult(result);
+            record.setScoreChange(scoreChange);
+            record.setCreateTime(LocalDateTime.now());
+
+            battleRecordService.save(record);
+        } catch (Exception e) {
+            System.err.println("保存对战记录失败: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }
