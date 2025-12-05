@@ -156,11 +156,22 @@ const canBreak = computed(() => (profile.value.currentExp || 0) >= (profile.valu
 
 const formatExp = () => `${profile.value.currentExp}/${profile.value.maxExp}`;
 
-// 基础成功率 (需与后端一致，用于前端展示)
+// 基础成功率 (需与后端 RealmEnum 逻辑保持一致)
 const baseSuccessRate = computed(() => {
-  const rates = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10];
   const lvl = profile.value.realmLevel || 0;
-  return lvl < rates.length ? rates[lvl] : 10;
+
+  // 【修复】核心修改：先除以 10 获取大境界索引，再查表
+  const realmIndex = Math.floor(lvl / 10);
+
+  // 对应 RealmEnum:
+  // 0:凡人(100%), 1:炼气(90%), 2:筑基(80%), 3:金丹(70%), 4:元婴(60%)
+  // 5:化神(50%), 6:炼虚(40%), 7:合体(30%), 8:大乘(20%), 9:渡劫(10%)
+  const rates = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10];
+
+  if (realmIndex < rates.length) {
+    return rates[realmIndex];
+  }
+  return 0; // 飞升后或异常情况
 });
 
 // 计算最终成功率
