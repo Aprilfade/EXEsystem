@@ -19,6 +19,12 @@ public class BizCultivation {
     private Integer attack;
     private Integer defense;
     private LocalDateTime updateTime;
+    // 【新增】上次结算时间
+    private LocalDateTime lastSettlementTime;
+
+    // ... 手动 Getter/Setter (如果未启用 Lombok) ...
+    public LocalDateTime getLastSettlementTime() { return lastSettlementTime; }
+    public void setLastSettlementTime(LocalDateTime lastSettlementTime) { this.lastSettlementTime = lastSettlementTime; }
 
     // === 手动添加 Getter 和 Setter ===
     public Long getStudentId() { return studentId; }
