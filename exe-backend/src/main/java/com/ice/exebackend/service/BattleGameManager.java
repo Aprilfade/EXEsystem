@@ -9,6 +9,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper; // 确保引入 QueryWrapper
+import java.util.concurrent.ThreadLocalRandom; // 用于生成随机延迟和概率
+import com.alibaba.fastjson.JSON; // 或者使用你项目里的 Jackson/Fastjson 解析选项
+
+
 
 
 import javax.annotation.PostConstruct;
@@ -116,6 +120,13 @@ public class BattleGameManager {
             for (WaitingPlayer p1 : queue) {
                 // 如果玩家已经匹配成功（可能在别的线程被移除了），跳过
                 if (!sessionWaitingMap.containsKey(p1.session.getId())) continue;
+
+
+                // 【新增】检查超时：如果等待超过 10 秒，分配机器人
+                if (now - p1.joinTime > 10000) {
+                    createBotMatch(p1);
+                    continue; // 处理下一个
+                }
 
                 // 计算等待时间
                 long waitTime = System.currentTimeMillis() - p1.joinTime;
@@ -264,10 +275,11 @@ public class BattleGameManager {
                     if (room.timeoutTask != null) room.timeoutTask.cancel(true);
 
                     WebSocketSession opponent = room.p1.equals(session) ? room.p2 : room.p1;
-                    sendMessage(opponent, BattleMessage.of("OPPONENT_LEFT", null));
-
-                    rooms.remove(roomId);
-                    playerRoomMap.remove(opponent.getId());
+                    // 如果对手存在（不是机器人），才通知他
+                    if (opponent != null) {
+                        sendMessage(opponent, BattleMessage.of("OPPONENT_LEFT", null));
+                        playerRoomMap.remove(opponent.getId());
+                    }
                 }
             }
         }
@@ -325,6 +337,52 @@ public class BattleGameManager {
         BattleMessage msg = BattleMessage.of("QUESTION", qData);
         sendMessage(room.p1, msg);
         sendMessage(room.p2, msg);
+
+// 【新增】如果是机器人局，安排机器人答题
+        if (room.isBotGame) {
+            scheduleBotAnswer(room);
+        }
+
+    }
+    /**
+     * 模拟机器人答题行为
+     */
+    private void scheduleBotAnswer(BattleRoom room) {
+        // 随机生成思考时间：3 ~ 15 秒
+        int delay = ThreadLocalRandom.current().nextInt(3, 15);
+
+        scheduler.schedule(() -> {
+            // 检查房间是否还在 (可能玩家已断开)
+            if (!rooms.containsKey(room.roomId)) return;
+
+            synchronized (room) {
+                BizQuestion q = room.getCurrentQuestion();
+                String botAnswer;
+
+                // 设定机器人智商：60% 概率答对 (可根据段位动态调整)
+                boolean willBeCorrect = ThreadLocalRandom.current().nextDouble() < 0.6;
+
+                if (willBeCorrect) {
+                    botAnswer = q.getAnswer();
+                } else {
+                    // 答错：随机选一个非正确答案 (这里简化处理，随机选 A/B/C/D)
+                    // 更严谨的做法是解析 options JSON，从中选一个错误的 key
+                    String[] options = {"A", "B", "C", "D"};
+                    do {
+                        botAnswer = options[ThreadLocalRandom.current().nextInt(4)];
+                    } while (botAnswer.equalsIgnoreCase(q.getAnswer()) && options.length > 1);
+                }
+
+                // 提交答案
+                room.p2Answer = botAnswer;
+
+                // 检查回合是否结束 (有可能玩家已经答完了)
+                if (room.isRoundComplete()) {
+                    if (room.timeoutTask != null) room.timeoutTask.cancel(false);
+                    processRoundTransition(room);
+                }
+            }
+        }, delay, TimeUnit.SECONDS);
     }
 
     private void startRoundTimer(BattleRoom room) {
@@ -418,10 +476,12 @@ public class BattleGameManager {
      * @param result 比赛结果 (YOU:胜, OPPONENT:负, DRAW:平)
      */
     private void updatePlayerPoints(WebSocketSession session, String result) {
+        if (session == null) return; // 机器人不更新积分
         try {
             // 从 Session 获取学号 (在握手拦截器或 joinQueue 时放入的)
             String studentNo = (String) session.getAttributes().get("username");
             if (studentNo == null) return;
+
 
             // 查询当前学生信息
             BizStudent student = studentService.getOne(
@@ -474,6 +534,9 @@ public class BattleGameManager {
     }
 
     private void sendMessage(WebSocketSession session, BattleMessage msg) {
+        // 【关键】如果是机器人(session为null)，直接忽略，不发送消息
+        if (session == null) return;
+
         try {
             if (session.isOpen()) {
                 session.sendMessage(new TextMessage(objectMapper.writeValueAsString(msg)));
@@ -486,12 +549,16 @@ public class BattleGameManager {
     // 内部房间类
     private static class BattleRoom {
         String roomId;
-        WebSocketSession p1, p2;
+        WebSocketSession p1;
+        WebSocketSession p2; // 机器人局时，此字段为 null
         List<BizQuestion> questions;
         int currentRoundIndex = 0;
         String p1Answer, p2Answer;
         int p1Score = 0, p2Score = 0;
         ScheduledFuture<?> timeoutTask;
+
+        // 【新增】标记是否为机器人局
+        boolean isBotGame = false;
 
         public BattleRoom(String roomId, WebSocketSession p1, WebSocketSession p2, List<BizQuestion> questions) {
             this.roomId = roomId;
@@ -499,13 +566,62 @@ public class BattleGameManager {
             this.p2 = p2;
             this.questions = questions;
         }
+
         public BizQuestion getCurrentQuestion() { return questions.get(currentRoundIndex); }
+
         public void submitAnswer(WebSocketSession s, String a) {
             if (s.equals(p1)) p1Answer = a;
-            if (s.equals(p2)) p2Answer = a;
+            // 如果 p2 存在且是发送者 (真人对战情况)
+            if (p2 != null && s.equals(p2)) p2Answer = a;
         }
+
         public boolean isRoundComplete() { return p1Answer != null && p2Answer != null; }
         public boolean hasNextQuestion() { return currentRoundIndex < questions.size() - 1; }
         public void nextRound() { currentRoundIndex++; p1Answer = null; p2Answer = null; }
+    }
+    /**
+     * 创建人机对战
+     */
+    private synchronized void createBotMatch(WaitingPlayer wp1) {
+        // 双重检查
+        if (!sessionWaitingMap.containsKey(wp1.session.getId())) return;
+
+        // 1. 移除队列
+        removeFromQueue(wp1);
+        WebSocketSession p1 = wp1.session;
+
+        // 2. 创建虚拟机器人信息
+        BizStudent botStudent = new BizStudent();
+        botStudent.setId(-1L); // 负数ID代表机器人
+        botStudent.setName("AI 智能助教"); // 或者随机名字
+        // 设置一个默认头像
+        botStudent.setAvatar("https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png");
+        botStudent.setPoints(new Random().nextInt(200) + 500); // 随机积分
+
+        // 3. 创建房间
+        String roomId = UUID.randomUUID().toString();
+        List<BizQuestion> questions = questionService.list(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<BizQuestion>()
+                        .eq("question_type", 1)
+                        .last("ORDER BY RAND() LIMIT 5")
+        );
+
+        // p2 传入 null
+        BattleRoom room = new BattleRoom(roomId, p1, null, questions);
+        room.isBotGame = true; // 标记为机器人局
+
+        rooms.put(roomId, room);
+        playerRoomMap.put(p1.getId(), roomId);
+
+        // 4. 发送匹配成功 (只发给 P1)
+        sendMatchSuccess(p1, botStudent);
+
+        // 5. 延迟开始
+        scheduler.schedule(() -> {
+            sendQuestion(room);
+            startRoundTimer(room);
+        }, 1, TimeUnit.SECONDS);
+
+        System.out.println("创建机器人对局: " + wp1.student.getName() + " vs AI");
     }
 }
