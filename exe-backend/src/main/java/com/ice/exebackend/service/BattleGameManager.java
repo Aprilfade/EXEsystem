@@ -111,6 +111,8 @@ public class BattleGameManager {
      * 核心逻辑：定时扫描匹配
      */
     private void processMatchMaking() {
+
+        long now = System.currentTimeMillis(); // 【核心修复】添加这一行定义 now 变量
         // 遍历所有段位的队列
         for (String tier : tierQueues.keySet()) {
             List<WaitingPlayer> queue = tierQueues.get(tier);
