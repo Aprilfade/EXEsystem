@@ -157,6 +157,9 @@ const handleMessage = (msg: any) => {
     myScore.value = msg.data.myScore;
     oppScore.value = msg.data.oppScore;
 
+    // 【建议添加】
+    ElMessage.info('本轮结束，3秒后进入下一题...');
+
     // 可选：增加一些动画或提示，例如：
     if (msg.data.isCorrect) {
       ElMessage.success('回答正确 +20分！');

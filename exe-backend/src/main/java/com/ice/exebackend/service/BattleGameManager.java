@@ -29,8 +29,7 @@ public class BattleGameManager {
     @Autowired
     private ObjectMapper objectMapper;
     // 【新增】定义一个单线程的调度线程池，用于处理所有房间的倒计时
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(4);
     // 【新增】每题倒计时时间（秒）
     private static final int ROUND_TIMEOUT_SECONDS = 20;
 
@@ -46,6 +45,9 @@ public class BattleGameManager {
 
     // 房间存储: RoomID -> RoomObj
     private final Map<String, BattleRoom> rooms = new ConcurrentHashMap<>();
+
+    // 观看结果的缓冲时间（秒）
+    private static final int ROUND_RESULT_VIEW_TIME = 3;
 
     /**
      * 用户申请匹配
@@ -97,30 +99,49 @@ public class BattleGameManager {
 
         BattleRoom room = rooms.get(roomId);
 
-        // 【修改】加锁，保证线程安全
         synchronized (room) {
             room.submitAnswer(session, answerStr);
 
             // 检查是否双方都已作答
             if (room.isRoundComplete()) {
-                // 【新增】双方都答了，立即取消当前的倒计时任务
+                // 1. 双方都答了，取消当前的倒计时任务
                 if (room.timeoutTask != null) {
                     room.timeoutTask.cancel(false);
                 }
 
-                // 发送本轮结果
-                sendRoundResult(room);
-
-                // 准备下一题
-                if (room.hasNextQuestion()) {
-                    room.nextRound();
-                    sendQuestion(room); // 发送新题目
-                    startRoundTimer(room); // 【新增】启动下一轮倒计时
-                } else {
-                    sendGameOver(room); // 游戏结束
-                }
+                // 2. 【修改点】调用过渡方法，不再直接调用 nextRound
+                processRoundTransition(room);
             }
         }
+    }
+
+    /**
+     * 【新增】统一处理回合过渡：发送结果 -> 延迟 -> 下一题/结束
+     */
+    private void processRoundTransition(BattleRoom room) {
+        // 1. 立即发送本轮结果（前端收到后展示结果页）
+        sendRoundResult(room);
+
+        // 2. 利用线程池调度延迟任务，3秒后执行下一阶段
+        scheduler.schedule(() -> {
+            // 必须加锁，确保操作房间状态时的线程安全
+            synchronized (room) {
+                // 再次检查房间状态（防止房间在等待期间被意外销毁）
+                if (rooms.get(room.roomId) == null) {
+                    return;
+                }
+
+                if (room.hasNextQuestion()) {
+                    // 有下一题：切换状态 -> 发题 -> 启动新倒计时
+                    room.nextRound();
+                    sendQuestion(room);
+                    startRoundTimer(room);
+                } else {
+                    // 没有下一题：发送游戏结束结算
+                    sendGameOver(room);
+                }
+            }
+        }, ROUND_RESULT_VIEW_TIME, TimeUnit.SECONDS);
     }
     // --- 内部逻辑 ---
 
@@ -345,19 +366,11 @@ public class BattleGameManager {
      * 【新增】处理超时逻辑
      */
     private void handleRoundTimeout(BattleRoom room) {
-        // 1. 强制结算当前回合
-        // (此时未答题的玩家 answer 字段为 null，sendRoundResult 会判错，符合预期)
-        sendRoundResult(room);
+        // 超时触发时，逻辑和双方作答完成类似
+        // 此时未作答玩家的 answer 字段为 null，sendRoundResult 会自动判错
 
-        // 2. 进入下一轮或结束
-        if (room.hasNextQuestion()) {
-            room.nextRound();
-            sendQuestion(room);
-            // 递归启动下一轮计时
-            startRoundTimer(room);
-        } else {
-            sendGameOver(room);
-        }
+        // 【修改点】直接调用过渡方法
+        processRoundTransition(room);
     }
 
 }
