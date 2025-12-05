@@ -152,21 +152,16 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useBattleStore } from '@/stores/battle';
 import { useStudentAuthStore } from '@/stores/studentAuth';
-import { Search, Select, CloseBold, Loading } from '@element-plus/icons-vue';
+import { Search, Select, CloseBold, Loading, Trophy } from '@element-plus/icons-vue';
 import UserAvatar from '@/components/UserAvatar.vue';
-import { fetchBattleLeaderboard, fetchMyBattleRecords } from '@/api/student'; // 【修改】引入 fetchMyBattleRecords
-import { Trophy } from '@element-plus/icons-vue'; // 【新增】引入图标
+import { fetchBattleLeaderboard, fetchMyBattleRecords } from '@/api/student';
 
-
-
-// --- 【新增】战绩历史逻辑 ---
 const historyVisible = ref(false);
 const historyLoading = ref(false);
 const historyList = ref([]);
 const battleStore = useBattleStore();
 const authStore = useStudentAuthStore();
 
-// --- 【新增】排行榜相关逻辑 ---
 const rankLoading = ref(false);
 const rankList = ref<any[]>([]);
 const myPoints = computed(() => authStore.student?.points || 0);
@@ -174,7 +169,6 @@ const myPoints = computed(() => authStore.student?.points || 0);
 const loadLeaderboard = async () => {
   rankLoading.value = true;
   try {
-    // 刷新个人信息以获取最新积分
     await authStore.fetchStudentInfo();
     const res = await fetchBattleLeaderboard();
     if(res.code === 200) {
@@ -184,6 +178,7 @@ const loadLeaderboard = async () => {
     rankLoading.value = false;
   }
 };
+
 const openHistory = async () => {
   historyVisible.value = true;
   historyLoading.value = true;
@@ -199,19 +194,16 @@ const openHistory = async () => {
 
 const formatTime = (timeStr: string) => {
   if (!timeStr) return '';
-  return timeStr.replace('T', ' ').substring(5, 16); // 只显示 MM-DD HH:mm
+  return timeStr.replace('T', ' ').substring(5, 16);
 };
 const handleStartMatch = () => {
   battleStore.startMatch();
 }
-
 const returnToLobby = () => {
-  battleStore.gameState = 'IDLE'; // 强制回大厅
-  loadLeaderboard(); // 刷新榜单
+  battleStore.gameState = 'IDLE';
+  loadLeaderboard();
 }
 
-// ... (原有 audios, playSound, timer, computed properties 保持不变) ...
-// 为了完整性，你需要把原文件 script 中除了 onMounted/onUnmounted 外的逻辑都保留在这里
 const audios: Record<string, HTMLAudioElement> = {
   bgm: new Audio('/audio/battle_bgm.mp3'),
   correct: new Audio('/audio/correct.mp3'),
@@ -246,10 +238,8 @@ watch(() => battleStore.currentQuestion, (newVal) => { if (newVal) { myAnswer.va
 watch(() => battleStore.roundResult, (res) => { if (res) { clearInterval(timerInterval); if (res.isCorrect) { playSound('correct'); showMyScoreAnim.value = true; } else { playSound('wrong'); } if (res.oppAnswer === res.correctAnswer) { showOppScoreAnim.value = true; } } });
 watch(() => battleStore.gameState, (state) => { if (state === 'GAME_OVER') { clearInterval(timerInterval); if (gameResult.value === 'YOU') playSound('win'); else playSound('lose'); } else if (state === 'MATCHING') { playSound('match'); } });
 
-// --- 生命周期修改 ---
 onMounted(() => {
   battleStore.connect();
-  // 【修改】不再自动开始匹配，而是加载排行榜
   if (battleStore.gameState === 'IDLE') {
     loadLeaderboard();
   }
@@ -262,144 +252,64 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* ... (保留原有样式) ... */
-.battle-container {
-  min-height: calc(100vh - 60px);
-  background: radial-gradient(circle at center, #2b323c 0%, #141414 100%);
-  color: #fff;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
-  position: relative;
-}
-
-/* === 【新增】大厅样式 === */
-.lobby-layer {
-  width: 100%;
-  max-width: 500px;
-  text-align: center;
-  animation: fadeIn 0.5s;
-  display: flex;
-  flex-direction: column;
-  height: 80vh; /* 占据大部分高度 */
-}
-.game-title {
-  font-size: 40px;
-  font-weight: 900;
-  margin-bottom: 20px;
-  background: linear-gradient(to right, #409eff, #00f2f1);
-  -webkit-background-clip: text;
-  color: transparent;
-  letter-spacing: 4px;
-}
-.rank-panel {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  margin-bottom: 20px;
-}
-.panel-header {
-  padding: 15px;
-  background: rgba(0,0,0,0.2);
-  font-weight: bold;
-  color: #ffd700;
-  font-size: 18px;
-}
-.rank-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px;
-}
-.rank-item {
-  display: flex;
-  align-items: center;
-  padding: 10px;
-  margin-bottom: 8px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 8px;
-  transition: all 0.2s;
-}
+/* ... 基础结构样式 ... */
+.battle-container { min-height: calc(100vh - 60px); background: radial-gradient(circle at center, #2b323c 0%, #141414 100%); color: #fff; display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative; }
+.lobby-layer { width: 100%; max-width: 500px; text-align: center; animation: fadeIn 0.5s; display: flex; flex-direction: column; height: 80vh; }
+.game-title { font-size: 40px; font-weight: 900; margin-bottom: 20px; background: linear-gradient(to right, #409eff, #00f2f1); -webkit-background-clip: text; color: transparent; letter-spacing: 4px; }
+.rank-panel { flex: 1; background: rgba(255, 255, 255, 0.1); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; overflow: hidden; margin-bottom: 20px; }
+.panel-header { padding: 15px; background: rgba(0,0,0,0.2); font-weight: bold; color: #ffd700; font-size: 18px; }
+.rank-list { flex: 1; overflow-y: auto; padding: 10px; }
+.rank-item { display: flex; align-items: center; padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.05); border-radius: 8px; transition: all 0.2s; }
 .rank-item:hover { background: rgba(255,255,255,0.1); transform: translateX(5px); }
-.rank-idx {
-  width: 28px;
-  height: 28px;
-  line-height: 28px;
-  text-align: center;
-  border-radius: 50%;
-  background: #555;
-  color: #fff;
-  font-weight: bold;
-  margin-right: 10px;
-  font-size: 12px;
-}
+.rank-idx { width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; background: #555; color: #fff; font-weight: bold; margin-right: 10px; font-size: 12px; }
 .top-1 { background: #FFD700; color: #000; box-shadow: 0 0 10px #FFD700; }
 .top-2 { background: #C0C0C0; color: #000; }
 .top-3 { background: #CD7F32; color: #000; }
-
-.rank-user {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.user-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
+.rank-user { flex: 1; display: flex; align-items: center; gap: 10px; }
+.user-info { display: flex; flex-direction: column; align-items: flex-start; }
 .u-name { font-size: 14px; font-weight: bold; }
-.u-tier { font-size: 12px; padding: 1px 4px; border-radius: 3px; margin-top: 2px; }
-.u-tier.GOLD { color: #FFD700; border: 1px solid #FFD700; }
-.u-tier.SILVER { color: #C0C0C0; border: 1px solid #C0C0C0; }
-.u-tier.BRONZE { color: #CD7F32; border: 1px solid #CD7F32; }
-
 .rank-score { font-weight: bold; color: #409eff; font-family: monospace; }
-
-.lobby-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  align-items: center;
-}
-/* 在 .lobby-actions 样式附近添加 */
-.history-btn {
-  color: #ddd;
-  font-size: 14px;
-  margin-top: 10px;
-}
-.history-btn:hover {
-  color: #409eff;
-}
-
-/* 优化 Dialog 样式（可选） */
-:deep(.battle-history-dialog) {
-  border-radius: 12px;
-  overflow: hidden;
-}
+.lobby-actions { display: flex; flex-direction: column; gap: 15px; align-items: center; }
+.history-btn { color: #ddd; font-size: 14px; margin-top: 10px; }
+.history-btn:hover { color: #409eff; }
+:deep(.battle-history-dialog) { border-radius: 12px; overflow: hidden; }
 .my-status { color: #ccc; font-size: 14px; }
 .my-status span { color: #fff; font-weight: bold; font-size: 16px; }
-.start-btn {
-  width: 200px;
-  height: 50px;
-  font-size: 20px;
-  font-weight: bold;
-  letter-spacing: 2px;
-  background: linear-gradient(45deg, #409eff, #36cfc9);
-  border: none;
-  box-shadow: 0 4px 15px rgba(64, 158, 255, 0.4);
-  transition: transform 0.2s;
-}
+.start-btn { width: 200px; height: 50px; font-size: 20px; font-weight: bold; letter-spacing: 2px; background: linear-gradient(45deg, #409eff, #36cfc9); border: none; box-shadow: 0 4px 15px rgba(64, 158, 255, 0.4); transition: transform 0.2s; }
 .start-btn:hover { transform: scale(1.05); }
 .start-btn:active { transform: scale(0.95); }
 
+/* === 核心修改：英雄联盟段位样式 === */
+.u-tier { font-size: 12px; padding: 1px 6px; border-radius: 4px; margin-top: 2px; border: 1px solid; font-weight: bold; text-transform: uppercase; }
 
-/* === 复用原有的样式 (Matching, Game, Result) === */
-/* 请将原文件 style 中关于 matching-layer, game-layer, result-layer 等样式粘贴在此处 */
+/* 黑铁 */
+.u-tier.IRON { color: #6d6969; border-color: #6d6969; background: rgba(109, 105, 105, 0.1); }
+/* 黄铜 */
+.u-tier.BRONZE { color: #cd7f32; border-color: #cd7f32; background: rgba(205, 127, 50, 0.1); }
+/* 白银 */
+.u-tier.SILVER { color: #c0c0c0; border-color: #c0c0c0; background: rgba(192, 192, 192, 0.1); }
+/* 黄金 */
+.u-tier.GOLD { color: #ffd700; border-color: #ffd700; background: rgba(255, 215, 0, 0.1); text-shadow: 0 0 2px #ffd700; }
+/* 铂金 */
+.u-tier.PLATINUM { color: #2de0a5; border-color: #2de0a5; background: rgba(45, 224, 165, 0.1); }
+/* 翡翠 */
+.u-tier.EMERALD { color: #00bba3; border-color: #00bba3; background: rgba(0, 187, 163, 0.1); }
+/* 钻石 */
+.u-tier.DIAMOND { color: #78b3ff; border-color: #78b3ff; background: rgba(120, 179, 255, 0.1); text-shadow: 0 0 5px #78b3ff; }
+/* 大师 */
+.u-tier.MASTER { color: #d264ff; border-color: #d264ff; background: rgba(210, 100, 255, 0.1); }
+/* 宗师 */
+.u-tier.GRANDMASTER { color: #ff4655; border-color: #ff4655; background: rgba(255, 70, 85, 0.1); }
+/* 王者 */
+.u-tier.CHALLENGER {
+  background: linear-gradient(45deg, #f7c978, #f2d8a6, #f7c978);
+  -webkit-background-clip: text;
+  color: transparent;
+  border-color: #f7c978;
+  box-shadow: 0 0 10px rgba(247, 201, 120, 0.4);
+}
+
+/* 游戏界面部分 */
 .matching-layer { text-align: center; animation: fadeIn 0.5s; }
 .radar-scanner { width: 140px; height: 140px; border-radius: 50%; border: 2px solid rgba(64, 158, 255, 0.3); position: relative; margin: 0 auto 40px; display: flex; justify-content: center; align-items: center; box-shadow: 0 0 30px rgba(64, 158, 255, 0.1); }
 .scan-beam { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0deg, rgba(64, 158, 255, 0.5) 360deg); animation: radar-spin 1.5s linear infinite; }
@@ -409,7 +319,6 @@ onUnmounted(() => {
 .cancel-btn:hover { color: #fff; border-color: #fff; }
 @keyframes radar-spin { to { transform: rotate(360deg); } }
 
-/* Game Layer */
 .game-layer { width: 100%; max-width: 800px; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
 .players-header { display: flex; justify-content: space-between; align-items: center; padding: 0 10px; }
 .player-card { display: flex; align-items: center; gap: 15px; width: 35%; }
@@ -447,7 +356,6 @@ onUnmounted(() => {
 .waiting-tip { position: absolute; bottom: 10px; left: 0; width: 100%; text-align: center; font-size: 12px; color: #909399; }
 @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
 
-/* Result Layer */
 .result-layer { text-align: center; animation: zoomIn 0.4s; }
 .result-anim { font-size: 80px; margin-bottom: 20px; }
 .emoji-anim { display: inline-block; animation: bounce 2s infinite; }

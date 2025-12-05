@@ -812,7 +812,8 @@ public class StudentDataController {
         return Result.suc(topStudents);
     }
     /**
-     * 【新增】获取对战段位排行榜
+     * 【修改】获取对战段位排行榜
+     * 升级为英雄联盟段位体系
      */
     @GetMapping("/battle/leaderboard")
     @PreAuthorize("hasAuthority('ROLE_STUDENT')")
@@ -833,19 +834,10 @@ public class StudentDataController {
             int points = s.getPoints() == null ? 0 : s.getPoints();
             map.put("points", points);
 
-            // 复用 BattleGameManager 的段位逻辑
-            String tier;
-            String tierName;
-            if (points >= 500) {
-                tier = "GOLD";
-                tierName = "最强王者";
-            } else if (points >= 200) {
-                tier = "SILVER";
-                tierName = "荣耀黄金";
-            } else {
-                tier = "BRONZE";
-                tierName = "倔强青铜";
-            }
+            // === 核心修改：使用 BattleGameManager 中的新逻辑 ===
+            String tier = BattleGameManager.calculateTier(points);
+            String tierName = BattleGameManager.getTierNameCN(tier);
+
             map.put("tier", tier);
             map.put("tierName", tierName);
             return map;

@@ -44,14 +44,24 @@ public class BattleGameManager {
     private static final int ROUND_TIMEOUT_SECONDS = 20; // 每题限时
     private static final int ROUND_RESULT_VIEW_TIME = 3; // 结果展示时间
 
-    // 段位常量
-    private static final String TIER_BRONZE = "BRONZE"; // < 200
-    private static final String TIER_SILVER = "SILVER"; // 200 - 500
-    private static final String TIER_GOLD = "GOLD";     // > 500
+    // === 修改点 1：定义英雄联盟段位常量 ===
+    public static final String TIER_IRON = "IRON";           // 坚韧黑铁
+    public static final String TIER_BRONZE = "BRONZE";       // 英勇黄铜
+    public static final String TIER_SILVER = "SILVER";       // 不屈白银
+    public static final String TIER_GOLD = "GOLD";           // 荣耀黄金
+    public static final String TIER_PLATINUM = "PLATINUM";   // 华贵铂金
+    public static final String TIER_EMERALD = "EMERALD";     // 流光翡翠 (新版LOL增加的段位)
+    public static final String TIER_DIAMOND = "DIAMOND";     // 璀璨钻石
+    public static final String TIER_MASTER = "MASTER";       // 超凡大师
+    public static final String TIER_GRANDMASTER = "GRANDMASTER"; // 傲世宗师
+    public static final String TIER_CHALLENGER = "CHALLENGER";   // 最强王者
 
-    // --- 新增：ELO 匹配相关结构 ---
-
-
+    // 有序段位列表，用于匹配查找
+    private static final List<String> ORDERED_TIERS = Arrays.asList(
+            TIER_IRON, TIER_BRONZE, TIER_SILVER, TIER_GOLD,
+            TIER_PLATINUM, TIER_EMERALD, TIER_DIAMOND,
+            TIER_MASTER, TIER_GRANDMASTER, TIER_CHALLENGER
+    );
 
     /**
      * 【新增】根据 WebSocket Session 获取学生实体
@@ -90,15 +100,12 @@ public class BattleGameManager {
     // 初始化
     @PostConstruct
     public void init() {
-        // 初始化各段位队列
-        tierQueues.put(TIER_BRONZE, new CopyOnWriteArrayList<>());
-        tierQueues.put(TIER_SILVER, new CopyOnWriteArrayList<>());
-        tierQueues.put(TIER_GOLD, new CopyOnWriteArrayList<>());
-
-        // 启动匹配扫描任务：每 1 秒执行一次
+        // === 修改点 2：初始化所有段位的队列 ===
+        for (String tier : ORDERED_TIERS) {
+            tierQueues.put(tier, new CopyOnWriteArrayList<>());
+        }
         scheduler.scheduleAtFixedRate(this::processMatchMaking, 1, 1, TimeUnit.SECONDS);
     }
-
     /**
      * 用户申请匹配（进入对应段位的队列）
      */
@@ -129,54 +136,36 @@ public class BattleGameManager {
      * 核心逻辑：定时扫描匹配
      */
     private void processMatchMaking() {
-
-        long now = System.currentTimeMillis(); // 【核心修复】添加这一行定义 now 变量
-        // 遍历所有段位的队列
+        long now = System.currentTimeMillis();
         for (String tier : tierQueues.keySet()) {
             List<WaitingPlayer> queue = tierQueues.get(tier);
-
-            // 遍历该队列中的玩家（作为匹配发起者）
-            // 使用迭代器防止并发修改异常，CopyOnWriteArrayList 支持安全遍历
             for (WaitingPlayer p1 : queue) {
-                // 如果玩家已经匹配成功（可能在别的线程被移除了），跳过
                 if (!sessionWaitingMap.containsKey(p1.session.getId())) continue;
 
-
-                // 【新增】检查超时：如果等待超过 10 秒，分配机器人
                 if (now - p1.joinTime > 10000) {
                     createBotMatch(p1);
-                    continue; // 处理下一个
+                    continue;
                 }
 
-                // 计算等待时间
-                long waitTime = System.currentTimeMillis() - p1.joinTime;
-
-                // 确定搜索范围
+                long waitTime = now - p1.joinTime;
                 List<String> targetTiers = new ArrayList<>();
-                targetTiers.add(p1.tier); // 首先搜同段位
+                targetTiers.add(p1.tier);
 
+                // === 修改点 3：动态扩大匹配范围 ===
                 if (waitTime > 5000) {
-                    // 等待 > 5秒，扩大到相邻段位
-                    addAdjacentTiers(targetTiers, p1.tier);
+                    addAdjacentTiers(targetTiers, p1.tier, 1); // 搜索上下1个段位
                 }
-                if (waitTime > 10000) {
-                    // 等待 > 10秒，全服匹配
-                    targetTiers.add(TIER_BRONZE);
-                    targetTiers.add(TIER_SILVER);
-                    targetTiers.add(TIER_GOLD);
+                if (waitTime > 8000) {
+                    addAdjacentTiers(targetTiers, p1.tier, 2); // 搜索上下2个段位
                 }
 
-                // 尝试寻找对手
                 WaitingPlayer opponent = findOpponent(p1, targetTiers);
-
                 if (opponent != null) {
-                    // 找到对手，创建房间
                     createRoom(p1, opponent);
                 }
             }
         }
     }
-
     /**
      * 在指定段位列表中寻找对手
      */
@@ -198,29 +187,52 @@ public class BattleGameManager {
         return null;
     }
 
-    /**
-     * 辅助：计算段位
-     */
-    private String calculateTier(int points) {
-        if (points >= 500) return TIER_GOLD;
-        if (points >= 200) return TIER_SILVER;
-        return TIER_BRONZE;
+    // === 修改点 4：实现 LOL 段位积分计算 ===
+    public static String calculateTier(int points) {
+        if (points < 100) return TIER_IRON;       // 0-99
+        if (points < 200) return TIER_BRONZE;     // 100-199
+        if (points < 300) return TIER_SILVER;     // 200-299
+        if (points < 400) return TIER_GOLD;       // 300-399
+        if (points < 500) return TIER_PLATINUM;   // 400-499
+        if (points < 600) return TIER_EMERALD;    // 500-599
+        if (points < 800) return TIER_DIAMOND;    // 600-799
+        if (points < 1000) return TIER_MASTER;    // 800-999
+        if (points < 1200) return TIER_GRANDMASTER; // 1000-1199
+        return TIER_CHALLENGER;                   // 1200+
     }
 
+    public static String getTierNameCN(String tier) {
+        switch (tier) {
+            case TIER_IRON: return "坚韧黑铁";
+            case TIER_BRONZE: return "英勇黄铜";
+            case TIER_SILVER: return "不屈白银";
+            case TIER_GOLD: return "荣耀黄金";
+            case TIER_PLATINUM: return "华贵铂金";
+            case TIER_EMERALD: return "流光翡翠";
+            case TIER_DIAMOND: return "璀璨钻石";
+            case TIER_MASTER: return "超凡大师";
+            case TIER_GRANDMASTER: return "傲世宗师";
+            case TIER_CHALLENGER: return "最强王者";
+            default: return "未定级";
+        }
+    }
     /**
      * 辅助：添加相邻段位
      */
-    private void addAdjacentTiers(List<String> tiers, String currentTier) {
-        if (TIER_BRONZE.equals(currentTier)) {
-            tiers.add(TIER_SILVER);
-        } else if (TIER_SILVER.equals(currentTier)) {
-            tiers.add(TIER_BRONZE);
-            tiers.add(TIER_GOLD);
-        } else if (TIER_GOLD.equals(currentTier)) {
-            tiers.add(TIER_SILVER);
+    // === 修改点 5：通用的相邻段位查找 ===
+    private void addAdjacentTiers(List<String> tiers, String currentTier, int range) {
+        int index = ORDERED_TIERS.indexOf(currentTier);
+        if (index == -1) return;
+
+        // 向下查找 range 个
+        for (int i = 1; i <= range; i++) {
+            if (index - i >= 0) tiers.add(ORDERED_TIERS.get(index - i));
+        }
+        // 向上查找 range 个
+        for (int i = 1; i <= range; i++) {
+            if (index + i < ORDERED_TIERS.size()) tiers.add(ORDERED_TIERS.get(index + i));
         }
     }
-
     /**
      * 创建房间并开始游戏 (加锁保证原子性，防止两人同时被别人匹配)
      */
@@ -562,21 +574,23 @@ public class BattleGameManager {
             e.printStackTrace();
         }
     }
-
     private Map<String, Object> buildStudentInfoMap(BizStudent s) {
         Map<String, Object> info = new HashMap<>();
         if (s != null) {
             info.put("name", s.getName());
             info.put("avatar", s.getAvatar());
             info.put("avatarFrameStyle", s.getAvatarFrameStyle());
-            info.put("points", s.getPoints()); // 可以展示对手的段位分
+            info.put("points", s.getPoints());
+            // === 修改点 6：返回详细段位信息 ===
+            String tier = calculateTier(s.getPoints() == null ? 0 : s.getPoints());
+            info.put("tier", tier);
+            info.put("tierName", getTierNameCN(tier));
         } else {
             info.put("name", "神秘对手");
             info.put("avatar", null);
         }
         return info;
     }
-
     private void sendMessage(WebSocketSession session, BattleMessage msg) {
         // 【关键】如果是机器人(session为null)，直接忽略，不发送消息
         if (session == null) return;
