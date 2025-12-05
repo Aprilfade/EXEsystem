@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper; // 确保引入 QueryWrapper
+import org.springframework.scheduling.annotation.Async; // 引入异步注解
 
 import java.time.LocalDateTime;
 import java.util.concurrent.ThreadLocalRandom; // 用于生成随机延迟和概率
@@ -43,6 +44,7 @@ public class BattleGameManager {
     // 常量定义
     private static final int ROUND_TIMEOUT_SECONDS = 20; // 每题限时
     private static final int ROUND_RESULT_VIEW_TIME = 3; // 结果展示时间
+    private static final int BASE_SCORE = 10; // 【新增】基础分
 
     // === 修改点 1：定义英雄联盟段位常量 ===
     public static final String TIER_IRON = "IRON";           // 坚韧黑铁
@@ -326,6 +328,9 @@ public class BattleGameManager {
         sendMessage(session, BattleMessage.of("MATCH_SUCCESS", data));
     }
 
+    /**
+     * 处理玩家提交答案
+     */
     public void handleAnswer(WebSocketSession session, String answerStr) {
         String roomId = playerRoomMap.get(session.getId());
         if (roomId == null) return;
@@ -334,14 +339,63 @@ public class BattleGameManager {
         if (room == null) return;
 
         synchronized (room) {
+            // 提交答案并记录时间
             room.submitAnswer(session, answerStr);
+
             if (room.isRoundComplete()) {
                 if (room.timeoutTask != null) room.timeoutTask.cancel(false);
                 processRoundTransition(room);
             }
         }
     }
+    /**
+     * 【新增】处理玩家使用道具
+     */
+    public void handleItemUsage(WebSocketSession session, String itemType) {
+        String roomId = playerRoomMap.get(session.getId());
+        if (roomId == null) return;
+        BattleRoom room = rooms.get(roomId);
+        if (room == null) return;
 
+        synchronized (room) {
+            boolean isP1 = session.equals(room.p1);
+            Map<String, Integer> myItems = isP1 ? room.p1Items : room.p2Items;
+            WebSocketSession opponent = isP1 ? room.p2 : room.p1;
+
+            // 检查库存
+            if (myItems.getOrDefault(itemType, 0) > 0) {
+                // 1. 扣除库存
+                myItems.put(itemType, myItems.get(itemType) - 1);
+
+                // 2. 执行效果
+                if ("FOG".equals(itemType)) {
+                    // 迷雾卡：发给对手，让前端显示遮罩
+                    sendMessage(opponent, BattleMessage.of("ITEM_EFFECT", Map.of("effect", "FOG", "duration", 3000)));
+                } else if ("HINT".equals(itemType)) {
+                    // 提示卡：发给自己，排除一个错误选项
+                    BizQuestion q = room.getCurrentQuestion();
+                    String wrongOption = findOneWrongOption(q);
+                    sendMessage(session, BattleMessage.of("ITEM_EFFECT", Map.of("effect", "HINT", "wrongOption", wrongOption)));
+                }
+
+                // 3. 通知前端扣除成功（用于更新道具栏UI）
+                sendMessage(session, BattleMessage.of("ITEM_USED_SUCCESS", itemType));
+            }
+        }
+    }
+    // 【新增】辅助方法：随机找一个错误选项
+    private String findOneWrongOption(BizQuestion q) {
+        String correct = q.getAnswer();
+        // 简单处理：遍历 A-D，找一个不是答案的
+        List<String> candidates = new ArrayList<>();
+        for (String opt : Arrays.asList("A", "B", "C", "D")) {
+            if (!opt.equalsIgnoreCase(correct)) {
+                candidates.add(opt);
+            }
+        }
+        if (candidates.isEmpty()) return "";
+        return candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+    }
     private void processRoundTransition(BattleRoom room) {
         sendRoundResult(room);
         scheduler.schedule(() -> {
@@ -377,38 +431,31 @@ public class BattleGameManager {
 
     }
     /**
-     * 模拟机器人答题行为
+     * 模拟机器人答题（更新时间记录）
      */
     private void scheduleBotAnswer(BattleRoom room) {
-        // 随机生成思考时间：3 ~ 15 秒
         int delay = ThreadLocalRandom.current().nextInt(3, 15);
 
         scheduler.schedule(() -> {
-            // 检查房间是否还在 (可能玩家已断开)
             if (!rooms.containsKey(room.roomId)) return;
-
             synchronized (room) {
+                // 记录机器人答题时间
+                room.p2AnswerTime = System.currentTimeMillis();
+
                 BizQuestion q = room.getCurrentQuestion();
                 String botAnswer;
-
-                // 设定机器人智商：60% 概率答对 (可根据段位动态调整)
                 boolean willBeCorrect = ThreadLocalRandom.current().nextDouble() < 0.6;
 
                 if (willBeCorrect) {
                     botAnswer = q.getAnswer();
                 } else {
-                    // 答错：随机选一个非正确答案 (这里简化处理，随机选 A/B/C/D)
-                    // 更严谨的做法是解析 options JSON，从中选一个错误的 key
                     String[] options = {"A", "B", "C", "D"};
                     do {
                         botAnswer = options[ThreadLocalRandom.current().nextInt(4)];
                     } while (botAnswer.equalsIgnoreCase(q.getAnswer()) && options.length > 1);
                 }
-
-                // 提交答案
                 room.p2Answer = botAnswer;
 
-                // 检查回合是否结束 (有可能玩家已经答完了)
                 if (room.isRoundComplete()) {
                     if (room.timeoutTask != null) room.timeoutTask.cancel(false);
                     processRoundTransition(room);
@@ -417,10 +464,17 @@ public class BattleGameManager {
         }, delay, TimeUnit.SECONDS);
     }
 
+    /**
+     * 开启回合倒计时（增加记录开始时间）
+     */
     private void startRoundTimer(BattleRoom room) {
         if (room.timeoutTask != null && !room.timeoutTask.isDone()) {
             room.timeoutTask.cancel(false);
         }
+
+        // 【关键】记录回合开始时间，用于计算速度分
+        room.roundStartTime = System.currentTimeMillis();
+
         int roundAtStart = room.currentRoundIndex;
         room.timeoutTask = scheduler.schedule(() -> {
             synchronized (room) {
@@ -430,35 +484,74 @@ public class BattleGameManager {
         }, ROUND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
+    /**
+     * 发送单局结果（核心评分逻辑升级）
+     */
     private void sendRoundResult(BattleRoom room) {
         BizQuestion q = room.getCurrentQuestion();
-        boolean p1Correct = room.p1Answer != null && room.p1Answer.equalsIgnoreCase(q.getAnswer());
-        boolean p2Correct = room.p2Answer != null && room.p2Answer.equalsIgnoreCase(q.getAnswer());
 
-        if (p1Correct) room.p1Score += 20;
-        if (p2Correct) room.p2Score += 20;
+        boolean p1Correct = isCorrect(room.p1Answer, q.getAnswer());
+        boolean p2Correct = isCorrect(room.p2Answer, q.getAnswer());
+
+        // --- 升级后的计分公式 ---
+        int p1RoundScore = 0;
+        int p2RoundScore = 0;
+
+        // P1 结算
+        if (p1Correct) {
+            room.p1Combo++; // 连击 +1
+            // 速度分: (20秒 - 用时) * 0.5
+            long timeUsedMs = room.p1AnswerTime - room.roundStartTime;
+            double timeBonus = Math.max(0, (ROUND_TIMEOUT_SECONDS * 1000 - timeUsedMs) / 1000.0 * 0.5);
+            // 连击分: 连击数 * 2 (最高10分)
+            int comboBonus = Math.min(room.p1Combo * 2, 10);
+
+            p1RoundScore = (int) (BASE_SCORE + timeBonus + comboBonus);
+        } else {
+            room.p1Combo = 0; // 答错中断连击
+        }
+
+        // P2 结算
+        if (p2Correct) {
+            room.p2Combo++;
+            long timeUsedMs = room.p2AnswerTime - room.roundStartTime;
+            double timeBonus = Math.max(0, (ROUND_TIMEOUT_SECONDS * 1000 - timeUsedMs) / 1000.0 * 0.5);
+            int comboBonus = Math.min(room.p2Combo * 2, 10);
+            p2RoundScore = (int) (BASE_SCORE + timeBonus + comboBonus);
+        } else {
+            room.p2Combo = 0;
+        }
+
+        room.p1Score += p1RoundScore;
+        room.p2Score += p2RoundScore;
 
         Map<String, Object> baseData = new HashMap<>();
         baseData.put("correctAnswer", q.getAnswer());
 
-        // 发给 P1
-        Map<String, Object> dataP1 = new HashMap<>(baseData);
-        dataP1.put("myAnswer", room.p1Answer);
-        dataP1.put("oppAnswer", room.p2Answer);
-        dataP1.put("myScore", room.p1Score);
-        dataP1.put("oppScore", room.p2Score);
-        dataP1.put("isCorrect", p1Correct);
-        sendMessage(room.p1, BattleMessage.of("ROUND_RESULT", dataP1));
-
-        // 发给 P2
-        Map<String, Object> dataP2 = new HashMap<>(baseData);
-        dataP2.put("myAnswer", room.p2Answer);
-        dataP2.put("oppAnswer", room.p1Answer);
-        dataP2.put("myScore", room.p2Score);
-        dataP2.put("oppScore", room.p1Score);
-        dataP2.put("isCorrect", p2Correct);
-        sendMessage(room.p2, BattleMessage.of("ROUND_RESULT", dataP2));
+        // 发送给 P1
+        sendResultToPlayer(room.p1, baseData, room.p1Answer, room.p2Answer, room.p1Score, room.p2Score, p1Correct, p1RoundScore, room.p1Combo);
+        // 发送给 P2
+        sendResultToPlayer(room.p2, baseData, room.p2Answer, room.p1Answer, room.p2Score, room.p1Score, p2Correct, p2RoundScore, room.p2Combo);
     }
+    // 【新增】封装发送结果的方法
+    private void sendResultToPlayer(WebSocketSession session, Map<String, Object> base, String myAns, String oppAns, int myScore, int oppScore, boolean isCorrect, int roundScore, int combo) {
+        Map<String, Object> data = new HashMap<>(base);
+        data.put("myAnswer", myAns);
+        data.put("oppAnswer", oppAns);
+        data.put("myScore", myScore);
+        data.put("oppScore", oppScore);
+        data.put("isCorrect", isCorrect);
+        // 新增字段供前端展示动画
+        data.put("scoreChange", roundScore);
+        data.put("combo", combo);
+        sendMessage(session, BattleMessage.of("ROUND_RESULT", data));
+    }
+
+    private boolean isCorrect(String userAns, String correctAns) {
+        return userAns != null && userAns.equalsIgnoreCase(correctAns);
+    }
+
+
 
     /**
      * 发送游戏结束消息并结算积分
@@ -604,38 +697,66 @@ public class BattleGameManager {
         }
     }
 
-    // 内部房间类
+    // ==========================================
+    //              BattleRoom 类升级
+    // ==========================================
     private static class BattleRoom {
         String roomId;
-        WebSocketSession p1;
-        WebSocketSession p2; // 机器人局时，此字段为 null
+        WebSocketSession p1, p2;
         List<BizQuestion> questions;
         int currentRoundIndex = 0;
         String p1Answer, p2Answer;
         int p1Score = 0, p2Score = 0;
         ScheduledFuture<?> timeoutTask;
-
-        // 【新增】标记是否为机器人局
         boolean isBotGame = false;
+
+        // 【新增】时间与连击记录
+        long roundStartTime; // 回合开始时间
+        long p1AnswerTime;   // P1 答题时刻
+        long p2AnswerTime;   // P2 答题时刻
+        int p1Combo = 0;     // P1 连击数
+        int p2Combo = 0;     // P2 连击数
+
+        // 【新增】道具库存 (Key: 道具类型, Value: 数量)
+        Map<String, Integer> p1Items = new HashMap<>();
+        Map<String, Integer> p2Items = new HashMap<>();
 
         public BattleRoom(String roomId, WebSocketSession p1, WebSocketSession p2, List<BizQuestion> questions) {
             this.roomId = roomId;
             this.p1 = p1;
             this.p2 = p2;
             this.questions = questions;
+            // 初始化赠送道具 (每局各送一个)
+            p1Items.put("FOG", 1);
+            p1Items.put("HINT", 1);
+            p2Items.put("FOG", 1);
+            p2Items.put("HINT", 1);
         }
-
         public BizQuestion getCurrentQuestion() { return questions.get(currentRoundIndex); }
 
         public void submitAnswer(WebSocketSession s, String a) {
-            if (s.equals(p1)) p1Answer = a;
-            // 如果 p2 存在且是发送者 (真人对战情况)
-            if (p2 != null && s.equals(p2)) p2Answer = a;
+            long now = System.currentTimeMillis();
+            if (s.equals(p1)) {
+                if (p1Answer == null) {
+                    p1Answer = a;
+                    p1AnswerTime = now; // 记录时间
+                }
+            }
+            if (p2 != null && s.equals(p2)) {
+                if (p2Answer == null) {
+                    p2Answer = a;
+                    p2AnswerTime = now; // 记录时间
+                }
+            }
         }
 
         public boolean isRoundComplete() { return p1Answer != null && p2Answer != null; }
         public boolean hasNextQuestion() { return currentRoundIndex < questions.size() - 1; }
-        public void nextRound() { currentRoundIndex++; p1Answer = null; p2Answer = null; }
+        public void nextRound() {
+            currentRoundIndex++;
+            p1Answer = null; p2Answer = null;
+            p1AnswerTime = 0; p2AnswerTime = 0; // 重置时间
+        }
     }
     /**
      * 创建人机对战

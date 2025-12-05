@@ -1,6 +1,5 @@
-// src/stores/battle.ts
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { useStudentAuthStore } from './studentAuth';
 import { ElMessage } from 'element-plus';
 
@@ -22,6 +21,14 @@ export const useBattleStore = defineStore('battle', () => {
     const oppScore = ref(0);
     const currentRound = ref(0);
     const totalRound = ref(0);
+
+    // === 【新增】进阶玩法状态 ===
+    const myCombo = ref(0); // 当前连击数
+    const myScoreChange = ref(0); // 本轮实际得分（含速度和连击加成）
+    // 本地模拟初始库存 (与后端 BattleRoom 构造函数保持一致)
+    const myItems = ref<Record<string, number>>({ 'FOG': 1, 'HINT': 1 });
+    const activeEffects = ref<string[]>([]); // 当前生效的效果，如 ['FOG']
+    const excludedOptions = ref<string[]>([]); // 被排除的选项 Key，如 ['C']
 
     // 连接 WebSocket
     const connect = () => {
@@ -49,7 +56,6 @@ export const useBattleStore = defineStore('battle', () => {
 
         socket.value.onclose = () => {
             console.log('Battle WS Closed');
-            // 如果非正常结束且还在游戏中，可以在此处理重连逻辑
             if (gameState.value !== 'IDLE' && gameState.value !== 'GAME_OVER') {
                 gameState.value = 'IDLE';
                 ElMessage.warning('连接已断开');
@@ -63,9 +69,14 @@ export const useBattleStore = defineStore('battle', () => {
             case 'MATCH_SUCCESS':
                 gameState.value = 'PLAYING';
                 opponent.value = msg.data.opponent || { name: '神秘对手' };
+                // 重置所有游戏状态
                 myScore.value = 0;
                 oppScore.value = 0;
                 currentRound.value = 0;
+                myCombo.value = 0;
+                myItems.value = { 'FOG': 1, 'HINT': 1 };
+                activeEffects.value = [];
+                excludedOptions.value = [];
                 break;
 
             case 'QUESTION':
@@ -73,15 +84,23 @@ export const useBattleStore = defineStore('battle', () => {
                 currentQuestion.value = msg.data;
                 currentRound.value = msg.data.round;
                 totalRound.value = msg.data.total;
-                roundResult.value = null; // 清除上一轮结果
+                roundResult.value = null;
+                // 新回合清除临时效果
+                excludedOptions.value = [];
+                // 迷雾通常持续几秒，这里可以选择由后端控制或简单地在切题时清除
+                // 如果后端发送 duration，可以不在这里立刻清除，依靠 setTimeout 自动清除
+                // 为了保险，切题时清除所有负面状态
+                activeEffects.value = [];
                 break;
 
             case 'ROUND_RESULT':
                 gameState.value = 'ROUND_RESULT';
                 roundResult.value = msg.data;
-                // 更新分数
                 myScore.value = msg.data.myScore;
                 oppScore.value = msg.data.oppScore;
+                // 【新增】更新连击和本轮得分
+                myCombo.value = msg.data.combo;
+                myScoreChange.value = msg.data.scoreChange;
                 break;
 
             case 'GAME_OVER':
@@ -93,6 +112,31 @@ export const useBattleStore = defineStore('battle', () => {
                 ElMessage.warning('对手已离开');
                 opponent.value.name = '对手已断线';
                 break;
+
+            // 【新增】处理道具效果通知
+            case 'ITEM_EFFECT':
+                if (msg.data.effect === 'FOG') {
+                    activeEffects.value.push('FOG');
+                    ElMessage.warning({ message: '对手使用了【迷雾卡】，视线受阻！', duration: 2000 });
+                    // 设置定时器自动移除效果
+                    setTimeout(() => {
+                        activeEffects.value = activeEffects.value.filter(e => e !== 'FOG');
+                    }, msg.data.duration || 3000);
+                } else if (msg.data.effect === 'HINT') {
+                    if (msg.data.wrongOption) {
+                        excludedOptions.value.push(msg.data.wrongOption);
+                        ElMessage.success({ message: '【提示卡】生效，排除了一个错误选项', duration: 2000 });
+                    }
+                }
+                break;
+
+            // 【新增】处理道具使用成功回执
+            case 'ITEM_USED_SUCCESS':
+                const itemType = msg.data;
+                if (myItems.value[itemType] > 0) {
+                    myItems.value[itemType]--;
+                }
+                break;
         }
     };
 
@@ -100,7 +144,6 @@ export const useBattleStore = defineStore('battle', () => {
     const startMatch = () => {
         if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
             connect();
-            // 等待连接后发送，这里简单处理用 setTimeout，生产环境可用 Promise
             setTimeout(() => {
                 socket.value?.send(JSON.stringify({ type: 'MATCH' }));
                 gameState.value = 'MATCHING';
@@ -109,8 +152,6 @@ export const useBattleStore = defineStore('battle', () => {
             socket.value.send(JSON.stringify({ type: 'MATCH' }));
             gameState.value = 'MATCHING';
         }
-
-        // 重置状态
         opponent.value = { name: '寻找对手...', avatar: '' };
     };
 
@@ -121,7 +162,17 @@ export const useBattleStore = defineStore('battle', () => {
         }
     };
 
-    // 动作：离开/取消
+    // 【新增】动作：使用道具
+    const useItem = (itemType: string) => {
+        // 简单的本地校验
+        if (myItems.value[itemType] <= 0) return;
+
+        if (socket.value?.readyState === WebSocket.OPEN) {
+            socket.value.send(JSON.stringify({ type: 'USE_ITEM', data: itemType }));
+        }
+    };
+
+    // 动作：离开
     const leave = () => {
         socket.value?.close();
         gameState.value = 'IDLE';
@@ -137,9 +188,17 @@ export const useBattleStore = defineStore('battle', () => {
         oppScore,
         currentRound,
         totalRound,
+        // 新增状态导出
+        myCombo,
+        myScoreChange,
+        myItems,
+        activeEffects,
+        excludedOptions,
+        // 方法导出
         connect,
         startMatch,
         submitAnswer,
+        useItem,
         leave
     };
 });

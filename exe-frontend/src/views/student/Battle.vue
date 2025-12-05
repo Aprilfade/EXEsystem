@@ -56,15 +56,13 @@
             </el-table-column>
             <el-table-column prop="scoreChange" label="变动" width="80" align="right">
               <template #default="{ row }">
-            <span :style="{ color: row.scoreChange > 0 ? '#67C23A' : '#F56C6C', fontWeight: 'bold' }">
-              {{ row.scoreChange > 0 ? '+' : '' }}{{ row.scoreChange }}
-            </span>
+                <span :style="{ color: row.scoreChange > 0 ? '#67C23A' : '#F56C6C', fontWeight: 'bold' }">
+                  {{ row.scoreChange > 0 ? '+' : '' }}{{ row.scoreChange }}
+                </span>
               </template>
             </el-table-column>
           </el-table>
         </el-dialog>
-
-
       </div>
     </div>
 
@@ -78,22 +76,44 @@
     </div>
 
     <div v-else-if="['PLAYING', 'ROUND_RESULT'].includes(battleStore.gameState)" class="game-layer">
+
+      <transition name="fade">
+        <div v-if="battleStore.activeEffects.includes('FOG')" class="fog-overlay">
+          <div class="fog-cloud">🌫️</div>
+          <div class="fog-text">迷雾遮蔽了你的视野！</div>
+        </div>
+      </transition>
+
       <div class="players-header">
         <div class="player-card me">
           <div class="avatar-wrapper">
             <UserAvatar :src="authStore.student?.avatar" :name="authStore.studentName" :size="70" :frame-style="authStore.student?.avatarFrameStyle" />
-            <transition name="score-float"><div v-if="showMyScoreAnim" class="floating-score">+20</div></transition>
+
+            <transition name="score-float">
+              <div v-if="showMyScoreAnim" class="floating-score">
+                +{{ battleStore.myScoreChange }}
+              </div>
+            </transition>
+
+            <transition name="bounce">
+              <div v-if="battleStore.myCombo > 1" class="combo-badge">
+                Combo x{{ battleStore.myCombo }} 🔥
+              </div>
+            </transition>
           </div>
+
           <div class="info-block">
             <div class="name">我</div>
             <div class="progress-bg"><div class="progress-fill" :style="{ width: myScorePercent + '%' }"></div></div>
             <div class="score-text">{{ battleStore.myScore }}</div>
           </div>
         </div>
+
         <div class="vs-status">
           <div class="vs-logo">VS</div>
           <div class="round-badge">Round {{ battleStore.currentRound }} / {{ battleStore.totalRound }}</div>
         </div>
+
         <div class="player-card opponent">
           <div class="info-block align-right">
             <div class="name">{{ battleStore.opponent.name }}</div>
@@ -102,17 +122,28 @@
           </div>
           <div class="avatar-wrapper">
             <UserAvatar :src="battleStore.opponent.avatar" :name="battleStore.opponent.name" :size="70" :frame-style="battleStore.opponent.avatarFrameStyle" />
-            <transition name="score-float"><div v-if="showOppScoreAnim" class="floating-score enemy">+20</div></transition>
+            <transition name="score-float"><div v-if="showOppScoreAnim" class="floating-score enemy">+??</div></transition>
           </div>
         </div>
       </div>
+
       <div class="timer-section">
         <el-progress :percentage="timePercentage" :format="timeFormat" :status="timerStatus" :stroke-width="12" striped striped-flow text-inside />
       </div>
+
       <div class="question-board" :class="{ 'result-mode': battleStore.gameState === 'ROUND_RESULT' }">
         <div class="question-text">{{ battleStore.currentQuestion?.content }}</div>
         <div class="options-container">
-          <div v-for="opt in parsedOptions" :key="opt.key" class="option-item" :class="getOptionClass(opt.key)" @click="handleAnswer(opt.key)">
+          <div
+              v-for="opt in parsedOptions"
+              :key="opt.key"
+              class="option-item"
+              :class="[
+               getOptionClass(opt.key),
+               { 'is-excluded': battleStore.excludedOptions.includes(opt.key) }
+            ]"
+              @click="handleAnswer(opt.key)"
+          >
             <span class="opt-tag">{{ opt.key }}</span>
             <span class="opt-content">{{ opt.value }}</span>
             <el-icon v-if="showResultIcon(opt.key) === 'correct'" class="status-icon correct"><Select /></el-icon>
@@ -123,6 +154,25 @@
           <el-icon class="is-loading"><Loading /></el-icon> 等待对手作答...
         </div>
       </div>
+
+      <div v-if="battleStore.gameState === 'PLAYING' && !hasAnswered" class="item-bar">
+        <el-tooltip content="排除一个错误选项" placement="top">
+          <div class="item-btn" @click="battleStore.useItem('HINT')" :class="{ disabled: battleStore.myItems['HINT'] <= 0 }">
+            <span class="icon">💡</span>
+            <span class="count">x{{ battleStore.myItems['HINT'] }}</span>
+            <span class="label">排除卡</span>
+          </div>
+        </el-tooltip>
+
+        <el-tooltip content="遮挡对手视野3秒" placement="top">
+          <div class="item-btn" @click="battleStore.useItem('FOG')" :class="{ disabled: battleStore.myItems['FOG'] <= 0 }">
+            <span class="icon">🌫️</span>
+            <span class="count">x{{ battleStore.myItems['FOG'] }}</span>
+            <span class="label">迷雾卡</span>
+          </div>
+        </el-tooltip>
+      </div>
+
     </div>
 
     <div v-else-if="battleStore.gameState === 'GAME_OVER'" class="result-layer">
@@ -156,6 +206,7 @@ import { Search, Select, CloseBold, Loading, Trophy } from '@element-plus/icons-
 import UserAvatar from '@/components/UserAvatar.vue';
 import { fetchBattleLeaderboard, fetchMyBattleRecords } from '@/api/student';
 
+// ... (排行榜、历史记录相关代码保持不变) ...
 const historyVisible = ref(false);
 const historyLoading = ref(false);
 const historyList = ref([]);
@@ -213,30 +264,106 @@ const audios: Record<string, HTMLAudioElement> = {
   match: new Audio('/audio/match.mp3')
 };
 const playSound = (name: string) => { const audio = audios[name]; if (audio) { audio.currentTime = 0; audio.play().catch(() => {}); } };
+
 const TOTAL_TIME = 20;
 const timeLeft = ref(TOTAL_TIME);
 let timerInterval: any = null;
 const timePercentage = computed(() => (timeLeft.value / TOTAL_TIME) * 100);
 const timerStatus = computed(() => timeLeft.value <= 5 ? 'exception' : 'success');
 const timeFormat = () => `${timeLeft.value}s`;
-const startTimer = () => { clearInterval(timerInterval); timeLeft.value = TOTAL_TIME; timerInterval = setInterval(() => { if (timeLeft.value > 0) timeLeft.value--; else clearInterval(timerInterval); }, 1000); };
+
+const startTimer = () => {
+  clearInterval(timerInterval);
+  timeLeft.value = TOTAL_TIME;
+  timerInterval = setInterval(() => {
+    if (timeLeft.value > 0) timeLeft.value--;
+    else clearInterval(timerInterval);
+  }, 1000);
+};
+
 const myAnswer = ref('');
 const showMyScoreAnim = ref(false);
 const showOppScoreAnim = ref(false);
+
 const maxScoreRef = computed(() => Math.max(100, battleStore.myScore + 40, battleStore.oppScore + 40));
 const myScorePercent = computed(() => (battleStore.myScore / maxScoreRef.value) * 100);
 const oppScorePercent = computed(() => (battleStore.oppScore / maxScoreRef.value) * 100);
 const hasAnswered = computed(() => !!myAnswer.value);
-const parsedOptions = computed(() => { try { return typeof battleStore.currentQuestion?.options === 'string' ? JSON.parse(battleStore.currentQuestion.options) : battleStore.currentQuestion?.options || []; } catch { return []; } });
-const gameResult = computed(() => battleStore.finalResult?.result || '');
-const getOptionClass = (key: string) => { if (battleStore.gameState === 'ROUND_RESULT') { const correctKey = battleStore.roundResult?.correctAnswer; if (key === correctKey) return 'is-correct'; if (key === myAnswer.value && key !== correctKey) return 'is-wrong'; return 'is-dimmed'; } if (key === myAnswer.value) return 'is-selected'; return ''; };
-const showResultIcon = (key: string) => { if (battleStore.gameState !== 'ROUND_RESULT') return ''; const correctKey = battleStore.roundResult?.correctAnswer; if (key === correctKey) return 'correct'; if (key === myAnswer.value && key !== correctKey) return 'wrong'; return ''; };
-const getResultTitle = (res: string) => { const map: Record<string, string> = { 'YOU': '大获全胜！', 'OPPONENT': '遗憾惜败...', 'DRAW': '平分秋色' }; return map[res] || '游戏结束'; };
-const handleAnswer = (key: string) => { if (hasAnswered.value || battleStore.gameState !== 'PLAYING') return; myAnswer.value = key; battleStore.submitAnswer(key); };
 
-watch(() => battleStore.currentQuestion, (newVal) => { if (newVal) { myAnswer.value = ''; showMyScoreAnim.value = false; showOppScoreAnim.value = false; startTimer(); } });
-watch(() => battleStore.roundResult, (res) => { if (res) { clearInterval(timerInterval); if (res.isCorrect) { playSound('correct'); showMyScoreAnim.value = true; } else { playSound('wrong'); } if (res.oppAnswer === res.correctAnswer) { showOppScoreAnim.value = true; } } });
-watch(() => battleStore.gameState, (state) => { if (state === 'GAME_OVER') { clearInterval(timerInterval); if (gameResult.value === 'YOU') playSound('win'); else playSound('lose'); } else if (state === 'MATCHING') { playSound('match'); } });
+const parsedOptions = computed(() => {
+  try {
+    return typeof battleStore.currentQuestion?.options === 'string'
+        ? JSON.parse(battleStore.currentQuestion.options)
+        : battleStore.currentQuestion?.options || [];
+  } catch { return []; }
+});
+
+const gameResult = computed(() => battleStore.finalResult?.result || '');
+
+const getOptionClass = (key: string) => {
+  if (battleStore.gameState === 'ROUND_RESULT') {
+    const correctKey = battleStore.roundResult?.correctAnswer;
+    if (key === correctKey) return 'is-correct';
+    if (key === myAnswer.value && key !== correctKey) return 'is-wrong';
+    return 'is-dimmed';
+  }
+  if (key === myAnswer.value) return 'is-selected';
+  return '';
+};
+
+const showResultIcon = (key: string) => {
+  if (battleStore.gameState !== 'ROUND_RESULT') return '';
+  const correctKey = battleStore.roundResult?.correctAnswer;
+  if (key === correctKey) return 'correct';
+  if (key === myAnswer.value && key !== correctKey) return 'wrong';
+  return '';
+};
+
+const getResultTitle = (res: string) => {
+  const map: Record<string, string> = { 'YOU': '大获全胜！', 'OPPONENT': '遗憾惜败...', 'DRAW': '平分秋色' };
+  return map[res] || '游戏结束';
+};
+
+const handleAnswer = (key: string) => {
+  // 如果被排除，不能点击
+  if (battleStore.excludedOptions.includes(key)) return;
+  if (hasAnswered.value || battleStore.gameState !== 'PLAYING') return;
+  myAnswer.value = key;
+  battleStore.submitAnswer(key);
+};
+
+watch(() => battleStore.currentQuestion, (newVal) => {
+  if (newVal) {
+    myAnswer.value = '';
+    showMyScoreAnim.value = false;
+    showOppScoreAnim.value = false;
+    startTimer();
+  }
+});
+
+watch(() => battleStore.roundResult, (res) => {
+  if (res) {
+    clearInterval(timerInterval);
+    if (res.isCorrect) {
+      playSound('correct');
+      showMyScoreAnim.value = true;
+    } else {
+      playSound('wrong');
+    }
+    if (res.oppAnswer === res.correctAnswer) {
+      showOppScoreAnim.value = true;
+    }
+  }
+});
+
+watch(() => battleStore.gameState, (state) => {
+  if (state === 'GAME_OVER') {
+    clearInterval(timerInterval);
+    if (gameResult.value === 'YOU') playSound('win'); else playSound('lose');
+  } else if (state === 'MATCHING') {
+    playSound('match');
+  }
+});
 
 onMounted(() => {
   battleStore.connect();
@@ -372,4 +499,115 @@ onUnmounted(() => {
 .action-btns { display: flex; gap: 20px; justify-content: center; }
 @keyframes zoomIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
 @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+/* --- 新增样式 --- */
+
+/* 1. 连击徽章 */
+.combo-badge {
+  position: absolute;
+  top: 50px;
+  right: -20px; /* 调整位置到头像右侧 */
+  background: linear-gradient(45deg, #ff0000, #ff7f00);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 900;
+  font-style: italic;
+  transform: rotate(-10deg);
+  border: 2px solid #fff;
+  box-shadow: 0 0 15px rgba(255, 80, 0, 0.6);
+  z-index: 20;
+  font-size: 14px;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+.bounce-enter-active { animation: bounce-in .5s; }
+@keyframes bounce-in {
+  0% { transform: scale(0) rotate(0); opacity: 0; }
+  50% { transform: scale(1.5) rotate(-10deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-10deg); }
+}
+
+/* 2. 迷雾遮罩 */
+.fog-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(220, 220, 230, 0.9);
+  z-index: 99; /* 盖住题目和选项 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(8px);
+  border-radius: 16px; /* 匹配 .game-layer 的圆角 */
+}
+.fog-cloud { font-size: 80px; animation: fog-float 2s infinite ease-in-out; }
+.fog-text { font-size: 24px; color: #555; font-weight: bold; margin-top: 10px; text-shadow: 0 1px 2px rgba(255,255,255,0.8); }
+
+@keyframes fog-float {
+  0%, 100% { transform: translateY(0); opacity: 0.8; }
+  50% { transform: translateY(-10px); opacity: 1; }
+}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.5s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* 3. 道具栏 */
+.item-bar {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 20px;
+  padding: 10px;
+}
+
+.item-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 12px;
+  padding: 12px 20px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  position: relative;
+  min-width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.item-btn:hover:not(.disabled) {
+  background: rgba(64, 158, 255, 0.2);
+  border-color: #409eff;
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.item-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(100%);
+}
+
+.item-btn .icon { font-size: 28px; display: block; margin-bottom: 4px; }
+.item-btn .count {
+  position: absolute; top: -8px; right: -8px;
+  background: #f56c6c; color: #fff; font-size: 12px; font-weight: bold;
+  padding: 2px 6px; border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+.item-btn .label { font-size: 12px; color: #ddd; font-weight: 500; }
+
+/* 4. 排除选项样式 */
+.option-item.is-excluded {
+  opacity: 0.3;
+  pointer-events: none;
+  background-color: #1a1a1a !important;
+  border-color: #333 !important;
+  text-decoration: line-through;
+  color: #666;
+}
+
+/* 原有 CSS 补充 */
+.game-layer {
+  position: relative; /* 确保绝对定位的子元素相对于它定位 */
+}
 </style>
