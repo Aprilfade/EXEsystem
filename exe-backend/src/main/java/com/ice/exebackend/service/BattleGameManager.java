@@ -9,18 +9,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper; // 确保引入 QueryWrapper
-import org.springframework.scheduling.annotation.Async; // 引入异步注解
-
-import java.time.LocalDateTime;
-import java.util.concurrent.ThreadLocalRandom; // 用于生成随机延迟和概率
-import com.alibaba.fastjson.JSON; // 或者使用你项目里的 Jackson/Fastjson 解析选项
-
-
-
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -33,8 +26,6 @@ public class BattleGameManager {
     private ObjectMapper objectMapper;
     @Autowired
     private BizStudentService studentService;
-
-    // 【新增】注入对战记录服务
     @Autowired
     private BizBattleRecordService battleRecordService;
 
@@ -44,36 +35,26 @@ public class BattleGameManager {
     // 常量定义
     private static final int ROUND_TIMEOUT_SECONDS = 20; // 每题限时
     private static final int ROUND_RESULT_VIEW_TIME = 3; // 结果展示时间
-    private static final int BASE_SCORE = 10; // 【新增】基础分
+    private static final int BASE_SCORE = 10; // 基础分
 
-    // === 修改点 1：定义英雄联盟段位常量 ===
-    public static final String TIER_IRON = "IRON";           // 坚韧黑铁
-    public static final String TIER_BRONZE = "BRONZE";       // 英勇黄铜
-    public static final String TIER_SILVER = "SILVER";       // 不屈白银
-    public static final String TIER_GOLD = "GOLD";           // 荣耀黄金
-    public static final String TIER_PLATINUM = "PLATINUM";   // 华贵铂金
-    public static final String TIER_EMERALD = "EMERALD";     // 流光翡翠 (新版LOL增加的段位)
-    public static final String TIER_DIAMOND = "DIAMOND";     // 璀璨钻石
-    public static final String TIER_MASTER = "MASTER";       // 超凡大师
-    public static final String TIER_GRANDMASTER = "GRANDMASTER"; // 傲世宗师
-    public static final String TIER_CHALLENGER = "CHALLENGER";   // 最强王者
+    // 段位常量
+    public static final String TIER_IRON = "IRON";
+    public static final String TIER_BRONZE = "BRONZE";
+    public static final String TIER_SILVER = "SILVER";
+    public static final String TIER_GOLD = "GOLD";
+    public static final String TIER_PLATINUM = "PLATINUM";
+    public static final String TIER_EMERALD = "EMERALD";
+    public static final String TIER_DIAMOND = "DIAMOND";
+    public static final String TIER_MASTER = "MASTER";
+    public static final String TIER_GRANDMASTER = "GRANDMASTER";
+    public static final String TIER_CHALLENGER = "CHALLENGER";
 
-    // 有序段位列表，用于匹配查找
     private static final List<String> ORDERED_TIERS = Arrays.asList(
             TIER_IRON, TIER_BRONZE, TIER_SILVER, TIER_GOLD,
             TIER_PLATINUM, TIER_EMERALD, TIER_DIAMOND,
             TIER_MASTER, TIER_GRANDMASTER, TIER_CHALLENGER
     );
 
-    /**
-     * 【新增】根据 WebSocket Session 获取学生实体
-     */
-    private BizStudent getStudentBySession(WebSocketSession session) {
-        if (session == null) return null; // 机器人 session 为 null
-        String studentNo = (String) session.getAttributes().get("username");
-        if (studentNo == null) return null;
-        return studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
-    }
     // 内部类：封装等待的玩家信息
     private static class WaitingPlayer {
         WebSocketSession session;
@@ -89,53 +70,49 @@ public class BattleGameManager {
         }
     }
 
-    // 分段位的等待队列 (Key: 段位名, Value: 等待玩家列表)
+    // 分段位的等待队列
     private final Map<String, CopyOnWriteArrayList<WaitingPlayer>> tierQueues = new ConcurrentHashMap<>();
-
-    // 快速查找映射：SessionID -> WaitingPlayer (用于处理离开)
+    // SessionID -> WaitingPlayer
     private final Map<String, WaitingPlayer> sessionWaitingMap = new ConcurrentHashMap<>();
-
     // 正在进行的房间映射
     private final Map<String, String> playerRoomMap = new ConcurrentHashMap<>();
     private final Map<String, BattleRoom> rooms = new ConcurrentHashMap<>();
 
-    // 初始化
     @PostConstruct
     public void init() {
-        // === 修改点 2：初始化所有段位的队列 ===
         for (String tier : ORDERED_TIERS) {
             tierQueues.put(tier, new CopyOnWriteArrayList<>());
         }
         scheduler.scheduleAtFixedRate(this::processMatchMaking, 1, 1, TimeUnit.SECONDS);
     }
-    /**
-     * 用户申请匹配（进入对应段位的队列）
-     */
-    public void joinQueue(WebSocketSession session) {
-        if (sessionWaitingMap.containsKey(session.getId()) || playerRoomMap.containsKey(session.getId())) {
-            return; // 已经在队列或游戏中
-        }
 
-        // 1. 获取用户信息和积分
+    private BizStudent getStudentBySession(WebSocketSession session) {
+        if (session == null) return null;
         String studentNo = (String) session.getAttributes().get("username");
-        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
-
-        // 判空保护
-        int points = (student != null && student.getPoints() != null) ? student.getPoints() : 0;
-
-        // 2. 计算段位
-        String tier = calculateTier(points);
-
-        // 3. 加入队列
-        WaitingPlayer player = new WaitingPlayer(session, student, tier);
-        tierQueues.get(tier).add(player);
-        sessionWaitingMap.put(session.getId(), player);
-
-        System.out.println("玩家加入匹配队列: " + studentNo + " 段位: " + tier + " 积分: " + points);
+        if (studentNo == null) return null;
+        return studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
     }
 
     /**
-     * 核心逻辑：定时扫描匹配
+     * 用户申请匹配
+     */
+    public void joinQueue(WebSocketSession session) {
+        if (sessionWaitingMap.containsKey(session.getId()) || playerRoomMap.containsKey(session.getId())) {
+            return;
+        }
+
+        String studentNo = (String) session.getAttributes().get("username");
+        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
+        int points = (student != null && student.getPoints() != null) ? student.getPoints() : 0;
+        String tier = calculateTier(points);
+
+        WaitingPlayer player = new WaitingPlayer(session, student, tier);
+        tierQueues.get(tier).add(player);
+        sessionWaitingMap.put(session.getId(), player);
+    }
+
+    /**
+     * 匹配核心逻辑
      */
     private void processMatchMaking() {
         long now = System.currentTimeMillis();
@@ -144,6 +121,7 @@ public class BattleGameManager {
             for (WaitingPlayer p1 : queue) {
                 if (!sessionWaitingMap.containsKey(p1.session.getId())) continue;
 
+                // 超过10秒匹配机器人
                 if (now - p1.joinTime > 10000) {
                     createBotMatch(p1);
                     continue;
@@ -153,13 +131,8 @@ public class BattleGameManager {
                 List<String> targetTiers = new ArrayList<>();
                 targetTiers.add(p1.tier);
 
-                // === 修改点 3：动态扩大匹配范围 ===
-                if (waitTime > 5000) {
-                    addAdjacentTiers(targetTiers, p1.tier, 1); // 搜索上下1个段位
-                }
-                if (waitTime > 8000) {
-                    addAdjacentTiers(targetTiers, p1.tier, 2); // 搜索上下2个段位
-                }
+                if (waitTime > 5000) addAdjacentTiers(targetTiers, p1.tier, 1);
+                if (waitTime > 8000) addAdjacentTiers(targetTiers, p1.tier, 2);
 
                 WaitingPlayer opponent = findOpponent(p1, targetTiers);
                 if (opponent != null) {
@@ -168,19 +141,13 @@ public class BattleGameManager {
             }
         }
     }
-    /**
-     * 在指定段位列表中寻找对手
-     */
+
     private WaitingPlayer findOpponent(WaitingPlayer p1, List<String> targetTiers) {
         for (String targetTier : targetTiers) {
             List<WaitingPlayer> targetQueue = tierQueues.get(targetTier);
             if (targetQueue == null) continue;
-
             for (WaitingPlayer p2 : targetQueue) {
-                // 不能匹配自己
                 if (p2.session.getId().equals(p1.session.getId())) continue;
-
-                // 确保对手也还在等待中
                 if (sessionWaitingMap.containsKey(p2.session.getId())) {
                     return p2;
                 }
@@ -189,18 +156,17 @@ public class BattleGameManager {
         return null;
     }
 
-    // === 修改点 4：实现 LOL 段位积分计算 ===
     public static String calculateTier(int points) {
-        if (points < 100) return TIER_IRON;       // 0-99
-        if (points < 200) return TIER_BRONZE;     // 100-199
-        if (points < 300) return TIER_SILVER;     // 200-299
-        if (points < 400) return TIER_GOLD;       // 300-399
-        if (points < 500) return TIER_PLATINUM;   // 400-499
-        if (points < 600) return TIER_EMERALD;    // 500-599
-        if (points < 800) return TIER_DIAMOND;    // 600-799
-        if (points < 1000) return TIER_MASTER;    // 800-999
-        if (points < 1200) return TIER_GRANDMASTER; // 1000-1199
-        return TIER_CHALLENGER;                   // 1200+
+        if (points < 100) return TIER_IRON;
+        if (points < 200) return TIER_BRONZE;
+        if (points < 300) return TIER_SILVER;
+        if (points < 400) return TIER_GOLD;
+        if (points < 500) return TIER_PLATINUM;
+        if (points < 600) return TIER_EMERALD;
+        if (points < 800) return TIER_DIAMOND;
+        if (points < 1000) return TIER_MASTER;
+        if (points < 1200) return TIER_GRANDMASTER;
+        return TIER_CHALLENGER;
     }
 
     public static String getTierNameCN(String tier) {
@@ -218,46 +184,33 @@ public class BattleGameManager {
             default: return "未定级";
         }
     }
-    /**
-     * 辅助：添加相邻段位
-     */
-    // === 修改点 5：通用的相邻段位查找 ===
+
     private void addAdjacentTiers(List<String> tiers, String currentTier, int range) {
         int index = ORDERED_TIERS.indexOf(currentTier);
         if (index == -1) return;
-
-        // 向下查找 range 个
         for (int i = 1; i <= range; i++) {
             if (index - i >= 0) tiers.add(ORDERED_TIERS.get(index - i));
         }
-        // 向上查找 range 个
         for (int i = 1; i <= range; i++) {
             if (index + i < ORDERED_TIERS.size()) tiers.add(ORDERED_TIERS.get(index + i));
         }
     }
-    /**
-     * 创建房间并开始游戏 (加锁保证原子性，防止两人同时被别人匹配)
-     */
+
     private synchronized void createRoom(WaitingPlayer wp1, WaitingPlayer wp2) {
-        // 双重检查：确保两人都还在等待映射中
         if (!sessionWaitingMap.containsKey(wp1.session.getId()) ||
                 !sessionWaitingMap.containsKey(wp2.session.getId())) {
             return;
         }
 
-        // 1. 从队列移除
         removeFromQueue(wp1);
         removeFromQueue(wp2);
 
         WebSocketSession p1 = wp1.session;
         WebSocketSession p2 = wp2.session;
-
-        // 2. 创建房间逻辑 (复用原有逻辑，稍作修改使用已查询到的 student 信息)
         String roomId = UUID.randomUUID().toString();
 
-        // 随机抽题
         List<BizQuestion> questions = questionService.list(
-                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<BizQuestion>()
+                new QueryWrapper<BizQuestion>()
                         .eq("question_type", 1)
                         .last("ORDER BY RAND() LIMIT 5")
         );
@@ -267,20 +220,15 @@ public class BattleGameManager {
         playerRoomMap.put(p1.getId(), roomId);
         playerRoomMap.put(p2.getId(), roomId);
 
-        // 3. 发送匹配成功消息 (使用 WaitingPlayer 中缓存的 student 信息，避免重复查库)
         sendMatchSuccess(p1, wp2.student);
         sendMatchSuccess(p2, wp1.student);
 
-        // 4. 延迟发题
         scheduler.schedule(() -> {
             sendQuestion(room);
             startRoundTimer(room);
         }, 1, TimeUnit.SECONDS);
     }
 
-    /**
-     * 从队列和映射中移除玩家
-     */
     private void removeFromQueue(WaitingPlayer wp) {
         sessionWaitingMap.remove(wp.session.getId());
         List<WaitingPlayer> queue = tierQueues.get(wp.tier);
@@ -289,27 +237,20 @@ public class BattleGameManager {
         }
     }
 
-    /**
-     * 用户取消匹配或断开
-     */
     public void leave(WebSocketSession session) {
-        // 1. 尝试从等待队列移除
         WaitingPlayer wp = sessionWaitingMap.get(session.getId());
         if (wp != null) {
             removeFromQueue(wp);
-            return; // 如果在等待队列中，移除后直接返回
+            return;
         }
 
-        // 2. 如果在游戏中，处理游戏退出逻辑
         String roomId = playerRoomMap.remove(session.getId());
         if (roomId != null) {
             BattleRoom room = rooms.get(roomId);
             if (room != null) {
                 synchronized (room) {
                     if (room.timeoutTask != null) room.timeoutTask.cancel(true);
-
                     WebSocketSession opponent = room.p1.equals(session) ? room.p2 : room.p1;
-                    // 如果对手存在（不是机器人），才通知他
                     if (opponent != null) {
                         sendMessage(opponent, BattleMessage.of("OPPONENT_LEFT", null));
                         playerRoomMap.remove(opponent.getId());
@@ -319,8 +260,6 @@ public class BattleGameManager {
         }
     }
 
-    // --- 以下为游戏进行中的逻辑 (保持原有逻辑基本不变，适配新结构) ---
-
     private void sendMatchSuccess(WebSocketSession session, BizStudent opponent) {
         Map<String, Object> data = new HashMap<>();
         data.put("message", "匹配成功");
@@ -328,9 +267,6 @@ public class BattleGameManager {
         sendMessage(session, BattleMessage.of("MATCH_SUCCESS", data));
     }
 
-    /**
-     * 处理玩家提交答案
-     */
     public void handleAnswer(WebSocketSession session, String answerStr) {
         String roomId = playerRoomMap.get(session.getId());
         if (roomId == null) return;
@@ -339,18 +275,14 @@ public class BattleGameManager {
         if (room == null) return;
 
         synchronized (room) {
-            // 提交答案并记录时间
             room.submitAnswer(session, answerStr);
-
             if (room.isRoundComplete()) {
                 if (room.timeoutTask != null) room.timeoutTask.cancel(false);
                 processRoundTransition(room);
             }
         }
     }
-    /**
-     * 【新增】处理玩家使用道具
-     */
+
     public void handleItemUsage(WebSocketSession session, String itemType) {
         String roomId = playerRoomMap.get(session.getId());
         if (roomId == null) return;
@@ -362,31 +294,22 @@ public class BattleGameManager {
             Map<String, Integer> myItems = isP1 ? room.p1Items : room.p2Items;
             WebSocketSession opponent = isP1 ? room.p2 : room.p1;
 
-            // 检查库存
             if (myItems.getOrDefault(itemType, 0) > 0) {
-                // 1. 扣除库存
                 myItems.put(itemType, myItems.get(itemType) - 1);
-
-                // 2. 执行效果
                 if ("FOG".equals(itemType)) {
-                    // 迷雾卡：发给对手，让前端显示遮罩
                     sendMessage(opponent, BattleMessage.of("ITEM_EFFECT", Map.of("effect", "FOG", "duration", 3000)));
                 } else if ("HINT".equals(itemType)) {
-                    // 提示卡：发给自己，排除一个错误选项
                     BizQuestion q = room.getCurrentQuestion();
                     String wrongOption = findOneWrongOption(q);
                     sendMessage(session, BattleMessage.of("ITEM_EFFECT", Map.of("effect", "HINT", "wrongOption", wrongOption)));
                 }
-
-                // 3. 通知前端扣除成功（用于更新道具栏UI）
                 sendMessage(session, BattleMessage.of("ITEM_USED_SUCCESS", itemType));
             }
         }
     }
-    // 【新增】辅助方法：随机找一个错误选项
+
     private String findOneWrongOption(BizQuestion q) {
         String correct = q.getAnswer();
-        // 简单处理：遍历 A-D，找一个不是答案的
         List<String> candidates = new ArrayList<>();
         for (String opt : Arrays.asList("A", "B", "C", "D")) {
             if (!opt.equalsIgnoreCase(correct)) {
@@ -396,6 +319,7 @@ public class BattleGameManager {
         if (candidates.isEmpty()) return "";
         return candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
     }
+
     private void processRoundTransition(BattleRoom room) {
         sendRoundResult(room);
         scheduler.schedule(() -> {
@@ -424,57 +348,91 @@ public class BattleGameManager {
         sendMessage(room.p1, msg);
         sendMessage(room.p2, msg);
 
-// 【新增】如果是机器人局，安排机器人答题
         if (room.isBotGame) {
             scheduleBotAnswer(room);
         }
-
     }
+
     /**
-     * 模拟机器人答题（更新时间记录）
+     * 【核心优化】模拟机器人答题（拟人化）
      */
     private void scheduleBotAnswer(BattleRoom room) {
-        int delay = ThreadLocalRandom.current().nextInt(3, 15);
+        BizQuestion q = room.getCurrentQuestion();
+
+        // 1. 计算拟人化延迟 (基于题目长度 + 随机思考)
+        // 假设阅读速度：每字 50ms (人类平均阅读速度)
+        int contentLength = q.getContent() != null ? q.getContent().length() : 10;
+        long readTime = contentLength * 50L;
+
+        // 思考时间：1 ~ 5秒随机 (模拟反应时间)
+        long thinkTime = ThreadLocalRandom.current().nextLong(1000, 5000);
+
+        long totalDelayMs = readTime + thinkTime;
+
+        // 限制范围：最小 2秒，最大 (总时间 - 2秒) 以免超时未答
+        long maxDelay = (ROUND_TIMEOUT_SECONDS - 2) * 1000L;
+        if (totalDelayMs > maxDelay) totalDelayMs = maxDelay;
+        if (totalDelayMs < 2000) totalDelayMs = 2000;
 
         scheduler.schedule(() -> {
+            // 检查房间是否还存在
             if (!rooms.containsKey(room.roomId)) return;
+
             synchronized (room) {
-                // 记录机器人答题时间
+                // 记录机器人答题时间 (用于结算时的速度分计算)
                 room.p2AnswerTime = System.currentTimeMillis();
 
-                BizQuestion q = room.getCurrentQuestion();
-                String botAnswer;
-                boolean willBeCorrect = ThreadLocalRandom.current().nextDouble() < 0.6;
+                // 2. 计算拟人化正确率 (基于题目难度)
+                // 获取难度，默认为 0.5 (0.1 简单 ~ 1.0 困难)
+                // 难度越高，机器人答对概率越低
+                double difficulty = (q.getDifficulty() != null) ? q.getDifficulty() : 0.5;
 
+                // 基础正确率公式：P = 0.95 - (难度 * 0.6)
+                // 例：难度0.1 -> 0.89, 难度0.5 -> 0.65, 难度0.9 -> 0.41
+                double winRate = 0.95 - (difficulty * 0.6);
+
+                // 增加随机波动 (-0.05 ~ +0.05)，模拟状态起伏
+                winRate += (ThreadLocalRandom.current().nextDouble() * 0.1 - 0.05);
+
+                // 判定是否答对
+                boolean willBeCorrect = ThreadLocalRandom.current().nextDouble() < winRate;
+
+                String botAnswer;
                 if (willBeCorrect) {
                     botAnswer = q.getAnswer();
                 } else {
-                    String[] options = {"A", "B", "C", "D"};
-                    do {
-                        botAnswer = options[ThreadLocalRandom.current().nextInt(4)];
-                    } while (botAnswer.equalsIgnoreCase(q.getAnswer()) && options.length > 1);
+                    // 智能生成错误答案：从非正确选项中随机选一个
+                    String[] allOptions = {"A", "B", "C", "D"};
+                    List<String> wrongOptions = new ArrayList<>();
+                    for(String opt : allOptions) {
+                        if(!opt.equalsIgnoreCase(q.getAnswer())) {
+                            wrongOptions.add(opt);
+                        }
+                    }
+
+                    if (!wrongOptions.isEmpty()) {
+                        botAnswer = wrongOptions.get(ThreadLocalRandom.current().nextInt(wrongOptions.size()));
+                    } else {
+                        // 容错：如果没找到错误选项（比如数据异常），随机选一个
+                        botAnswer = allOptions[ThreadLocalRandom.current().nextInt(4)];
+                    }
                 }
                 room.p2Answer = botAnswer;
 
+                // 如果双方都答完了，触发结算
                 if (room.isRoundComplete()) {
                     if (room.timeoutTask != null) room.timeoutTask.cancel(false);
                     processRoundTransition(room);
                 }
             }
-        }, delay, TimeUnit.SECONDS);
+        }, totalDelayMs, TimeUnit.MILLISECONDS);
     }
 
-    /**
-     * 开启回合倒计时（增加记录开始时间）
-     */
     private void startRoundTimer(BattleRoom room) {
         if (room.timeoutTask != null && !room.timeoutTask.isDone()) {
             room.timeoutTask.cancel(false);
         }
-
-        // 【关键】记录回合开始时间，用于计算速度分
         room.roundStartTime = System.currentTimeMillis();
-
         int roundAtStart = room.currentRoundIndex;
         room.timeoutTask = scheduler.schedule(() -> {
             synchronized (room) {
@@ -484,34 +442,24 @@ public class BattleGameManager {
         }, ROUND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
-    /**
-     * 发送单局结果（核心评分逻辑升级）
-     */
     private void sendRoundResult(BattleRoom room) {
         BizQuestion q = room.getCurrentQuestion();
-
         boolean p1Correct = isCorrect(room.p1Answer, q.getAnswer());
         boolean p2Correct = isCorrect(room.p2Answer, q.getAnswer());
 
-        // --- 升级后的计分公式 ---
         int p1RoundScore = 0;
         int p2RoundScore = 0;
 
-        // P1 结算
         if (p1Correct) {
-            room.p1Combo++; // 连击 +1
-            // 速度分: (20秒 - 用时) * 0.5
+            room.p1Combo++;
             long timeUsedMs = room.p1AnswerTime - room.roundStartTime;
             double timeBonus = Math.max(0, (ROUND_TIMEOUT_SECONDS * 1000 - timeUsedMs) / 1000.0 * 0.5);
-            // 连击分: 连击数 * 2 (最高10分)
             int comboBonus = Math.min(room.p1Combo * 2, 10);
-
             p1RoundScore = (int) (BASE_SCORE + timeBonus + comboBonus);
         } else {
-            room.p1Combo = 0; // 答错中断连击
+            room.p1Combo = 0;
         }
 
-        // P2 结算
         if (p2Correct) {
             room.p2Combo++;
             long timeUsedMs = room.p2AnswerTime - room.roundStartTime;
@@ -528,12 +476,10 @@ public class BattleGameManager {
         Map<String, Object> baseData = new HashMap<>();
         baseData.put("correctAnswer", q.getAnswer());
 
-        // 发送给 P1
         sendResultToPlayer(room.p1, baseData, room.p1Answer, room.p2Answer, room.p1Score, room.p2Score, p1Correct, p1RoundScore, room.p1Combo);
-        // 发送给 P2
         sendResultToPlayer(room.p2, baseData, room.p2Answer, room.p1Answer, room.p2Score, room.p1Score, p2Correct, p2RoundScore, room.p2Combo);
     }
-    // 【新增】封装发送结果的方法
+
     private void sendResultToPlayer(WebSocketSession session, Map<String, Object> base, String myAns, String oppAns, int myScore, int oppScore, boolean isCorrect, int roundScore, int combo) {
         Map<String, Object> data = new HashMap<>(base);
         data.put("myAnswer", myAns);
@@ -541,7 +487,6 @@ public class BattleGameManager {
         data.put("myScore", myScore);
         data.put("oppScore", oppScore);
         data.put("isCorrect", isCorrect);
-        // 新增字段供前端展示动画
         data.put("scoreChange", roundScore);
         data.put("combo", combo);
         sendMessage(session, BattleMessage.of("ROUND_RESULT", data));
@@ -551,16 +496,10 @@ public class BattleGameManager {
         return userAns != null && userAns.equalsIgnoreCase(correctAns);
     }
 
-
-
-    /**
-     * 发送游戏结束消息并结算积分
-     */
     private void sendGameOver(BattleRoom room) {
-        // 1. 判定胜负 (保持原有逻辑)
-        String resultP1, resultP2; // 前端展示用的状态 (YOU/OPPONENT/DRAW)
-        String dbResultP1, dbResultP2; // 【新增】数据库存储用的状态 (WIN/LOSE/DRAW)
-        int scoreP1, scoreP2; // 【新增】积分变动值
+        String resultP1, resultP2;
+        String dbResultP1, dbResultP2;
+        int scoreP1, scoreP2;
 
         if (room.p1Score > room.p2Score) {
             resultP1 = "YOU";      dbResultP1 = "WIN";  scoreP1 = 20;
@@ -573,36 +512,24 @@ public class BattleGameManager {
             resultP2 = "DRAW";     dbResultP2 = "DRAW"; scoreP2 = 5;
         }
 
-        // 2. 更新数据库积分 (原有逻辑，保持不变)
         updatePlayerPoints(room.p1, resultP1);
         updatePlayerPoints(room.p2, resultP2);
 
-        // ==========================================
-        // 【新增】 3. 保存对战记录到数据库
-        // ==========================================
-        // 获取双方学生实体
         BizStudent s1 = getStudentBySession(room.p1);
-        BizStudent s2 = getStudentBySession(room.p2); // 如果是机器人，s2 为 null
+        BizStudent s2 = getStudentBySession(room.p2);
 
-        // 保存 P1 的记录
         saveBattleRecord(s1, s2, dbResultP1, scoreP1);
-
-        // 保存 P2 的记录 (仅当 P2 是真人时)
         if (s2 != null) {
             saveBattleRecord(s2, s1, dbResultP2, scoreP2);
         }
-        // ==========================================
 
-        // 4. 发送消息给 P1 (原有逻辑)
         Map<String, Object> res1 = new HashMap<>();
         res1.put("result", resultP1);
         res1.put("myScore", room.p1Score);
         res1.put("oppScore", room.p2Score);
-        // 可选：把积分变动也发给前端显示
         res1.put("scoreChange", scoreP1);
         sendMessage(room.p1, BattleMessage.of("GAME_OVER", res1));
 
-        // 5. 发送消息给 P2 (原有逻辑)
         Map<String, Object> res2 = new HashMap<>();
         res2.put("result", resultP2);
         res2.put("myScore", room.p2Score);
@@ -610,7 +537,6 @@ public class BattleGameManager {
         res2.put("scoreChange", scoreP2);
         sendMessage(room.p2, BattleMessage.of("GAME_OVER", res2));
 
-        // 6. 清理房间 (原有逻辑)
         rooms.remove(room.roomId);
         playerRoomMap.remove(room.p1.getId());
         if (room.p2 != null) {
@@ -618,55 +544,32 @@ public class BattleGameManager {
         }
     }
 
-
-    /**
-     * 【新增】更新玩家积分到数据库
-     * @param session 玩家的 WebSocket 会话
-     * @param result 比赛结果 (YOU:胜, OPPONENT:负, DRAW:平)
-     */
     private void updatePlayerPoints(WebSocketSession session, String result) {
-        if (session == null) return; // 机器人不更新积分
+        if (session == null) return;
         try {
-            // 从 Session 获取学号 (在握手拦截器或 joinQueue 时放入的)
             String studentNo = (String) session.getAttributes().get("username");
             if (studentNo == null) return;
-
-
-            // 查询当前学生信息
             BizStudent student = studentService.getOne(
                     new QueryWrapper<BizStudent>().eq("student_no", studentNo)
             );
-
             if (student != null) {
                 int currentPoints = student.getPoints() != null ? student.getPoints() : 0;
                 int delta = 0;
-
-                // 积分规则
                 switch (result) {
-                    case "YOU":
-                        delta = 20; // 胜利 +20
-                        break;
-                    case "DRAW":
-                        delta = 5;  // 平局 +5
-                        break;
-                    case "OPPONENT":
-                        delta = -10; // 失败 -10
-                        break;
+                    case "YOU": delta = 20; break;
+                    case "DRAW": delta = 5; break;
+                    case "OPPONENT": delta = -10; break;
                 }
-
                 int newPoints = currentPoints + delta;
-                if (newPoints < 0) newPoints = 0; // 积分保底为0
-
+                if (newPoints < 0) newPoints = 0;
                 student.setPoints(newPoints);
                 studentService.updateById(student);
-
-                System.out.println("更新积分: " + studentNo + " " + currentPoints + " -> " + newPoints + " (" + result + ")");
             }
         } catch (Exception e) {
-            System.err.println("更新积分失败: " + e.getMessage());
             e.printStackTrace();
         }
     }
+
     private Map<String, Object> buildStudentInfoMap(BizStudent s) {
         Map<String, Object> info = new HashMap<>();
         if (s != null) {
@@ -674,7 +577,6 @@ public class BattleGameManager {
             info.put("avatar", s.getAvatar());
             info.put("avatarFrameStyle", s.getAvatarFrameStyle());
             info.put("points", s.getPoints());
-            // === 修改点 6：返回详细段位信息 ===
             String tier = calculateTier(s.getPoints() == null ? 0 : s.getPoints());
             info.put("tier", tier);
             info.put("tierName", getTierNameCN(tier));
@@ -684,10 +586,9 @@ public class BattleGameManager {
         }
         return info;
     }
-    private void sendMessage(WebSocketSession session, BattleMessage msg) {
-        // 【关键】如果是机器人(session为null)，直接忽略，不发送消息
-        if (session == null) return;
 
+    private void sendMessage(WebSocketSession session, BattleMessage msg) {
+        if (session == null) return;
         try {
             if (session.isOpen()) {
                 session.sendMessage(new TextMessage(objectMapper.writeValueAsString(msg)));
@@ -697,9 +598,6 @@ public class BattleGameManager {
         }
     }
 
-    // ==========================================
-    //              BattleRoom 类升级
-    // ==========================================
     private static class BattleRoom {
         String roomId;
         WebSocketSession p1, p2;
@@ -709,15 +607,11 @@ public class BattleGameManager {
         int p1Score = 0, p2Score = 0;
         ScheduledFuture<?> timeoutTask;
         boolean isBotGame = false;
-
-        // 【新增】时间与连击记录
-        long roundStartTime; // 回合开始时间
-        long p1AnswerTime;   // P1 答题时刻
-        long p2AnswerTime;   // P2 答题时刻
-        int p1Combo = 0;     // P1 连击数
-        int p2Combo = 0;     // P2 连击数
-
-        // 【新增】道具库存 (Key: 道具类型, Value: 数量)
+        long roundStartTime;
+        long p1AnswerTime;
+        long p2AnswerTime;
+        int p1Combo = 0;
+        int p2Combo = 0;
         Map<String, Integer> p1Items = new HashMap<>();
         Map<String, Integer> p2Items = new HashMap<>();
 
@@ -726,7 +620,6 @@ public class BattleGameManager {
             this.p1 = p1;
             this.p2 = p2;
             this.questions = questions;
-            // 初始化赠送道具 (每局各送一个)
             p1Items.put("FOG", 1);
             p1Items.put("HINT", 1);
             p2Items.put("FOG", 1);
@@ -739,103 +632,75 @@ public class BattleGameManager {
             if (s.equals(p1)) {
                 if (p1Answer == null) {
                     p1Answer = a;
-                    p1AnswerTime = now; // 记录时间
+                    p1AnswerTime = now;
                 }
             }
             if (p2 != null && s.equals(p2)) {
                 if (p2Answer == null) {
                     p2Answer = a;
-                    p2AnswerTime = now; // 记录时间
+                    p2AnswerTime = now;
                 }
             }
         }
-
         public boolean isRoundComplete() { return p1Answer != null && p2Answer != null; }
         public boolean hasNextQuestion() { return currentRoundIndex < questions.size() - 1; }
         public void nextRound() {
             currentRoundIndex++;
             p1Answer = null; p2Answer = null;
-            p1AnswerTime = 0; p2AnswerTime = 0; // 重置时间
+            p1AnswerTime = 0; p2AnswerTime = 0;
         }
     }
-    /**
-     * 创建人机对战
-     */
+
     private synchronized void createBotMatch(WaitingPlayer wp1) {
-        // 双重检查
         if (!sessionWaitingMap.containsKey(wp1.session.getId())) return;
 
-        // 1. 移除队列
         removeFromQueue(wp1);
         WebSocketSession p1 = wp1.session;
 
-        // 2. 创建虚拟机器人信息
         BizStudent botStudent = new BizStudent();
-        botStudent.setId(-1L); // 负数ID代表机器人
-        botStudent.setName("AI 智能助教"); // 或者随机名字
-        // 设置一个默认头像
+        botStudent.setId(-1L);
+        botStudent.setName("AI 智能助教");
         botStudent.setAvatar("https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png");
-        botStudent.setPoints(new Random().nextInt(200) + 500); // 随机积分
+        botStudent.setPoints(new Random().nextInt(200) + 500);
 
-        // 3. 创建房间
         String roomId = UUID.randomUUID().toString();
         List<BizQuestion> questions = questionService.list(
-                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<BizQuestion>()
+                new QueryWrapper<BizQuestion>()
                         .eq("question_type", 1)
                         .last("ORDER BY RAND() LIMIT 5")
         );
 
-        // p2 传入 null
         BattleRoom room = new BattleRoom(roomId, p1, null, questions);
-        room.isBotGame = true; // 标记为机器人局
+        room.isBotGame = true;
 
         rooms.put(roomId, room);
         playerRoomMap.put(p1.getId(), roomId);
 
-        // 4. 发送匹配成功 (只发给 P1)
         sendMatchSuccess(p1, botStudent);
 
-        // 5. 延迟开始
         scheduler.schedule(() -> {
             sendQuestion(room);
             startRoundTimer(room);
         }, 1, TimeUnit.SECONDS);
-
-        System.out.println("创建机器人对局: " + wp1.student.getName() + " vs AI");
     }
-    /**
-     * 【新增】保存单条对战记录
-     * @param player 本方玩家
-     * @param opponent 对手玩家 (可能为 null，表示机器人)
-     * @param result 结果 (WIN/LOSE/DRAW)
-     * @param scoreChange 积分变动
-     */
-    /**
-     * 【修复】保存单条对战记录 (补充保存 opponentName)
-     */
+
     private void saveBattleRecord(BizStudent player, BizStudent opponent, String result, int scoreChange) {
         if (player == null) return;
-
         try {
             BizBattleRecord record = new BizBattleRecord();
             record.setPlayerId(player.getId());
-
-            // 如果对手是真人，存ID；如果是机器人，存 -1
             if (opponent != null) {
                 record.setOpponentId(opponent.getId());
-                record.setOpponentName(opponent.getName()); // 【修复点】保存对手真实姓名
+                record.setOpponentName(opponent.getName());
             } else {
                 record.setOpponentId(-1L);
-                record.setOpponentName("AI 智能助教"); // 【修复点】保存机器人名字
+                record.setOpponentName("AI 智能助教");
             }
-
             record.setResult(result);
             record.setScoreChange(scoreChange);
             record.setCreateTime(LocalDateTime.now());
-
             battleRecordService.save(record);
         } catch (Exception e) {
-            System.err.println("保存对战记录失败: " + e.getMessage());
             e.printStackTrace();
         }
     }
