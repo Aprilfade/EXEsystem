@@ -1,286 +1,674 @@
 <template>
   <div class="battle-container">
-    <div v-if="gameState === 'MATCHING'" class="matching-box">
-      <div class="radar">
-        <div class="scan"></div>
-        <el-icon class="search-icon" :size="50"><Search /></el-icon>
+
+    <div v-if="battleStore.gameState === 'MATCHING'" class="matching-layer">
+      <div class="radar-scanner">
+        <div class="scan-beam"></div>
+        <el-icon class="search-icon" :size="48"><Search /></el-icon>
       </div>
-      <h2>正在寻找对手...</h2>
-      <el-button round @click="cancelMatch">取消匹配</el-button>
+      <h2 class="loading-text">正在寻找旗鼓相当的对手...</h2>
+      <el-button round class="cancel-btn" @click="battleStore.leave">取消匹配</el-button>
     </div>
 
-    <div v-else-if="gameState === 'PLAYING' || gameState === 'ROUND_RESULT'" class="game-box">
-      <div class="players-bar">
-        <div class="player me">
-          <UserAvatar
-              :src="store.student?.avatar"
-              :name="store.studentName"
-              :size="60"
-              :frame-style="store.student?.avatarFrameStyle"
-          />
-          <div class="score">{{ myScore }} 分</div>
-          <div class="name">我</div>
-        </div>
+    <div v-else-if="['PLAYING', 'ROUND_RESULT'].includes(battleStore.gameState)" class="game-layer">
 
-        <div class="vs-icon">VS</div>
-        <div class="player opponent">
-          <UserAvatar
-              :src="opponentInfo.avatar"
-              :name="opponentInfo.name"
-              :size="60"
-              :frame-style="opponentInfo.avatarFrameStyle"
-          />
-          <div class="score">{{ oppScore }} 分</div>
-          <div class="name">{{ opponentInfo.name }}</div>
-        </div>
-
-      </div>
-
-      <div class="question-card">
-        <div class="round-info">第 {{ currentRound }} / {{ totalRound }} 题</div>
-        <div class="q-content">{{ currentQuestion?.content }}</div>
-
-        <div class="options-grid">
-          <div
-              v-for="opt in parseOptions(currentQuestion?.options)"
-              :key="opt.key"
-              class="option-btn"
-              :class="{
-              'selected': myAnswer === opt.key,
-              'correct': gameState === 'ROUND_RESULT' && opt.key === roundResult?.correctAnswer,
-              'wrong': gameState === 'ROUND_RESULT' && myAnswer === opt.key && myAnswer !== roundResult?.correctAnswer
-            }"
-              @click="submitAnswer(opt.key)"
-          >
-            {{ opt.key }}. {{ opt.value }}
+      <div class="players-header">
+        <div class="player-card me">
+          <div class="avatar-wrapper">
+            <UserAvatar
+                :src="authStore.student?.avatar"
+                :name="authStore.studentName"
+                :size="70"
+                :frame-style="authStore.student?.avatarFrameStyle"
+            />
+            <transition name="score-float">
+              <div v-if="showMyScoreAnim" class="floating-score">+20</div>
+            </transition>
+          </div>
+          <div class="info-block">
+            <div class="name">我</div>
+            <div class="progress-bg">
+              <div class="progress-fill" :style="{ width: myScorePercent + '%' }"></div>
+            </div>
+            <div class="score-text">{{ battleStore.myScore }}</div>
           </div>
         </div>
 
-        <div v-if="gameState === 'ROUND_RESULT'" class="round-tip">
-          <el-tag type="info">等待下一题...</el-tag>
+        <div class="vs-status">
+          <div class="vs-logo">VS</div>
+          <div class="round-badge">
+            Round {{ battleStore.currentRound }} / {{ battleStore.totalRound }}
+          </div>
+        </div>
+
+        <div class="player-card opponent">
+          <div class="info-block align-right">
+            <div class="name">{{ battleStore.opponent.name }}</div>
+            <div class="progress-bg">
+              <div class="progress-fill enemy" :style="{ width: oppScorePercent + '%' }"></div>
+            </div>
+            <div class="score-text">{{ battleStore.oppScore }}</div>
+          </div>
+          <div class="avatar-wrapper">
+            <UserAvatar
+                :src="battleStore.opponent.avatar"
+                :name="battleStore.opponent.name"
+                :size="70"
+                :frame-style="battleStore.opponent.avatarFrameStyle"
+            />
+            <transition name="score-float">
+              <div v-if="showOppScoreAnim" class="floating-score enemy">+20</div>
+            </transition>
+          </div>
+        </div>
+      </div>
+
+      <div class="timer-section">
+        <el-progress
+            :percentage="timePercentage"
+            :format="timeFormat"
+            :status="timerStatus"
+            :stroke-width="12"
+            striped
+            striped-flow
+            text-inside
+        />
+      </div>
+
+      <div class="question-board" :class="{ 'result-mode': battleStore.gameState === 'ROUND_RESULT' }">
+        <div class="question-text">
+          {{ battleStore.currentQuestion?.content }}
+        </div>
+
+        <div class="options-container">
+          <div
+              v-for="opt in parsedOptions"
+              :key="opt.key"
+              class="option-item"
+              :class="getOptionClass(opt.key)"
+              @click="handleAnswer(opt.key)"
+          >
+            <span class="opt-tag">{{ opt.key }}</span>
+            <span class="opt-content">{{ opt.value }}</span>
+
+            <el-icon v-if="showResultIcon(opt.key) === 'correct'" class="status-icon correct"><Select /></el-icon>
+            <el-icon v-if="showResultIcon(opt.key) === 'wrong'" class="status-icon wrong"><CloseBold /></el-icon>
+          </div>
+        </div>
+
+        <div v-if="hasAnswered && battleStore.gameState === 'PLAYING'" class="waiting-tip">
+          <el-icon class="is-loading"><Loading /></el-icon> 等待对手作答...
         </div>
       </div>
     </div>
 
-    <div v-else-if="gameState === 'GAME_OVER'" class="result-box">
-      <img v-if="finalResult === 'YOU'" src="/1.png" class="trophy" />
-      <h1 :class="finalResult === 'YOU' ? 'win' : 'lose'">
-        {{ finalResult === 'YOU' ? '胜利！' : (finalResult === 'DRAW' ? '平局' : '惜败') }}
-      </h1>
-      <div class="final-score">
-        {{ myScore }} : {{ oppScore }}
+    <div v-else-if="battleStore.gameState === 'GAME_OVER'" class="result-layer">
+      <div class="result-content">
+        <div class="result-anim">
+          <span v-if="gameResult === 'YOU'" class="emoji-anim">🏆</span>
+          <span v-else-if="gameResult === 'DRAW'" class="emoji-anim">🤝</span>
+          <span v-else class="emoji-anim">😭</span>
+        </div>
+
+        <h1 :class="['result-title', gameResult]">
+          {{ getResultTitle(gameResult) }}
+        </h1>
+
+        <div class="final-score-board">
+          <div class="score-box me">
+            <div class="label">我</div>
+            <div class="val">{{ battleStore.myScore }}</div>
+          </div>
+          <div class="vs-divider">:</div>
+          <div class="score-box opp">
+            <div class="label">{{ battleStore.opponent.name }}</div>
+            <div class="val">{{ battleStore.oppScore }}</div>
+          </div>
+        </div>
+
+        <div class="action-btns">
+          <el-button type="primary" size="large" round @click="battleStore.startMatch">再来一局</el-button>
+          <el-button size="large" round @click="$router.push('/student/dashboard')">返回首页</el-button>
+        </div>
       </div>
-      <el-button type="primary" size="large" @click="startMatch">再来一局</el-button>
-      <el-button @click="$router.push('/student/dashboard')">返回首页</el-button>
     </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { useBattleStore } from '@/stores/battle';
 import { useStudentAuthStore } from '@/stores/studentAuth';
-import { ElMessage } from 'element-plus';
-import { Search } from '@element-plus/icons-vue';
-import UserAvatar from '@/components/UserAvatar.vue'; // 确保引入头像组件
+import { Search, Select, CloseBold, Loading } from '@element-plus/icons-vue';
+import UserAvatar from '@/components/UserAvatar.vue';
 
-const store = useStudentAuthStore();
-const socket = ref<WebSocket | null>(null);
+const battleStore = useBattleStore();
+const authStore = useStudentAuthStore();
 
-// 状态机: IDLE, MATCHING, PLAYING, ROUND_RESULT, GAME_OVER
-const gameState = ref('IDLE');
-
-const currentQuestion = ref<any>(null);
-const currentRound = ref(0);
-const totalRound = ref(0);
-const myScore = ref(0);
-const oppScore = ref(0);
-const myAnswer = ref('');
-const roundResult = ref<any>(null);
-const finalResult = ref('');
-
-// 连接 WebSocket
-const connect = () => {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const domain = apiBase.replace(/^https?:\/\//, '');
-  const url = `${wsProtocol}://${domain}/ws/battle?token=${store.token}`;
-
-  socket.value = new WebSocket(url);
-
-  socket.value.onopen = () => {
-    console.log('Battle WS Connected');
-    startMatch(); // 自动开始匹配
-  };
-
-  socket.value.onmessage = (event) => {
-    const msg = JSON.parse(event.data);
-    handleMessage(msg);
-  };
-
-  socket.value.onclose = () => {
-    console.log('Battle WS Closed');
-  };
+// --- 音效系统 ---
+// 建议将音效文件放在 public/audio/ 目录下
+const audios: Record<string, HTMLAudioElement> = {
+  bgm: new Audio('/audio/battle_bgm.mp3'), // 可选
+  correct: new Audio('/audio/correct.mp3'),
+  wrong: new Audio('/audio/wrong.mp3'),
+  win: new Audio('/audio/win.mp3'),
+  lose: new Audio('/audio/lose.mp3'),
+  match: new Audio('/audio/match.mp3')
 };
 
-// 【新增】对手信息状态
-const opponentInfo = ref({
-  name: '匹配中...',
-  avatar: '',
-  avatarFrameStyle: ''
-});
-
-
-const handleMessage = (msg: any) => {
-  if (msg.type === 'MATCH_SUCCESS') {
-    gameState.value = 'PLAYING'; // 准备开始，实际等待题目
-    ElMessage.success('匹配成功！准备开始');
-    // 【核心修改】更新对手信息
-    if (msg.data && msg.data.opponent) {
-      opponentInfo.value = msg.data.opponent;
-    }
-
-    myScore.value = 0;
-    oppScore.value = 0;
-  } else if (msg.type === 'QUESTION') {
-    gameState.value = 'PLAYING';
-    currentQuestion.value = msg.data;
-    currentRound.value = msg.data.round;
-    totalRound.value = msg.data.total;
-    myAnswer.value = '';
-    roundResult.value = null;
-  } else if (msg.type === 'ROUND_RESULT') {
-    // 【修改开始】
-    gameState.value = 'ROUND_RESULT';
-    roundResult.value = msg.data;
-
-    // 核心修复：直接使用后端转换好的相对分数
-    myScore.value = msg.data.myScore;
-    oppScore.value = msg.data.oppScore;
-
-    // 【建议添加】
-    ElMessage.info('本轮结束，3秒后进入下一题...');
-
-    // 可选：增加一些动画或提示，例如：
-    if (msg.data.isCorrect) {
-      ElMessage.success('回答正确 +20分！');
-    } else {
-      ElMessage.error('回答错误');
-    }
-    // 【修改结束】
-
-  } else if (msg.type === 'GAME_OVER') {
-    gameState.value = 'GAME_OVER';
-    finalResult.value = msg.data.result;
-    myScore.value = msg.data.myScore;
-    oppScore.value = msg.data.oppScore;
-  } else if (msg.type === 'OPPONENT_LEFT') {
-    // 对手离开时，重置信息
-    opponentInfo.value.name = '对手已离开';
+// 播放音效辅助函数
+const playSound = (name: string) => {
+  const audio = audios[name];
+  if (audio) {
+    audio.currentTime = 0;
+    audio.play().catch(() => {}); // 忽略自动播放策略的报错
   }
 };
 
-// 在 startMatch 或重置时，记得重置 opponentInfo
-const startMatch = () => {
-  // 重置显示的对手信息
-  opponentInfo.value = { name: '寻找对手...', avatar: '', avatarFrameStyle: '' };
-  gameState.value = 'MATCHING';
-  socket.value?.send(JSON.stringify({ type: 'MATCH' }));
+// --- 倒计时逻辑 ---
+const TOTAL_TIME = 20; // 假设每题20秒
+const timeLeft = ref(TOTAL_TIME);
+let timerInterval: any = null;
+
+const timePercentage = computed(() => (timeLeft.value / TOTAL_TIME) * 100);
+const timerStatus = computed(() => timeLeft.value <= 5 ? 'exception' : 'success');
+const timeFormat = () => `${timeLeft.value}s`;
+
+const startTimer = () => {
+  clearInterval(timerInterval);
+  timeLeft.value = TOTAL_TIME;
+  timerInterval = setInterval(() => {
+    if (timeLeft.value > 0) {
+      timeLeft.value--;
+    } else {
+      clearInterval(timerInterval);
+    }
+  }, 1000);
 };
 
-const cancelMatch = () => {
-  socket.value?.close();
-  gameState.value = 'IDLE';
+// --- 状态与动画控制 ---
+const myAnswer = ref(''); // 记录我当前选的项
+const showMyScoreAnim = ref(false);
+const showOppScoreAnim = ref(false);
+
+// 计算分数条百分比 (假设总分 100 或更多，动态计算)
+const maxScoreRef = computed(() => Math.max(100, battleStore.myScore + 40, battleStore.oppScore + 40));
+const myScorePercent = computed(() => (battleStore.myScore / maxScoreRef.value) * 100);
+const oppScorePercent = computed(() => (battleStore.oppScore / maxScoreRef.value) * 100);
+
+const hasAnswered = computed(() => !!myAnswer.value);
+
+// 解析选项 JSON
+const parsedOptions = computed(() => {
+  try {
+    return typeof battleStore.currentQuestion?.options === 'string'
+        ? JSON.parse(battleStore.currentQuestion.options)
+        : battleStore.currentQuestion?.options || [];
+  } catch { return []; }
+});
+
+// 游戏结果状态
+const gameResult = computed(() => battleStore.finalResult?.result || '');
+
+// 获取选项样式类名
+const getOptionClass = (key: string) => {
+  // 结算阶段高亮正确/错误
+  if (battleStore.gameState === 'ROUND_RESULT') {
+    const correctKey = battleStore.roundResult?.correctAnswer;
+    if (key === correctKey) return 'is-correct';
+    if (key === myAnswer.value && key !== correctKey) return 'is-wrong';
+    return 'is-dimmed';
+  }
+  // 答题阶段高亮选中
+  if (key === myAnswer.value) return 'is-selected';
+  return '';
 };
 
-const submitAnswer = (key: string) => {
-  if (myAnswer.value || gameState.value !== 'PLAYING') return; // 已答过
+// 获取结果图标类型
+const showResultIcon = (key: string) => {
+  if (battleStore.gameState !== 'ROUND_RESULT') return '';
+  const correctKey = battleStore.roundResult?.correctAnswer;
+  if (key === correctKey) return 'correct';
+  if (key === myAnswer.value && key !== correctKey) return 'wrong';
+  return '';
+};
+
+const getResultTitle = (res: string) => {
+  const map: Record<string, string> = {
+    'YOU': '大获全胜！',
+    'OPPONENT': '遗憾惜败...',
+    'DRAW': '平分秋色'
+  };
+  return map[res] || '游戏结束';
+};
+
+// --- 交互事件 ---
+const handleAnswer = (key: string) => {
+  if (hasAnswered.value || battleStore.gameState !== 'PLAYING') return;
   myAnswer.value = key;
-  socket.value?.send(JSON.stringify({ type: 'ANSWER', data: key }));
+  battleStore.submitAnswer(key); // 调用 Store 方法发送
 };
 
-const parseOptions = (json: string) => {
-  try { return JSON.parse(json); } catch { return []; }
-};
+// --- 监听器 (核心逻辑) ---
 
+// 1. 监听题目更新 -> 重置状态，开始倒计时
+watch(() => battleStore.currentQuestion, (newVal) => {
+  if (newVal) {
+    myAnswer.value = '';
+    showMyScoreAnim.value = false;
+    showOppScoreAnim.value = false;
+    startTimer();
+  }
+});
+
+// 2. 监听回合结算 -> 播放音效，停止倒计时，显示得分
+watch(() => battleStore.roundResult, (res) => {
+  if (res) {
+    clearInterval(timerInterval);
+
+    // 播放音效
+    if (res.isCorrect) {
+      playSound('correct');
+      showMyScoreAnim.value = true;
+    } else {
+      playSound('wrong');
+    }
+
+    // 简单的判断对手是否得分：如果对手答案等于正确答案
+    if (res.oppAnswer === res.correctAnswer) {
+      showOppScoreAnim.value = true;
+    }
+  }
+});
+
+// 3. 监听游戏结束 -> 播放终局音效
+watch(() => battleStore.gameState, (state) => {
+  if (state === 'GAME_OVER') {
+    clearInterval(timerInterval);
+    if (gameResult.value === 'YOU') playSound('win');
+    else playSound('lose');
+  } else if (state === 'MATCHING') {
+    playSound('match'); // 开始匹配音效
+  }
+});
+
+// --- 生命周期 ---
 onMounted(() => {
-  connect();
+  // 尝试连接
+  battleStore.connect();
+  // 自动开始匹配 (延迟一下让连接建立)
+  setTimeout(() => {
+    if (battleStore.gameState === 'IDLE') {
+      battleStore.startMatch();
+    }
+  }, 500);
 });
 
 onUnmounted(() => {
-  socket.value?.close();
+  battleStore.leave();
+  clearInterval(timerInterval);
 });
 </script>
 
 <style scoped>
+/* 容器基础样式：深色科技风背景 */
 .battle-container {
-  padding: 20px;
-  min-height: 80vh;
+  min-height: calc(100vh - 60px); /* 减去头部高度 */
+  background: radial-gradient(circle at center, #2b323c 0%, #141414 100%);
+  color: #fff;
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #1c1c1c, #2a2a2a);
-  color: white;
-}
-
-/* 匹配雷达样式 */
-.matching-box { text-align: center; }
-.radar {
-  width: 100px; height: 100px;
-  border: 2px solid #409eff;
-  border-radius: 50%;
+  overflow: hidden;
   position: relative;
-  margin: 0 auto 20px;
+}
+
+/* ================= 匹配界面 ================= */
+.matching-layer {
+  text-align: center;
+  animation: fadeIn 0.5s;
+}
+
+.radar-scanner {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  border: 2px solid rgba(64, 158, 255, 0.3);
+  position: relative;
+  margin: 0 auto 40px;
   display: flex;
   justify-content: center;
   align-items: center;
+  box-shadow: 0 0 30px rgba(64, 158, 255, 0.1);
 }
-.scan {
-  position: absolute;
-  width: 100%; height: 100%;
-  border-radius: 50%;
-  background: conic-gradient(from 0deg, transparent 0deg, rgba(64,158,255, 0.5) 360deg);
-  animation: spin 2s linear infinite;
-}
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-/* 游戏区域样式 */
-.game-box { width: 100%; max-width: 800px; }
-.players-bar {
+.scan-beam {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(64, 158, 255, 0.5) 360deg);
+  animation: radar-spin 1.5s linear infinite;
+}
+
+.search-icon {
+  color: #409eff;
+  z-index: 2;
+}
+
+.loading-text {
+  font-weight: 300;
+  letter-spacing: 1px;
+  margin-bottom: 30px;
+}
+
+.cancel-btn {
+  padding: 12px 40px;
+  font-size: 16px;
+  background: transparent;
+  color: #909399;
+  border: 1px solid #4c4d4f;
+}
+.cancel-btn:hover {
+  color: #fff;
+  border-color: #fff;
+}
+
+@keyframes radar-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ================= 对战界面 ================= */
+.game-layer {
+  width: 100%;
+  max-width: 800px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.players-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
-  padding: 0 40px;
+  padding: 0 10px;
 }
-.player { text-align: center; }
-.score { font-size: 24px; font-weight: bold; color: #ffba00; margin: 5px 0; }
-.vs-icon { font-size: 40px; font-style: italic; font-weight: 900; color: #f56c6c; }
 
-.question-card {
-  background: rgba(255,255,255,0.1);
-  padding: 30px;
-  border-radius: 16px;
+.player-card {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  width: 35%;
+}
+
+.player-card.opponent {
+  flex-direction: row-reverse;
+}
+
+.avatar-wrapper {
+  position: relative;
+}
+
+/* 浮动得分动画 */
+.floating-score {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #67c23a;
+  font-weight: 900;
+  font-size: 24px;
+  text-shadow: 0 2px 5px rgba(0,0,0,0.8);
+  animation: floatUp 1.2s ease-out forwards;
+  pointer-events: none;
+}
+.floating-score.enemy {
+  color: #f56c6c;
+}
+
+@keyframes floatUp {
+  0% { top: 0; opacity: 0; transform: translateX(-50%) scale(0.5); }
+  20% { opacity: 1; transform: translateX(-50%) scale(1.2); }
+  100% { top: -50px; opacity: 0; transform: translateX(-50%) scale(1); }
+}
+
+.info-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.info-block.align-right {
+  align-items: flex-end;
+}
+
+.name {
+  font-size: 16px;
+  font-weight: bold;
+  max-width: 100px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.progress-bg {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #409eff;
+  transition: width 0.5s ease-out;
+}
+.progress-fill.enemy {
+  background: #f56c6c;
+}
+
+.score-text {
+  font-size: 20px;
+  font-family: 'Impact', sans-serif;
+  letter-spacing: 1px;
+}
+
+.vs-status {
+  text-align: center;
+}
+.vs-logo {
+  font-size: 40px;
+  font-weight: 900;
+  font-style: italic;
+  color: #e6a23c;
+  text-shadow: 0 0 10px rgba(230, 162, 60, 0.5);
+}
+.round-badge {
+  font-size: 12px;
+  color: #909399;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: 5px;
+}
+
+.timer-section {
+  margin: 0 20px;
+}
+/* 覆盖 Element Plus 进度条背景色 */
+:deep(.el-progress-bar__outer) {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 题目板 */
+.question-board {
+  background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
-}
-.round-info { color: #909399; margin-bottom: 10px; }
-.q-content { font-size: 20px; margin-bottom: 30px; font-weight: bold; line-height: 1.5; }
-.options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-.option-btn {
-  background: rgba(255,255,255,0.05);
-  padding: 15px;
-  border-radius: 8px;
-  cursor: pointer;
-  border: 2px solid transparent;
+  border-radius: 16px;
+  padding: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all 0.3s;
+  position: relative;
 }
-.option-btn:hover { background: rgba(255,255,255,0.15); }
-.option-btn.selected { border-color: #409eff; background: rgba(64,158,255, 0.2); }
-.option-btn.correct { border-color: #67c23a; background: rgba(103,194,58, 0.2); }
-.option-btn.wrong { border-color: #f56c6c; background: rgba(245,108,108, 0.2); }
 
-/* 结算样式 */
-.result-box { text-align: center; }
-.win { color: #ffba00; font-size: 40px; text-shadow: 0 0 20px rgba(255, 186, 0, 0.5); }
-.lose { color: #909399; font-size: 40px; }
-.final-score { font-size: 60px; font-weight: bold; margin: 20px 0; }
+.question-text {
+  font-size: 20px;
+  line-height: 1.6;
+  margin-bottom: 30px;
+  font-weight: 500;
+}
+
+.options-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.option-item {
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid transparent;
+  padding: 15px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.option-item:hover:not(.is-dimmed):not(.is-selected):not(.is-correct):not(.is-wrong) {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.opt-tag {
+  width: 30px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.opt-content {
+  font-size: 16px;
+}
+
+/* 状态样式 */
+.option-item.is-selected {
+  border-color: #409eff;
+  background: rgba(64, 158, 255, 0.1);
+}
+
+.option-item.is-correct {
+  border-color: #67c23a;
+  background: rgba(103, 194, 58, 0.2);
+  box-shadow: 0 0 15px rgba(103, 194, 58, 0.3);
+}
+
+.option-item.is-wrong {
+  border-color: #f56c6c;
+  background: rgba(245, 108, 108, 0.2);
+  animation: shake 0.5s;
+}
+
+.option-item.is-dimmed {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.status-icon {
+  position: absolute;
+  right: 15px;
+  font-size: 24px;
+}
+.status-icon.correct { color: #67c23a; }
+.status-icon.wrong { color: #f56c6c; }
+
+.waiting-tip {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  color: #909399;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+}
+
+/* ================= 结算界面 ================= */
+.result-layer {
+  text-align: center;
+  animation: zoomIn 0.4s;
+}
+
+.result-anim {
+  font-size: 80px;
+  margin-bottom: 20px;
+}
+.emoji-anim {
+  display: inline-block;
+  animation: bounce 2s infinite;
+}
+
+.result-title {
+  font-size: 48px;
+  margin-bottom: 40px;
+  font-weight: 900;
+}
+.result-title.YOU {
+  background: linear-gradient(to right, #f8b500, #fceabb);
+  -webkit-background-clip: text;
+  color: transparent;
+}
+.result-title.OPPONENT { color: #909399; }
+.result-title.DRAW { color: #409eff; }
+
+.final-score-board {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 40px;
+  margin-bottom: 50px;
+}
+
+.score-box {
+  text-align: center;
+}
+.score-box .label { font-size: 18px; margin-bottom: 5px; color: #ccc; }
+.score-box .val { font-size: 60px; font-weight: bold; }
+.score-box.me .val { color: #e6a23c; text-shadow: 0 0 20px rgba(230, 162, 60, 0.5); }
+
+.vs-divider {
+  font-size: 40px;
+  color: #555;
+  margin-top: 20px;
+}
+
+.action-btns {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+@keyframes zoomIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-15px); }
+}
 </style>
