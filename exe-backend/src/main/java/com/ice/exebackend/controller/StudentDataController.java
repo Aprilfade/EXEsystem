@@ -228,6 +228,9 @@ public class StudentDataController {
         return Result.suc(questions);
     }
 
+    /**
+     * 学生提交练习
+     */
     @PostMapping("/submit-practice")
     @PreAuthorize("hasAuthority('ROLE_STUDENT')")
     public Result submitPractice(@RequestBody PracticeSubmissionDTO submission, Authentication authentication) {
@@ -242,6 +245,7 @@ public class StudentDataController {
             return Result.suc(new PracticeResultDTO());
         }
 
+        // 获取正确答案映射
         Map<Long, BizQuestion> correctAnswersMap = questionService.listByIds(questionIds).stream()
                 .collect(Collectors.toMap(BizQuestion::getId, q -> q));
 
@@ -249,6 +253,7 @@ public class StudentDataController {
         List<PracticeResultDTO.AnswerResult> answerResults = new ArrayList<>();
         int correctCount = 0;
 
+        // 判题逻辑
         for (Long questionId : questionIds) {
             BizQuestion question = correctAnswersMap.get(questionId);
             String userAnswer = submission.getAnswers().get(questionId);
@@ -261,12 +266,18 @@ public class StudentDataController {
             if (isCorrect) {
                 correctCount++;
             } else {
+                // 记录错题
                 BizWrongRecord wrongRecord = new BizWrongRecord();
                 wrongRecord.setStudentId(student.getId());
                 wrongRecord.setQuestionId(questionId);
                 wrongRecord.setWrongAnswer(userAnswer);
                 wrongRecord.setWrongReason("在线练习错误");
-                if (wrongRecordService.lambdaQuery().eq(BizWrongRecord::getStudentId, student.getId()).eq(BizWrongRecord::getQuestionId, questionId).count() == 0) {
+                // 避免重复插入未掌握的错题
+                if (wrongRecordService.lambdaQuery()
+                        .eq(BizWrongRecord::getStudentId, student.getId())
+                        .eq(BizWrongRecord::getQuestionId, questionId)
+                        .eq(BizWrongRecord::getIsMastered, 0)
+                        .count() == 0) {
                     wrongRecordService.save(wrongRecord);
                 }
             }
@@ -275,26 +286,34 @@ public class StudentDataController {
             answerResult.setCorrect(isCorrect);
             answerResults.add(answerResult);
         }
-        // 【新增】记录学习活动日志
+
+        // --- 1. 记录学习活动日志 ---
         BizLearningActivity log = new BizLearningActivity();
         log.setStudentId(student.getId());
         log.setActivityType("PRACTICE_SUBMIT");
-        log.setDescription("完成了在线练习，共" + questionIds.size() + "道题");
+        log.setDescription("完成了在线练习，共" + questionIds.size() + "道题，答对" + correctCount + "题");
         log.setCreateTime(LocalDateTime.now());
         learningActivityService.save(log);
-// --- 新增：修仙挂钩 ---
-// 基础分 10，每答对一题加 10 修为
+
+        // --- 2. 【核心修改】修仙挂钩：计算并发放修为 ---
+        // 规则：基础分 10 + 每答对一题 10 修为
         int expGain = 10 + (correctCount * 10);
         cultivationService.addExp(student.getId(), expGain);
 
-
-        student.setPoints((student.getPoints() == null ? 0 : student.getPoints()) + 5);
+        // --- 3. 【核心修改】发放积分 ---
+        int pointsGain = 5; // 练习固定奖励 5 积分
+        student.setPoints((student.getPoints() == null ? 0 : student.getPoints()) + pointsGain);
         studentService.updateById(student);
 
+        // --- 4. 【核心修改】组装返回结果 ---
         resultDTO.setTotalQuestions(questionIds.size());
         resultDTO.setCorrectCount(correctCount);
         resultDTO.setResults(answerResults);
 
+        // 关键点：将奖励数值传回前端，以便前端 Practice.vue 弹出提示
+        // 请确保 PracticeResultDTO 已添加这两个字段
+        resultDTO.setExpGain(expGain);
+        resultDTO.setPointsGain(pointsGain);
 
         return Result.suc(resultDTO);
     }

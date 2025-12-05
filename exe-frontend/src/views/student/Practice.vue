@@ -151,12 +151,15 @@ import request from '@/utils/request';
 import type { Subject } from '@/api/subject';
 import type { Question, QuestionOption } from '@/api/question';
 import type { ApiResult } from '@/api/user'; // 引入通用的 ApiResult 类型
-import { ElMessage } from 'element-plus';
 import { Collection, Reading } from '@element-plus/icons-vue';
 import { fetchPracticeQuestions } from '@/api/studentAuth'; // 确保你已修改此文件
 // 1. 导入 API 和 图标
 import { toggleFavorite, checkFavoriteStatus } from '@/api/favorite';
 import { Star, StarFilled } from '@element-plus/icons-vue';
+// 引入 ElNotification
+import { ElMessage, ElNotification } from 'element-plus';
+
+
 
 // 【修复】为 practiceResult 提供更具体的类型
 interface PracticeResult {
@@ -166,6 +169,8 @@ interface PracticeResult {
     question: Question;
     userAnswer: string;
     isCorrect: boolean;
+    expGain?: number;
+    pointsGain?: number;
   }>;
 }
 // 2. 定义状态
@@ -285,7 +290,6 @@ const prevQuestion = () => {
 const submitPractice = async () => {
   isSubmitting.value = true;
   try {
-    // 【修复】为API返回结果添加明确的类型
     const res: ApiResult<PracticeResult> = await request({
       url: '/api/v1/student/submit-practice',
       method: 'post',
@@ -294,6 +298,17 @@ const submitPractice = async () => {
     if (res.code === 200) {
       practiceResult.value = res.data;
       practiceState.value = 'result';
+
+      // 【新增】显示修为获取通知
+      if (res.data.expGain) {
+        ElNotification({
+          title: '历练结算',
+          message: `🎉 历练完成！获得修为 +${res.data.expGain}，积分 +${res.data.pointsGain || 0}`,
+          type: 'success',
+          duration: 5000,
+          position: 'top-right'
+        });
+      }
     }
   } catch (error) {
     ElMessage.error('提交失败');
