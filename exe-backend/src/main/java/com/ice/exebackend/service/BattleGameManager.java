@@ -675,6 +675,9 @@ public class BattleGameManager {
      * @param result 结果 (WIN/LOSE/DRAW)
      * @param scoreChange 积分变动
      */
+    /**
+     * 【修复】保存单条对战记录 (补充保存 opponentName)
+     */
     private void saveBattleRecord(BizStudent player, BizStudent opponent, String result, int scoreChange) {
         if (player == null) return;
 
@@ -685,8 +688,10 @@ public class BattleGameManager {
             // 如果对手是真人，存ID；如果是机器人，存 -1
             if (opponent != null) {
                 record.setOpponentId(opponent.getId());
+                record.setOpponentName(opponent.getName()); // 【修复点】保存对手真实姓名
             } else {
                 record.setOpponentId(-1L);
+                record.setOpponentName("AI 智能助教"); // 【修复点】保存机器人名字
             }
 
             record.setResult(result);

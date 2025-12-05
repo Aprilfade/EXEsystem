@@ -34,7 +34,37 @@
           <el-button type="primary" size="large" class="start-btn" @click="handleStartMatch">
             开始匹配
           </el-button>
+          <el-button text class="history-btn" @click="openHistory">
+            <el-icon><Trophy /></el-icon> 查看近期战绩
+          </el-button>
         </div>
+
+        <el-dialog v-model="historyVisible" title="⚔️ 近期战绩" width="500px" append-to-body class="battle-history-dialog">
+          <el-table :data="historyList" stripe style="width: 100%" v-loading="historyLoading">
+            <el-table-column prop="createTime" label="时间" width="160">
+              <template #default="{ row }">
+                {{ formatTime(row.createTime) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="opponentName" label="对手" />
+            <el-table-column prop="result" label="结果" width="80" align="center">
+              <template #default="{ row }">
+                <el-tag v-if="row.result === 'WIN'" type="success" effect="dark">胜利</el-tag>
+                <el-tag v-else-if="row.result === 'LOSE'" type="danger" effect="dark">失败</el-tag>
+                <el-tag v-else type="info" effect="dark">平局</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="scoreChange" label="变动" width="80" align="right">
+              <template #default="{ row }">
+            <span :style="{ color: row.scoreChange > 0 ? '#67C23A' : '#F56C6C', fontWeight: 'bold' }">
+              {{ row.scoreChange > 0 ? '+' : '' }}{{ row.scoreChange }}
+            </span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-dialog>
+
+
       </div>
     </div>
 
@@ -124,9 +154,15 @@ import { useBattleStore } from '@/stores/battle';
 import { useStudentAuthStore } from '@/stores/studentAuth';
 import { Search, Select, CloseBold, Loading } from '@element-plus/icons-vue';
 import UserAvatar from '@/components/UserAvatar.vue';
-// 【新增】引入API
-import { fetchBattleLeaderboard } from '@/api/student';
+import { fetchBattleLeaderboard, fetchMyBattleRecords } from '@/api/student'; // 【修改】引入 fetchMyBattleRecords
+import { Trophy } from '@element-plus/icons-vue'; // 【新增】引入图标
 
+
+
+// --- 【新增】战绩历史逻辑 ---
+const historyVisible = ref(false);
+const historyLoading = ref(false);
+const historyList = ref([]);
 const battleStore = useBattleStore();
 const authStore = useStudentAuthStore();
 
@@ -148,7 +184,23 @@ const loadLeaderboard = async () => {
     rankLoading.value = false;
   }
 };
+const openHistory = async () => {
+  historyVisible.value = true;
+  historyLoading.value = true;
+  try {
+    const res = await fetchMyBattleRecords();
+    if (res.code === 200) {
+      historyList.value = res.data;
+    }
+  } finally {
+    historyLoading.value = false;
+  }
+};
 
+const formatTime = (timeStr: string) => {
+  if (!timeStr) return '';
+  return timeStr.replace('T', ' ').substring(5, 16); // 只显示 MM-DD HH:mm
+};
 const handleStartMatch = () => {
   battleStore.startMatch();
 }
@@ -313,6 +365,21 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 15px;
   align-items: center;
+}
+/* 在 .lobby-actions 样式附近添加 */
+.history-btn {
+  color: #ddd;
+  font-size: 14px;
+  margin-top: 10px;
+}
+.history-btn:hover {
+  color: #409eff;
+}
+
+/* 优化 Dialog 样式（可选） */
+:deep(.battle-history-dialog) {
+  border-radius: 12px;
+  overflow: hidden;
 }
 .my-status { color: #ccc; font-size: 14px; }
 .my-status span { color: #fff; font-weight: bold; font-size: 16px; }

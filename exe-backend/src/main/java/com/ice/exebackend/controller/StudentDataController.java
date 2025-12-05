@@ -72,6 +72,9 @@ public class StudentDataController {
     @Autowired
     private com.ice.exebackend.service.BizPaperService paperService;
 
+    @Autowired
+    private BizBattleRecordService battleRecordService;
+
 
     @Autowired
     private BizAchievementService achievementService; // 注入
@@ -849,6 +852,25 @@ public class StudentDataController {
         }).collect(Collectors.toList());
 
         return Result.suc(resultList);
+    }
+
+    /**
+     * 【新增】获取我的对战记录
+     */
+    @GetMapping("/battle/records")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result getMyBattleRecords(Authentication authentication) {
+        String studentNo = authentication.getName();
+        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
+
+        // 查询最近的 20 条记录
+        List<BizBattleRecord> list = battleRecordService.lambdaQuery()
+                .eq(BizBattleRecord::getPlayerId, student.getId())
+                .orderByDesc(BizBattleRecord::getCreateTime)
+                .last("LIMIT 20")
+                .list();
+
+        return Result.suc(list);
     }
 
 }

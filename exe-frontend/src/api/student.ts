@@ -103,3 +103,12 @@ export function fetchBattleLeaderboard(): Promise<ApiResult<any[]>> {
         method: 'get'
     });
 }
+/**
+ * 【新增】获取我的对战记录
+ */
+export function fetchMyBattleRecords(): Promise<ApiResult<any[]>> {
+    return request({
+        url: '/api/v1/student/battle/records',
+        method: 'get'
+    });
+}
