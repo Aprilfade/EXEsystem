@@ -60,4 +60,19 @@ public class CultivationController {
         cultivationService.addExp(uid, 10); // 打坐加10点修为
         return Result.suc("打坐结束，吸纳天地灵气，修为 +10");
     }
+    // 【新增】天劫试炼突破接口
+    @PostMapping("/breakthrough-with-quiz")
+    public Result doBreakthroughWithQuiz(@RequestBody Map<String, Object> body, Authentication auth) {
+        Long uid = getCurrentStudentId(auth);
+        Long questionId = Long.valueOf(body.get("questionId").toString());
+        String answer = (String) body.get("answer");
+
+        try {
+            String msg = cultivationService.breakthroughWithQuiz(uid, questionId, answer);
+            return Result.suc(msg);
+        } catch (Exception e) {
+            // 失败时返回 400，并带上错误信息
+            return Result.fail(e.getMessage());
+        }
+    }
 }

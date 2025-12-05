@@ -21,3 +21,10 @@ export function breakthrough(): Promise<ApiResult<string>> {
 export function meditate(): Promise<ApiResult<string>> {
     return request({ url: '/api/v1/student/game/meditate', method: 'post' });
 }
+export function breakthroughWithQuiz(data: { questionId: number; answer: string }): Promise<ApiResult<string>> {
+    return request({
+        url: '/api/v1/student/game/breakthrough-with-quiz',
+        method: 'post',
+        data
+    });
+}

@@ -70,6 +70,7 @@
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -77,6 +78,10 @@
 import { ref, computed, onMounted } from 'vue';
 import { fetchGameProfile, breakthrough, meditate } from '@/api/game';
 import { ElMessage, ElNotification } from 'element-plus';
+import { fetchGameProfile, breakthrough, meditate, breakthroughWithQuiz } from '@/api/game'; // 导入新API
+import { fetchPracticeQuestions } from '@/api/studentAuth'; // 导入获取题目API
+import request from '@/utils/request'; // 如果 fetchPracticeQuestions 没有导出，可以用 request
+
 
 // 定义日志接口结构
 interface LogItem {
@@ -88,7 +93,11 @@ interface LogItem {
 const profile = ref<any>({ currentExp: 0, maxExp: 100, attack: 0, defense: 0, realmLevel: 0 });
 const realmName = ref('凡人');
 const logs = ref<LogItem[]>([]);
-
+// 【新增】天劫试炼相关状态
+const tribulationVisible = ref(false);
+const tribulationQuestion = ref<any>(null);
+const selectedAnswer = ref('');
+const tribulationLoading = ref(false);
 // 视觉状态控制
 const isBreaking = ref(false);
 const shakeEffect = ref(false);
@@ -164,51 +173,101 @@ const handleMeditate = async () => {
     }
   } catch(e){}
 };
-
+// 【修改】原本的 handleBreakthrough
 const handleBreakthrough = async () => {
   if (!canBreak.value) {
     ElMessage.warning('修为不足，切勿急躁，以免走火入魔！');
     return;
   }
 
-  // 开启突破特效
-  isBreaking.value = true;
+  // 1. 尝试获取“天劫题目”
+  // 这里为了简单，随机获取一道单选题。为了增加难度，你可以指定 subjectId 或特定 tag
+  try {
+    tribulationLoading.value = true;
+    // 假设获取当前用户年级的一道单选题
+    // 注意：你需要确保后端 fetchPracticeQuestions 支持 size 参数，或者获取列表后取第一个
+    const res = await fetchPracticeQuestions({
+      subjectId: 1, // 这里的ID最好动态获取用户的科目，或者让用户选
+      grade: '高三', // 同上
+      size: 1,
+      questionType: 1 // 只取单选
+    } as any);
 
-  // 模拟 1.5秒 的“渡劫”延迟感，配合CSS动画
+    if (res.code === 200 && res.data && res.data.length > 0) {
+      tribulationQuestion.value = res.data[0];
+      selectedAnswer.value = ''; // 重置答案
+      tribulationVisible.value = true; // 打开弹窗
+    } else {
+      // 获取题目失败（可能题库空了），降级为普通突破
+      doDirectBreakthrough();
+    }
+  } catch (e) {
+    console.error(e);
+    doDirectBreakthrough();
+  } finally {
+    tribulationLoading.value = false;
+  }
+};
+// 【新增】原有的直接突破逻辑（作为降级方案）
+const doDirectBreakthrough = async () => {
+  // ... 也就是你之前的 handleBreakthrough 里的 setTimeout ... 逻辑
+  // 这里可以保留，用于当无法获取题目时的备选
+  // 或者直接提示“天劫未至”（无法获取题目）
+  ElMessage.info('今日天象平和，无需试炼，直接尝试突破...');
+  // 接着走你原来的普通突破接口...
+};
+
+// 【新增】确认提交答案并突破
+const confirmBreakthrough = async () => {
+  if (!selectedAnswer.value) {
+    ElMessage.warning('请选择心中的道（答案）！');
+    return;
+  }
+
+  isBreaking.value = true; // 开启全屏特效
+
+  // 模拟一点延迟，营造紧张感
   setTimeout(async () => {
     try {
-      const res = await breakthrough();
-      isBreaking.value = false; // 关闭特效
+      const res = await breakthroughWithQuiz({
+        questionId: tribulationQuestion.value.id,
+        answer: selectedAnswer.value
+      });
+
+      isBreaking.value = false;
+      tribulationVisible.value = false; // 关闭弹窗
 
       if (res.code === 200) {
-        // 成功：播放喜庆提示
         ElNotification({
           title: '渡劫成功',
           message: res.data,
           type: 'success',
-          duration: 5000
+          duration: 6000
         });
-        addLog(`[大事件] ${res.data}`, 'success');
+        addLog(`[逆天改命] 答对天劫试题，${res.data}`, 'success');
+        // 播放音效
+        const audio = new Audio('/audio/win.mp3'); // 确保你有这个文件
+        audio.play().catch(()=>{});
         loadData();
-      } else {
-        // 失败（后端逻辑控制概率）：触发震动反馈
-        // 注意：这里虽然是 try，但如果后端返回 code!=200，通常 axios 拦截器会处理
-        // 如果拦截器 reject，则会进入 catch 块。如果拦截器 resolve 但 code!=200，则进入这里。
-        triggerShake();
-        ElMessage.error(res.msg);
-        addLog(res.msg || '渡劫失败', 'danger');
-        loadData(); // 失败也会扣除经验，需要刷新
       }
     } catch (e: any) {
       isBreaking.value = false;
-      triggerShake();
-      // 获取错误信息
-      const errorMsg = e.message || '天道干扰，突破中断';
-      addLog(errorMsg, 'danger');
-      loadData(); // 刷新数据（后端可能已经扣除了经验）
+      tribulationVisible.value = false;
+      triggerShake(); // 震动
+      // 后端返回 400 会进入这里
+      // 错误信息在 request 拦截器可能已经弹出了，这里记录日志
+      addLog(`[道心破碎] ${e.message || '渡劫失败'}`, 'danger');
+      const audio = new Audio('/audio/lose.mp3');
+      audio.play().catch(()=>{});
+      loadData(); // 刷新数据（因为扣了经验）
     }
-  }, 1500);
+  }, 1000);
 };
+
+
+
+
+
 
 const triggerShake = () => {
   shakeEffect.value = true;
@@ -436,5 +495,87 @@ onMounted(() => {
 .list-leave-to {
   opacity: 0;
   transform: translateX(-20px);
+}
+
+/* 天劫弹窗样式 */
+.tribulation-header {
+  text-align: center;
+  margin-bottom: 20px;
+  animation: shake 2s infinite; /* 让文字微微颤抖，增加紧张感 */
+}
+.thunder-icon {
+  font-size: 60px;
+  margin-bottom: 10px;
+}
+.warning-text {
+  color: #F56C6C;
+  font-weight: bold;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.exam-box {
+  background: #2c3e50;
+  padding: 20px;
+  border-radius: 8px;
+  color: #fff;
+  border: 2px solid #e6a23c;
+  box-shadow: 0 0 20px rgba(230, 162, 60, 0.3);
+}
+.q-tag {
+  background: #f56c6c;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.q-content {
+  font-size: 18px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+  font-weight: bold;
+}
+
+.options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+.opt-item {
+  background: rgba(255,255,255,0.1);
+  padding: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+}
+.opt-item:hover {
+  background: rgba(255,255,255,0.2);
+}
+.opt-item.selected {
+  background: rgba(230, 162, 60, 0.2);
+  border-color: #e6a23c;
+  box-shadow: 0 0 10px rgba(230, 162, 60, 0.4);
+}
+.opt-key {
+  font-weight: bold;
+  color: #e6a23c;
+  margin-right: 10px;
+  font-size: 18px;
+}
+
+.defy-btn {
+  width: 100%;
+  font-size: 18px;
+  letter-spacing: 2px;
+  background: linear-gradient(45deg, #f56c6c, #e6a23c);
+  border: none;
+}
+.defy-btn:hover {
+  opacity: 0.9;
+  transform: scale(1.02);
 }
 </style>
