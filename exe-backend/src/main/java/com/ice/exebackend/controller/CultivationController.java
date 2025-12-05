@@ -14,8 +14,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import com.ice.exebackend.exception.TribulationException;
+import com.ice.exebackend.entity.BizQuestion;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -103,14 +106,34 @@ public class CultivationController {
         return Result.suc(pills);
     }
 
-    // 【新增】使用丹药突破
     @PostMapping("/breakthrough-v2")
     public Result breakthroughWithItem(@RequestBody Map<String, Long> body, Authentication auth) {
         Long uid = getCurrentStudentId(auth);
-        Long goodsId = body.get("goodsId"); // 前端传 null 表示不使用
+        Long goodsId = body.get("goodsId");
         try {
             String msg = cultivationService.breakthroughWithItem(uid, goodsId);
             return Result.suc(msg);
+        } catch (TribulationException e) {
+            // 【核心】捕获心魔异常，返回特殊状态码 401 (或者自定义业务码如 2001)
+            // 这里为了前端方便识别，我们用 code: 202 代表 "需进一步操作"
+            Map<String, Object> data = new HashMap<>();
+            BizQuestion q = e.getQuestion();
+
+            // 简单脱敏，去掉答案
+            q.setAnswer(null);
+            q.setDescription(null);
+
+            data.put("message", "突破遭遇心魔！请回答问题以稳定道心！");
+            data.put("question", q);
+
+            // 返回 Result.result(code, msg, total, data)
+            // 我们复用 Result 类，假设它有全参构造或setter，这里用 Result.suc 的变体或手动构造
+            Result res = new Result();
+            res.setCode(202); // 202: Accepted / Need Action
+            res.setMsg("TRIBULATION_TRIGGERED");
+            res.setData(data);
+            return res;
+
         } catch (Exception e) {
             return Result.fail(e.getMessage());
         }

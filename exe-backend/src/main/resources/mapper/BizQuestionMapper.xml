@@ -36,4 +36,19 @@
         RAND()
         LIMIT #{limit}
     </select>
+
+    <select id="selectRandomWrongQuestion" resultType="com.ice.exebackend.entity.BizQuestion">
+        SELECT q.*
+        FROM biz_wrong_record wr
+                 JOIN biz_question q ON wr.question_id = q.id
+        WHERE wr.student_id = #{studentId} AND wr.is_mastered = 0
+        ORDER BY RAND()
+            LIMIT 1
+    </select>
+
+    <select id="selectRandomQuestion" resultType="com.ice.exebackend.entity.BizQuestion">
+        SELECT * FROM biz_question
+        ORDER BY RAND()
+            LIMIT 1
+    </select>
 </mapper>

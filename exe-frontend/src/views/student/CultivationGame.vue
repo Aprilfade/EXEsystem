@@ -111,19 +111,68 @@
       </template>
     </el-dialog>
 
+    <el-dialog
+        v-model="showDemonDialog"
+        title="👻 心魔劫 (最后的机会)"
+        width="500px"
+        :close-on-click-modal="false"
+        :close-on-press-escape="false"
+        :show-close="false"
+        center
+        class="demon-dialog"
+    >
+      <div class="demon-content">
+        <div class="demon-alert">
+          突破失败！心魔趁虚而入！<br/>
+          <small>答对下方题目可逆天改命，答错将修为大损！</small>
+        </div>
+
+        <div class="question-card" v-if="demonQuestion">
+          <div class="q-type">
+            <el-tag type="danger" size="small">心魔题</el-tag>
+          </div>
+          <div class="q-text" v-html="demonQuestion.content"></div>
+
+          <div v-if="[1, 2].includes(demonQuestion.questionType)" class="q-options">
+            <el-radio-group v-model="demonAnswer" class="option-group">
+              <el-radio
+                  v-for="opt in parseOptions(demonQuestion.options)"
+                  :key="opt.key"
+                  :label="opt.key"
+                  border
+                  class="demon-option"
+              >
+                {{ opt.key }}. {{ opt.value }}
+              </el-radio>
+            </el-radio-group>
+          </div>
+
+          <div v-if="demonQuestion.questionType === 4" class="q-options">
+            <el-radio-group v-model="demonAnswer">
+              <el-radio label="T" border>正确</el-radio>
+              <el-radio label="F" border>错误</el-radio>
+            </el-radio-group>
+          </div>
+
+          <div v-if="[3, 5].includes(demonQuestion.questionType)" class="q-input">
+            <el-input v-model="demonAnswer" placeholder="请输入答案" />
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button type="danger" size="large" :loading="answeringDemon" @click="submitDemonAnswer" class="demon-btn">
+          破除心魔
+        </el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { ElMessage, ElNotification } from 'element-plus';
-import {
-  fetchGameProfile,
-  meditate,
-  breakthroughWithItem,
-  fetchMyPills
-} from '@/api/game';
-
+import { fetchGameProfile, meditate, breakthroughWithItem, breakthroughWithQuiz, fetchMyPills } from '@/api/game';
 // 定义接口
 interface LogItem {
   id: number;
@@ -139,6 +188,12 @@ const isBreaking = ref(false);
 const shakeEffect = ref(false);
 const lastEventType = ref(''); // 控制打坐特效
 
+
+// 【新增】心魔相关状态
+const showDemonDialog = ref(false);
+const demonQuestion = ref<any>(null);
+const demonAnswer = ref('');
+const answeringDemon = ref(false);
 // 突破弹窗相关
 const showBreakDialog = ref(false);
 const myPills = ref<any[]>([]);
@@ -173,6 +228,17 @@ const baseSuccessRate = computed(() => {
   }
   return 0; // 飞升后或异常情况
 });
+
+
+// 解析选项的辅助函数
+const parseOptions = (optsStr: any) => {
+  if (!optsStr) return [];
+  try {
+    return typeof optsStr === 'string' ? JSON.parse(optsStr) : optsStr;
+  } catch (e) {
+    return [];
+  }
+};
 
 // 计算最终成功率
 const finalRate = computed(() => {
@@ -257,7 +323,7 @@ const openBreakDialog = async () => {
   showBreakDialog.value = true;
 };
 
-// 执行突破 (使用道具)
+// 修改 confirmBreakthroughWithItem 方法
 const confirmBreakthroughWithItem = async () => {
   breaking.value = true;
   try {
@@ -265,32 +331,83 @@ const confirmBreakthroughWithItem = async () => {
       goodsId: selectedPillId.value
     });
 
+    // 正常成功 (Code 200)
     if (res.code === 200) {
-      showBreakDialog.value = false;
-      isBreaking.value = true; // 播放全屏闪电特效
-
-      // 延迟显示结果，配合动画
-      setTimeout(() => {
-        isBreaking.value = false;
-        ElNotification({
-          title: '渡劫成功',
-          message: res.data,
-          type: 'success',
-          duration: 5000
-        });
-        addLog(res.data, 'success');
-        // 播放音效 (如果有)
-        // const audio = new Audio('/audio/win.mp3'); audio.play().catch(()=>{});
-        loadData();
-      }, 1500);
+      handleBreakSuccess(res.data);
+    }
+    // 【新增】触发心魔 (Code 202)
+    else if (res.code === 202) {
+      showBreakDialog.value = false; // 关闭准备弹窗
+      // 打开心魔弹窗
+      demonQuestion.value = res.data.question;
+      demonAnswer.value = ''; // 重置答案
+      showDemonDialog.value = true;
+      // 播放心魔音效或震动特效
+      triggerShake();
+      addLog('突破遭遇心魔阻拦！', 'danger');
+    }
+    else {
+      ElMessage.error(res.msg);
     }
   } catch (e: any) {
+    // 网络错误或其他异常
     showBreakDialog.value = false;
-    triggerShake();
-    addLog(`[道心破碎] ${e.message || '渡劫失败'}`, 'danger');
-    loadData();
+    addLog(`[异常] ${e.message}`, 'danger');
   } finally {
     breaking.value = false;
+  }
+};
+
+// 抽离成功处理逻辑
+const handleBreakSuccess = (msg: string) => {
+  showBreakDialog.value = false;
+  showDemonDialog.value = false; // 同时也关闭心魔
+  isBreaking.value = true; // 播放全屏特效
+
+  setTimeout(() => {
+    isBreaking.value = false;
+    ElNotification({
+      title: '突破成功',
+      message: msg,
+      type: 'success',
+      duration: 5000
+    });
+    addLog(msg, 'success');
+    loadData();
+  }, 1500);
+};
+// 【新增】提交心魔答案
+const submitDemonAnswer = async () => {
+  if (!demonAnswer.value) {
+    ElMessage.warning('请先给出你的答案！');
+    return;
+  }
+
+  answeringDemon.value = true;
+  try {
+    // 复用后端的 breakthroughWithQuiz 接口 (它会校验答案，对->doSuccess, 错->doFail)
+    const res = await breakthroughWithQuiz({
+      questionId: demonQuestion.value.id,
+      answer: demonAnswer.value
+    });
+
+    if (res.code === 200) {
+      // 答对了，逆天改命
+      handleBreakSuccess("心魔已破！" + res.data);
+    } else {
+      // 答错了 (Controller可能会返回200但msg是失败，或者抛异常)
+      // 如果你的接口设计是失败抛错，会进 catch
+      ElMessage.error(res.msg);
+    }
+  } catch (e: any) {
+    // 答错失败，后端已扣除经验
+    showDemonDialog.value = false;
+    triggerShake();
+    ElMessage.error('道心破碎！突破失败，修为大损！');
+    addLog('心魔试炼失败，修为倒退。', 'danger');
+    loadData();
+  } finally {
+    answeringDemon.value = false;
   }
 };
 
@@ -549,4 +666,67 @@ onMounted(() => {
 .high-rate { color: #67C23A; font-weight: bold; font-size: 22px; }
 .mid-rate { color: #E6A23C; font-weight: bold; font-size: 22px; }
 .low-rate { color: #F56C6C; font-weight: bold; font-size: 22px; }
+/* 心魔弹窗样式 */
+.demon-dialog :deep(.el-dialog__header) {
+  background-color: #2c3e50;
+  margin-right: 0;
+  padding: 20px;
+}
+.demon-dialog :deep(.el-dialog__title) {
+  color: #F56C6C;
+  font-weight: bold;
+  font-size: 24px;
+}
+.demon-content {
+  padding: 10px;
+  text-align: center;
+}
+.demon-alert {
+  font-size: 20px;
+  font-weight: bold;
+  color: #F56C6C;
+  margin-bottom: 20px;
+  animation: pulse 1s infinite;
+}
+.demon-alert small {
+  font-size: 14px;
+  color: #606266;
+  font-weight: normal;
+}
+
+.question-card {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  border: 2px solid #F56C6C;
+  text-align: left;
+  box-shadow: 0 4px 12px rgba(245, 108, 108, 0.2);
+}
+.q-text {
+  font-size: 16px;
+  margin: 15px 0;
+  font-weight: 600;
+}
+.option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.demon-option {
+  width: 100%;
+  margin-left: 0 !important;
+}
+.demon-btn {
+  width: 100%;
+  font-size: 18px;
+  letter-spacing: 2px;
+  background-color: #F56C6C;
+  border-color: #F56C6C;
+}
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
 </style>

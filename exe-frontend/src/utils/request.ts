@@ -38,19 +38,21 @@ service.interceptors.request.use(
         return Promise.reject(error);
     }
 );
-
-// 响应拦截器: 在每次接收到响应后执行
+// 响应拦截器
 service.interceptors.response.use(
     (response: AxiosResponse) => {
-        // ... 此部分代码保持不变 ...
         if (response.data instanceof Blob) {
             return response;
         }
         const res = response.data;
-        if (res.code !== 200) {
+
+        // 【修复点】：允许 code 200 (成功) 和 202 (特殊业务逻辑，如心魔) 通过
+        // 原代码：if (res.code !== 200) {
+        if (res.code !== 200 && res.code !== 202) {
             ElMessage.error(res.msg || 'Error');
+
+            // 401 token 失效处理 (保持不变)
             if (res.code === 401 || res.code === 40001) {
-                // 根据请求路径决定哪个store执行登出
                 if (response.config.url?.startsWith('/api/v1/student/')) {
                     useStudentAuthStore().logout();
                 } else {
@@ -59,10 +61,12 @@ service.interceptors.response.use(
             }
             return Promise.reject(new Error(res.msg || 'Error'));
         } else {
+            // 200 和 202 都会走到这里，返回给组件处理
             return res;
         }
     },
     (error) => {
+        // ... 错误处理保持不变 ...
         console.error('响应错误:', error);
         ElMessage.error(error.message);
         return Promise.reject(error);

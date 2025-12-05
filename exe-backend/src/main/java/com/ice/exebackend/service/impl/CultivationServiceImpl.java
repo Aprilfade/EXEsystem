@@ -6,6 +6,7 @@ import com.ice.exebackend.entity.*;
 import com.ice.exebackend.enums.RealmEnum;
 import com.ice.exebackend.mapper.BizCultivationMapper;
 import com.ice.exebackend.mapper.BizGoodsMapper;
+import com.ice.exebackend.mapper.BizQuestionMapper;
 import com.ice.exebackend.mapper.BizUserGoodsMapper;
 import com.ice.exebackend.service.BizQuestionService;
 import com.ice.exebackend.service.BizStudentService;
@@ -13,6 +14,7 @@ import com.ice.exebackend.service.CultivationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.ice.exebackend.exception.TribulationException; // 导入刚才建的异常
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -20,9 +22,18 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom; // 推荐使用 ThreadLocalRandom
+import org.slf4j.Logger; // 导入日志
+import org.slf4j.LoggerFactory;
+
+
+
+
 
 @Service
 public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, BizCultivation> implements CultivationService {
+
+
+    private static final Logger log = LoggerFactory.getLogger(CultivationServiceImpl.class);
 
     @Autowired
     private BizQuestionService questionService; // 注入题库服务用于校验答案
@@ -35,6 +46,9 @@ public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, Bi
 
     @Autowired
     private BizStudentService studentService; // 注入学生服务（用于发放积分奖励）
+
+    @Autowired
+    private BizQuestionMapper questionMapper; // 确保注入这个
 
 
     @Override
@@ -218,11 +232,27 @@ public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, Bi
 
         if (ThreadLocalRandom.current().nextDouble() < successRate) {
             doSuccess(profile);
-            // 成功后获取新的境界名称
             return "⚡️ 渡劫成功！" + itemMsg + " 晋升为【" + getRealmName(profile.getRealmLevel()) + "】！";
         } else {
-            doFail(profile);
-            throw new RuntimeException("💔 渡劫失败！" + itemMsg + " 天雷击碎了你的防御，修为受损！");
+            // 【修改点】失败时不直接 doFail，而是抛出心魔异常
+
+            // 1. 尝试获取一道错题
+            BizQuestion question = questionMapper.selectRandomWrongQuestion(studentId);
+
+            // 2. 如果没有错题，随机抽一道普通题
+            if (question == null) {
+                question = questionMapper.selectRandomQuestion();
+            }
+
+            // 3. 如果题库是空的 (极少见)，则直接失败
+            if (question == null) {
+                doFail(profile);
+                throw new RuntimeException("💔 渡劫失败！天雷击碎了你的防御，修为受损！");
+            }
+
+            // 4. 抛出心魔异常，携带题目
+            // 注意：这里不要调用 doFail，因为还有机会挽救
+            throw new TribulationException("天劫降临！心魔滋生！", question);
         }
     }
 
@@ -240,22 +270,49 @@ public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, Bi
     @Transactional
     public String breakthroughWithQuiz(Long studentId, Long questionId, String userAnswer) {
         BizCultivation profile = getById(studentId);
-        if (profile.getCurrentExp() < profile.getMaxExp()) {
-            throw new RuntimeException("修为不足，无法感应天劫！");
+
+        // 【优化1】移除严格的经验校验，或改为 warn 日志。
+        // 因为如果是“心魔”补救，此时可能因为并发或其他逻辑导致经验略有变动，不应直接阻断。
+        // 只要是当前境界的满经验附近即可（例如允许少一点点，或者干脆只在完全不够时才拦）
+        // 这里建议：如果是为了救场，只要等级没变，就允许尝试。
+        /* if (profile.getCurrentExp() < profile.getMaxExp()) {
+            // 如果你非常确定逻辑严密，可以保留，但为了防止死锁，建议先注释掉或放宽
+            // throw new RuntimeException("修为不足，无法感应天劫！");
         }
+        */
 
         BizQuestion question = questionService.getById(questionId);
         if (question == null) {
             throw new RuntimeException("天劫异象（题目不存在），请稍后再试");
         }
 
-        boolean isCorrect = question.getAnswer().trim().equalsIgnoreCase(userAnswer.trim());
+        // 【优化2】答案标准化处理 (兼容 T/F 和 正确/错误)
+        String dbAnswer = question.getAnswer().trim();
+        String input = userAnswer == null ? "" : userAnswer.trim();
+
+        // 判断题特殊兼容
+        if (question.getQuestionType() != null && question.getQuestionType() == 4) {
+            if ("T".equalsIgnoreCase(input)) input = "正确";
+            if ("F".equalsIgnoreCase(input)) input = "错误";
+
+            if ("T".equalsIgnoreCase(dbAnswer)) dbAnswer = "正确";
+            if ("F".equalsIgnoreCase(dbAnswer)) dbAnswer = "错误";
+        }
+
+        log.info("心魔校验 - 题目: {}, 用户输入(转换后): {}, 正确答案(转换后): {}", questionId, input, dbAnswer);
+
+        boolean isCorrect = dbAnswer.equalsIgnoreCase(input);
 
         if (isCorrect) {
+            // 答对了！
+            // 【关键】必须检查是否需要恢复被错误扣除的经验 (如果你的 breakthroughWithItem 误扣了的话)
+            // 但标准逻辑是：doSuccess 会自动重置当前经验为 0 (升级了)，所以不用手动恢复。
             doSuccess(profile);
             return "⚡️ 智慧破天劫！你答对了【天劫试炼】，成功晋升【" + getRealmName(profile.getRealmLevel()) + "】！";
         } else {
+            // 只有答错了，才执行失败惩罚
             doFail(profile);
+            // 抛出异常告诉前端
             throw new RuntimeException("💔 试炼失败！你的回答无法抗衡天劫（正确答案：" + question.getAnswer() + "），修为受损！");
         }
     }
