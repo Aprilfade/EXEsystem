@@ -76,7 +76,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { fetchGameProfile, breakthrough, meditate } from '@/api/game';
 import { ElMessage, ElNotification } from 'element-plus';
 import { fetchGameProfile, breakthrough, meditate, breakthroughWithQuiz } from '@/api/game'; // 导入新API
 import { fetchPracticeQuestions } from '@/api/studentAuth'; // 导入获取题目API
