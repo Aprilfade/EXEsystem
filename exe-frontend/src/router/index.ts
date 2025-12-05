@@ -167,8 +167,13 @@ const routes: Array<RouteRecordRaw> = [
                 name: 'StudentBattle',
                 component: () => import('@/views/student/Battle.vue'),
                 meta: { title: '知识对战' }
-            }
-
+            },
+            {
+                path: 'cultivation',
+                name: 'CultivationGame',
+                component: () => import('@/views/student/CultivationGame.vue'),
+                meta: { title: '文字修仙' }
+            },
 
 
         ]

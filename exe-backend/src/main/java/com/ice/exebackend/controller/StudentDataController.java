@@ -74,6 +74,8 @@ public class StudentDataController {
 
     @Autowired
     private BizBattleRecordService battleRecordService;
+    @Autowired
+    private com.ice.exebackend.service.CultivationService cultivationService; // 新增注
 
 
     @Autowired
@@ -280,6 +282,12 @@ public class StudentDataController {
         log.setDescription("完成了在线练习，共" + questionIds.size() + "道题");
         log.setCreateTime(LocalDateTime.now());
         learningActivityService.save(log);
+// --- 新增：修仙挂钩 ---
+// 基础分 10，每答对一题加 10 修为
+        int expGain = 10 + (correctCount * 10);
+        cultivationService.addExp(student.getId(), expGain);
+
+
         student.setPoints((student.getPoints() == null ? 0 : student.getPoints()) + 5);
         studentService.updateById(student);
 
