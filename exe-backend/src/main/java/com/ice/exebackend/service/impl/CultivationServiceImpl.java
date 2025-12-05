@@ -3,6 +3,7 @@ package com.ice.exebackend.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ice.exebackend.entity.*;
+import com.ice.exebackend.enums.RealmEnum;
 import com.ice.exebackend.mapper.BizCultivationMapper;
 import com.ice.exebackend.mapper.BizGoodsMapper;
 import com.ice.exebackend.mapper.BizUserGoodsMapper;
@@ -18,6 +19,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom; // 推荐使用 ThreadLocalRandom
 
 @Service
 public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, BizCultivation> implements CultivationService {
@@ -34,15 +36,6 @@ public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, Bi
     @Autowired
     private BizStudentService studentService; // 注入学生服务（用于发放积分奖励）
 
-    // 境界名称映射
-    private static final String[] REALM_NAMES = {
-            "凡人", "炼气期", "筑基期", "金丹期", "元婴期", "化神期", "炼虚期", "合体期", "大乘期", "渡劫期"
-    };
-
-    // 基础成功率配置 (索引对应境界等级，越后期越难)
-    private static final double[] BASE_SUCCESS_RATE = {
-            1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1
-    };
 
     @Override
     public BizCultivation getOrCreateProfile(Long studentId) {
@@ -50,13 +43,16 @@ public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, Bi
         if (profile == null) {
             profile = new BizCultivation();
             profile.setStudentId(studentId);
-            profile.setRealmLevel(0); // 凡人
+            profile.setRealmLevel(0); // 默认为凡人
+
+            // 【修改】从枚举获取初始配置
+            RealmEnum initRealm = RealmEnum.MORTAL;
             profile.setCurrentExp(0L);
-            profile.setMaxExp(100L); // 初始上限
+            profile.setMaxExp(initRealm.getBaseMaxExp());
             profile.setAttack(10);
             profile.setDefense(5);
-            // 初始化上次结算时间，避免新用户第一次登录就触发大量离线收益
             profile.setLastSettlementTime(LocalDateTime.now());
+
             this.save(profile);
         }
         return profile;
@@ -183,9 +179,6 @@ public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, Bi
         return result;
     }
 
-    /**
-     * 【新增】使用道具辅助突破
-     */
     @Override
     @Transactional
     public String breakthroughWithItem(Long studentId, Long goodsId) {
@@ -194,49 +187,38 @@ public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, Bi
             throw new RuntimeException("修为不足，无法感应天劫！当前需 " + profile.getMaxExp());
         }
 
-        // 获取当前境界的基础成功率
-        int currentRealm = profile.getRealmLevel();
-        double successRate = currentRealm < BASE_SUCCESS_RATE.length ? BASE_SUCCESS_RATE[currentRealm] : 0.1;
+        // 【修改】使用枚举获取当前境界的基础成功率
+        RealmEnum currentRealm = RealmEnum.getByLevel(profile.getRealmLevel());
+        double successRate = currentRealm.getSuccessRate();
         String itemMsg = "";
 
-        // --- 道具逻辑开始 ---
+        // --- 道具逻辑 (保持不变) ---
         if (goodsId != null) {
-            // 1. 校验背包是否有该道具
             QueryWrapper<BizUserGoods> query = new QueryWrapper<BizUserGoods>()
-                    .eq("student_id", studentId)
-                    .eq("goods_id", goodsId)
-                    .last("LIMIT 1");
+                    .eq("student_id", studentId).eq("goods_id", goodsId).last("LIMIT 1");
             BizUserGoods userGoods = userGoodsMapper.selectOne(query);
 
             if (userGoods != null) {
-                // 2. 获取道具详情，读取加成数值
                 BizGoods goods = goodsMapper.selectById(goodsId);
-                // 假设 type='PILL' 为丹药
                 if (goods != null && "PILL".equals(goods.getType())) {
-                    // 解析 resource_value (如 "0.2" 代表 +20%)
                     try {
                         double bonus = Double.parseDouble(goods.getResourceValue());
                         successRate += bonus;
                         itemMsg = "（" + goods.getName() + "护体，成功率+" + (int)(bonus * 100) + "%）";
-
-                        // 3. 消耗道具
                         userGoodsMapper.deleteById(userGoods.getId());
-                    } catch (NumberFormatException e) {
-                        // 防止配置错误导致崩溃，忽略该道具效果
-                    }
+                    } catch (NumberFormatException e) {}
                 }
             } else {
                 throw new RuntimeException("你的背包中没有该丹药！");
             }
         }
-        // --- 道具逻辑结束 ---
 
-        // 封顶 95% 成功率，保留一丝天意
+        // 封顶 95%
         successRate = Math.min(0.95, successRate);
 
-        // 随机判定
-        if (Math.random() < successRate) {
+        if (ThreadLocalRandom.current().nextDouble() < successRate) {
             doSuccess(profile);
+            // 成功后获取新的境界名称
             return "⚡️ 渡劫成功！" + itemMsg + " 晋升为【" + getRealmName(profile.getRealmLevel()) + "】！";
         } else {
             doFail(profile);
@@ -278,23 +260,39 @@ public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, Bi
         }
     }
 
-    // === 私有辅助方法：处理成功逻辑 ===
+    // === 私有辅助方法：处理成功逻辑 (核心修改) ===
     private void doSuccess(BizCultivation profile) {
-        int currentRealm = profile.getRealmLevel();
-
         // 1. 扣除升级所需的经验
-        profile.setCurrentExp(profile.getCurrentExp() - profile.getMaxExp());
+        profile.setCurrentExp(Math.max(0, profile.getCurrentExp() - profile.getMaxExp()));
 
-        // 2. 境界提升
-        profile.setRealmLevel(currentRealm + 1);
+        // 2. 等级提升
+        int newLevel = profile.getRealmLevel() + 1;
+        profile.setRealmLevel(newLevel);
 
-        // 3. 下一境界所需经验指数级提升 (1.8倍)
-        profile.setMaxExp((long)(profile.getMaxExp() * 1.8));
+        // 3. 获取新境界的配置
+        RealmEnum newRealm = RealmEnum.getByLevel(newLevel);
 
-        // 4. 属性大幅提升
-        int bonus = currentRealm + 1;
-        profile.setAttack(profile.getAttack() + 50 + (10 * bonus));
-        profile.setDefense(profile.getDefense() + 20 + (5 * bonus));
+        // 4. 【核心优化】计算新的经验上限
+        // 逻辑：如果是跨大境界（如炼气9 -> 筑基0），使用枚举定义的 baseMaxExp
+        // 如果是小境界提升（如炼气1 -> 炼气2），在当前基础上 * 1.2
+        if (newLevel % 10 == 0) {
+            // 跨大境界，直接使用新境界的基准值
+            profile.setMaxExp(newRealm.getBaseMaxExp());
+        } else {
+            // 小境界，平滑增长 (例如 1.2倍)
+            profile.setMaxExp((long)(profile.getMaxExp() * 1.2));
+        }
+
+        // 5. 【核心优化】属性提升
+        // 如果是跨大境界，获得枚举定义的巨额加成；如果是小境界，获得少量成长
+        if (newLevel % 10 == 0) {
+            profile.setAttack(profile.getAttack() + newRealm.getAtkBonus());
+            profile.setDefense(profile.getDefense() + newRealm.getDefBonus());
+        } else {
+            // 小境界成长：攻击+10%，防御+10% (或者固定值)
+            profile.setAttack((int)(profile.getAttack() * 1.1) + 10);
+            profile.setDefense((int)(profile.getDefense() * 1.1) + 5);
+        }
 
         this.updateById(profile);
     }
@@ -313,10 +311,14 @@ public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, Bi
 
     @Override
     public String getRealmName(int level) {
-        int bigRealm = level / 10;
-        int smallRealm = level % 10;
-        if(bigRealm >= REALM_NAMES.length) return "飞升仙界";
-        if (bigRealm == 0 && smallRealm == 0) return "凡人"; // 修正0级显示
-        return REALM_NAMES[bigRealm] + (smallRealm == 0 ? "初期" : smallRealm + "层");
+        // 【修改】使用枚举生成名称
+        RealmEnum realm = RealmEnum.getByLevel(level);
+        int smallLevel = level % 10;
+
+        if (realm == RealmEnum.MORTAL && smallLevel == 0) return "凡人";
+        if (realm == RealmEnum.ASCENSION) return realm.getName();
+
+        // 例如：炼气期 3层
+        return realm.getName() + (smallLevel == 0 ? "初期" : " " + smallLevel + "层");
     }
 }
