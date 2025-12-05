@@ -808,5 +808,47 @@ public class StudentDataController {
                 .list();
         return Result.suc(topStudents);
     }
+    /**
+     * 【新增】获取对战段位排行榜
+     */
+    @GetMapping("/battle/leaderboard")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result getBattleLeaderboard() {
+        // 1. 获取积分前 20 名的学生
+        List<BizStudent> topList = studentService.lambdaQuery()
+                .select(BizStudent::getName, BizStudent::getAvatar, BizStudent::getPoints, BizStudent::getAvatarFrameStyle)
+                .orderByDesc(BizStudent::getPoints)
+                .last("LIMIT 20")
+                .list();
+
+        // 2. 转换数据，计算段位
+        List<Map<String, Object>> resultList = topList.stream().map(s -> {
+            Map<String, Object> map = new java.util.HashMap<>();
+            map.put("name", s.getName());
+            map.put("avatar", s.getAvatar());
+            map.put("avatarFrameStyle", s.getAvatarFrameStyle());
+            int points = s.getPoints() == null ? 0 : s.getPoints();
+            map.put("points", points);
+
+            // 复用 BattleGameManager 的段位逻辑
+            String tier;
+            String tierName;
+            if (points >= 500) {
+                tier = "GOLD";
+                tierName = "最强王者";
+            } else if (points >= 200) {
+                tier = "SILVER";
+                tierName = "荣耀黄金";
+            } else {
+                tier = "BRONZE";
+                tierName = "倔强青铜";
+            }
+            map.put("tier", tier);
+            map.put("tierName", tierName);
+            return map;
+        }).collect(Collectors.toList());
+
+        return Result.suc(resultList);
+    }
 
 }

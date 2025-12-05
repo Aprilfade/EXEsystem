@@ -94,3 +94,12 @@ export function fetchMyAchievements(): Promise<ApiResult<any[]>> {
         method: 'get'
     });
 }
+/**
+ * 【新增】获取对战排行榜
+ */
+export function fetchBattleLeaderboard(): Promise<ApiResult<any[]>> {
+    return request({
+        url: '/api/v1/student/battle/leaderboard',
+        method: 'get'
+    });
+}
