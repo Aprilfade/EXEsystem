@@ -19,6 +19,9 @@ public class BizCultivation {
     private Long maxExp;
     private Integer attack;
     private Integer defense;
+
+    // 【新增】最大生命值字段
+    private Integer maxHp;
     private LocalDateTime updateTime;
     // 【新增】上次结算时间
     private LocalDateTime lastSettlementTime;
@@ -29,6 +32,11 @@ public class BizCultivation {
      */
     @TableField("spirit_roots")
     private String spiritRoots;
+
+
+    // 【新增】maxHp 的 Getter 和 Setter
+    public Integer getMaxHp() { return maxHp; }
+    public void setMaxHp(Integer maxHp) { this.maxHp = maxHp; }
 
     public String getSpiritRoots() {
         return spiritRoots;

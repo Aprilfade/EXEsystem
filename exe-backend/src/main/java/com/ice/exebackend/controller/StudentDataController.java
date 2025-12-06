@@ -301,19 +301,22 @@ public class StudentDataController {
 
         // ================== 【新增】灵根经验结算 START ==================
         // 只有答对题目才增加灵根经验
-        if (correctCount > 0 && !results.isEmpty()) {
+        // 【修改前】 if (correctCount > 0 && !results.isEmpty()) {
+        // 【修改后】 ↓↓↓
+        if (correctCount > 0 && !answerResults.isEmpty()) {
+
             // 假设一次练习的所有题目属于同一个科目（取第一题的科目即可）
             // 注意：results 中包含 AnswerResult，AnswerResult 中包含 BizQuestion
-            BizQuestion firstQ = results.get(0).getQuestion();
+            // 【修改前】 BizQuestion firstQ = results.get(0).getQuestion();
+            // 【修改后】 ↓↓↓
+            BizQuestion firstQ = answerResults.get(0).getQuestion();
+
             if (firstQ != null && firstQ.getSubjectId() != null) {
                 BizSubject subject = subjectService.getById(firstQ.getSubjectId());
                 if (subject != null) {
                     // 练习模式：每答对1题增加 2 点灵根经验
                     int spiritExp = correctCount * 2;
                     cultivationService.addSpiritRootExp(student.getId(), subject.getName(), spiritExp);
-                    // (可选) 将灵根获取情况放入返回结果，供前端提示
-                    // resultDTO.setSpiritExpGain(spiritExp);
-                    // resultDTO.setSpiritName(subject.getName());
                 }
             }
         }

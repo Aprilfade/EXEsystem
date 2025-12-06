@@ -17,6 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ice.exebackend.exception.TribulationException; // 导入刚才建的异常
 
+// 【新增】导入 Fastjson 相关类
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.TypeReference;
+
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;

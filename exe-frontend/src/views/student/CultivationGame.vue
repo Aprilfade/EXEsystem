@@ -1,894 +1,514 @@
 <template>
-  <div class="cultivation-container">
-    <div v-if="isBreaking" class="effect-overlay lightning-effect"></div>
+  <div class="cultivation-container p-4 h-[calc(100vh-100px)]">
+    <el-row :gutter="20" class="h-full">
+      <el-col :span="6" class="h-full">
+        <el-card class="h-full flex flex-col box-card-custom" :body-style="{ height: '100%', display: 'flex', flexDirection: 'column' }">
+          <template #header>
+            <div class="flex items-center justify-between">
+              <span class="text-lg font-bold">道友信息</span>
+              <el-tag type="warning" effect="dark" class="text-md">{{ profile.realmName || '凡人' }}</el-tag>
+            </div>
+          </template>
 
-    <div class="game-panel" :class="{ shake: shakeEffect }">
-      <div class="panel-left">
-        <div class="character-box">
-          <div class="meditation-visual" :class="'aura-' + Math.min(profile.realmLevel || 0, 9)">
-            🧘
+          <div class="flex flex-col items-center mb-6 mt-4">
+            <el-avatar :size="100" :src="userStore.userInfo?.avatar || ''" class="mb-4 border-4 border-blue-100 shadow-md">
+              {{ userStore.userInfo?.realName?.charAt(0) }}
+            </el-avatar>
+            <h2 class="text-2xl font-bold text-gray-700">{{ userStore.userInfo?.realName }}</h2>
           </div>
-          <div class="realm-title">{{ realmName }}</div>
-        </div>
 
-        <div class="stats-box">
-          <div class="stat-row">
-            <span>攻击力(道法):</span> <strong>{{ profile.attack }}</strong>
-          </div>
-          <div class="stat-row">
-            <span>防御力(道心):</span> <strong>{{ profile.defense }}</strong>
-          </div>
-        </div>
-      </div>
+          <div class="stats-area flex-1 overflow-y-auto pr-2">
+            <div class="mb-6">
+              <div class="flex justify-between text-sm mb-1 text-gray-500">
+                <span>修为进度</span>
+                <span>{{ profile.currentExp }} / {{ profile.maxExp }}</span>
+              </div>
+              <el-progress
+                  :percentage="calculateProgress(profile.currentExp, profile.maxExp)"
+                  :stroke-width="18"
+                  striped
+                  striped-flow
+                  :format="formatProgress"
+                  color="#409eff"
+              />
+            </div>
 
-      <div class="panel-right">
-        <h2 class="sect-title">我的洞府</h2>
+            <el-divider content-position="left">基础属性</el-divider>
 
-        <div class="spirit-panel">
-          <div class="spirit-header">
-            <span>五行灵根</span>
-            <el-tooltip content="刷对应学科题目可提升灵根，增加战斗属性" placement="top">
-              <el-icon><InfoFilled /></el-icon>
-            </el-tooltip>
-          </div>
-          <div class="spirit-grid">
-            <div
-                v-for="item in spiritConfig"
-                :key="item.key"
-                class="spirit-card"
-                :class="item.class"
-            >
-              <div class="sp-icon">{{ item.icon }}</div>
-              <div class="sp-info">
-                <div class="sp-name">{{ item.name }} <span class="sp-sub">({{ item.subject }})</span></div>
-                <div class="sp-attr">{{ item.attr }} Lv.{{ getSpiritInfo(item.key).level }}</div>
-                <el-progress
-                    :percentage="getSpiritInfo(item.key).progress"
-                    :show-text="false"
-                    :stroke-width="4"
-                    class="sp-progress"
-                />
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div class="stat-item bg-red-50 p-3 rounded-lg text-center">
+                <div class="text-xs text-gray-500 mb-1">攻击力</div>
+                <div class="text-xl font-bold text-red-500">{{ profile.attack || 0 }}</div>
+              </div>
+              <div class="stat-item bg-green-50 p-3 rounded-lg text-center">
+                <div class="text-xs text-gray-500 mb-1">防御力</div>
+                <div class="text-xl font-bold text-green-500">{{ profile.defense || 0 }}</div>
+              </div>
+              <div class="stat-item bg-orange-50 p-3 rounded-lg text-center col-span-2">
+                <div class="text-xs text-gray-500 mb-1">最大生命值 (HP)</div>
+                <div class="text-xl font-bold text-orange-500">{{ profile.maxHp || 100 }}</div>
               </div>
             </div>
-          </div>
-        </div>
 
-
-
-
-
-        <div class="exp-section">
-          <div class="exp-label">修为进度 ({{ profile.currentExp }} / {{ profile.maxExp }})</div>
-          <el-progress
-              :percentage="expPercentage"
-              :format="formatExp"
-              :stroke-width="15"
-              striped
-              striped-flow
-              color="#67C23A"
-          />
-        </div>
-
-        <div class="action-grid">
-          <div class="action-card" @click="handleMeditate" :class="{ 'glow-gold': lastEventType === 'LUCKY' }">
-            <div class="icon">🧘</div>
-            <div class="name">静心打坐</div>
-            <div class="desc">机缘与风险并存</div>
-          </div>
-
-          <div class="action-card" @click="$router.push('/student/practice')">
-            <div class="icon">⚔️</div>
-            <div class="name">外出历练</div>
-            <div class="desc">去题库刷题获取大量修为</div>
-          </div>
-
-          <div class="action-card highlight" @click="openBreakDialog" :class="{ disabled: !canBreak, 'pulse-anim': canBreak }">
-            <div class="icon">⚡</div>
-            <div class="name">境界突破</div>
-            <div class="desc" v-if="canBreak">瓶颈松动 (点击渡劫)</div>
-            <div class="desc" v-else>修为不足，需积累至 {{ profile.maxExp }}</div>
-          </div>
-        </div>
-
-        <div class="log-box" ref="logBoxRef">
-          <div class="log-title">
-            修仙日志
-            <el-button link size="small" @click="clearLogs" style="float: right; padding: 0;">清空</el-button>
-          </div>
-          <transition-group name="list" tag="div">
-            <div v-for="log in logs" :key="log.id" class="log-item" :class="log.type">
-              {{ log.content }}
+            <el-divider content-position="left">灵根资质</el-divider>
+            <div class="flex flex-wrap gap-2">
+              <template v-if="Object.keys(spiritRoots).length > 0">
+                <el-tooltip
+                    v-for="(level, type) in spiritRoots"
+                    :key="type"
+                    :content="`等级: ${level} (加成效果)`"
+                >
+                  <el-tag :type="getSpiritType(type)" class="text-md py-1 px-3" effect="light">
+                    {{ type }} Lv.{{ level }}
+                  </el-tag>
+                </el-tooltip>
+              </template>
+              <div v-else class="text-gray-400 text-sm w-full text-center">暂无灵根觉醒</div>
             </div>
-          </transition-group>
-        </div>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="12" class="h-full">
+        <el-card class="h-full flex flex-col relative overflow-hidden" :body-style="{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }">
+
+          <div class="absolute top-10 left-0 w-full text-center opacity-5 pointer-events-none select-none">
+            <span class="text-[150px] font-bold text-gray-900">修仙</span>
+          </div>
+
+          <div class="z-10 text-center mb-10">
+            <h1 class="text-3xl font-bold text-gray-800 mb-4">{{ gameStateText }}</h1>
+            <p class="text-gray-500 text-lg max-w-md mx-auto">{{ currentEventDescription }}</p>
+          </div>
+
+          <div class="z-10 flex flex-col gap-6 items-center w-full max-w-sm">
+
+            <el-button
+                type="primary"
+                class="w-full h-20 text-2xl shadow-lg transition-all hover:scale-105"
+                :loading="isMeditating"
+                @click="handleMeditate"
+                v-if="!canBreakthrough"
+                round
+            >
+              <el-icon class="mr-2"><VideoPlay /></el-icon>
+              {{ isMeditating ? '打坐中...' : '开始打坐 (+修为)' }}
+            </el-button>
+
+            <el-button
+                v-else
+                type="warning"
+                class="w-full h-24 text-3xl shadow-xl animate-pulse"
+                @click="handleBreakthrough()"
+                round
+            >
+              <el-icon class="mr-2"><Lightning /></el-icon>
+              境界突破！
+            </el-button>
+
+            <div class="flex gap-4 w-full">
+              <el-button class="flex-1 h-12 text-lg" @click="handlePractice">
+                <el-icon class="mr-1"><Edit /></el-icon> 练题悟道
+              </el-button>
+              <el-button class="flex-1 h-12 text-lg" type="success" plain @click="showShop = true">
+                <el-icon class="mr-1"><Shop /></el-icon> 坊市交易
+              </el-button>
+            </div>
+          </div>
+
+          <div class="absolute bottom-6 text-gray-400 text-sm">
+            <el-icon><InfoFilled /></el-icon> 提示：练题可获得大量灵根经验，提升属性加成
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="6" class="h-full">
+        <el-card class="h-full flex flex-col" :body-style="{ height: '100%', display: 'flex', flexDirection: 'column', padding: '0' }">
+          <el-tabs v-model="activeRightTab" class="flex-1 flex flex-col custom-tabs" stretch>
+
+            <el-tab-pane label="储物袋" name="bag" class="h-full flex flex-col">
+              <div class="p-4 flex-1 overflow-y-auto">
+                <div v-if="bagItems.length > 0" class="grid grid-cols-3 gap-2">
+                  <div
+                      v-for="item in bagItems"
+                      :key="item.id"
+                      class="aspect-square bg-gray-50 border rounded-lg flex flex-col items-center justify-center p-1 cursor-pointer hover:bg-blue-50 transition-colors relative group"
+                      @click="useItem(item)"
+                  >
+                    <div class="text-2xl mb-1">💊</div>
+                    <div class="text-xs text-center truncate w-full px-1">{{ item.name || item.goodsName }}</div>
+
+                    <div class="absolute hidden group-hover:block bottom-full left-1/2 transform -translate-x-1/2 bg-black text-white text-xs p-2 rounded w-32 z-50 mb-1 pointer-events-none">
+                      {{ item.description || '暂无描述' }}
+                    </div>
+                  </div>
+                </div>
+                <el-empty v-else description="储物袋空空如也" :image-size="60"></el-empty>
+              </div>
+            </el-tab-pane>
+
+            <el-tab-pane label="修仙日志" name="log" class="h-full flex flex-col">
+              <div class="p-4 flex-1 overflow-y-auto bg-gray-50 font-mono text-sm" ref="logContainer">
+                <ul class="space-y-2">
+                  <li v-for="(log, index) in logs" :key="index" class="border-b border-gray-100 pb-1 last:border-0">
+                    <span class="text-gray-400 text-xs">[{{ formatTime(new Date()) }}]</span>
+                    <span :class="getLogClass(log)"> {{ log }}</span>
+                  </li>
+                </ul>
+              </div>
+            </el-tab-pane>
+
+          </el-tabs>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-dialog v-model="showTribulation" title="⚠️ 心魔挑战 (天劫)" width="600px" :close-on-click-modal="false" :show-close="false" center>
+      <div class="text-center mb-6">
+        <p class="text-lg font-bold text-red-600 mb-2">天劫降临！回答正确方可突破！</p>
+        <p class="text-gray-600" v-html="currentQuestion?.content"></p>
       </div>
-    </div>
 
-    <el-dialog v-model="showBreakDialog" title="⚡ 渡劫准备" width="420px" append-to-body>
-      <div class="break-modal">
-        <div class="info-row">
-          <span>当前境界：</span><strong>{{ realmName }}</strong>
-        </div>
-        <div class="info-row">
-          <span>基础成功率：</span><span class="rate-text">{{ baseSuccessRate }}%</span>
-        </div>
-
-        <el-divider content-position="left">天材地宝辅助</el-divider>
-
-        <el-select v-model="selectedPillId" placeholder="选择丹药护体 (可选)" clearable style="width: 100%">
-          <el-option
-              v-for="pill in myPills"
-              :key="pill.id"
-              :label="pill.name + ' (成功率+' + (parseFloat(pill.resourceValue)*100).toFixed(0) + '%)'"
-              :value="pill.id"
-          />
-        </el-select>
-        <div v-if="myPills.length === 0" class="no-pill-tip">
-          背包空空如也，可去 <el-button link type="primary" @click="$router.push('/student/points-mall')">积分商城</el-button> 兑换
-        </div>
-
-        <div class="final-rate-box">
-          预计最终成功率：
-          <span :class="finalRate > 80 ? 'high-rate' : (finalRate < 40 ? 'low-rate' : 'mid-rate')">
-             {{ finalRate }}%
-           </span>
-        </div>
-      </div>
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="showBreakDialog = false">暂缓</el-button>
-          <el-button type="danger" :loading="breaking" @click="confirmBreakthroughWithItem">
-            逆天而行 (开始)
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
-
-    <el-dialog
-        v-model="showDemonDialog"
-        title="👻 心魔劫 (最后的机会)"
-        width="500px"
-        :close-on-click-modal="false"
-        :close-on-press-escape="false"
-        :show-close="false"
-        center
-        class="demon-dialog"
-    >
-      <div class="demon-content">
-        <div class="demon-alert">
-          突破失败！心魔趁虚而入！<br/>
-          <small>答对下方题目可逆天改命，答错将修为大损！</small>
-        </div>
-
-        <div class="question-card" v-if="demonQuestion">
-          <div class="q-type">
-            <el-tag type="danger" size="small">心魔题</el-tag>
-          </div>
-          <div class="q-text" v-html="demonQuestion.content"></div>
-
-          <div v-if="[1, 2].includes(demonQuestion.questionType)" class="q-options">
-            <el-radio-group v-model="demonAnswer" class="option-group">
-              <el-radio
-                  v-for="opt in parseOptions(demonQuestion.options)"
-                  :key="opt.key"
-                  :label="opt.key"
-                  border
-                  class="demon-option"
-              >
-                {{ opt.key }}. {{ opt.value }}
-              </el-radio>
-            </el-radio-group>
-          </div>
-
-          <div v-if="demonQuestion.questionType === 4" class="q-options">
-            <el-radio-group v-model="demonAnswer">
-              <el-radio label="T" border>正确</el-radio>
-              <el-radio label="F" border>错误</el-radio>
-            </el-radio-group>
-          </div>
-
-          <div v-if="[3, 5].includes(demonQuestion.questionType)" class="q-input">
-            <el-input v-model="demonAnswer" placeholder="请输入答案" />
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <el-button type="danger" size="large" :loading="answeringDemon" @click="submitDemonAnswer" class="demon-btn">
-          破除心魔
+      <div class="grid grid-cols-1 gap-3" v-if="currentQuestionOptions.length > 0">
+        <el-button
+            v-for="opt in currentQuestionOptions"
+            :key="opt.key"
+            size="large"
+            @click="answerTribulation(opt.key)"
+            :class="{'w-full': true}"
+        >
+          {{ opt.key }}. {{ opt.value }}
         </el-button>
-      </template>
+      </div>
+      <div class="flex gap-4 justify-center" v-else-if="currentQuestion?.questionType === 4">
+        <el-button type="success" size="large" @click="answerTribulation('T')">正确</el-button>
+        <el-button type="danger" size="large" @click="answerTribulation('F')">错误</el-button>
+      </div>
+      <div v-else class="text-center text-gray-500">
+        (此题型暂不支持快速作答)
+      </div>
     </el-dialog>
 
+    <el-dialog v-model="showShop" title="灵石坊市" width="800px">
+      <el-table :data="shopGoods" style="width: 100%">
+        <el-table-column prop="name" label="宝物名称" width="180" />
+        <el-table-column prop="price" label="价格 (积分)" width="120">
+          <template #default="scope">
+            <span class="text-orange-500 font-bold">{{ scope.row.price }} 灵石</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="description" label="功效" />
+        <el-table-column label="操作" width="120">
+          <template #default="scope">
+            <el-button type="primary" size="small" @click="handleBuyGoods(scope.row)">购买</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted, computed, nextTick } from 'vue';
+import { useUserStore } from '../../stores/auth';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElNotification } from 'element-plus';
-import { fetchGameProfile, meditate, breakthroughWithItem, breakthroughWithQuiz, fetchMyPills } from '@/api/game';
-// 引入图标（如果没有自动引入，可能需要手动import）
-import { Monitor, Reading, ChatDotRound, Lightning, Sunny } from '@element-plus/icons-vue';
-import { InfoFilled } from '@element-plus/icons-vue';
+import { VideoPlay, Lightning, Edit, Shop, InfoFilled } from '@element-plus/icons-vue';
 
+// 【修复 1】引入 api/game.ts 中的 fetchMyPills 用于获取背包（丹药）
+import {
+  fetchGameProfile,
+  meditate,
+  breakthroughWithItem,
+  breakthroughWithQuiz,
+  fetchMyPills
+} from '../../api/game';
 
+// 【修复 2】引入 api/goods.ts 中的正确方法 (fetchGoodsList 和 exchangeGoods)
+import {
+  fetchGoodsList,
+  exchangeGoods
+} from '../../api/goods';
 
-
-// 定义接口
-interface LogItem {
-  id: number;
-  content: string;
-  type: 'info' | 'success' | 'danger' | 'event';
+// 类型定义
+interface CultivationProfile {
+  realmLevel: number;
+  realmName: string;
+  currentExp: number;
+  maxExp: number;
+  attack: number;
+  defense: number;
+  maxHp: number;
+  spiritRoots: string;
 }
 
+interface BagItem {
+  id: number; // 商品ID
+  name: string;
+  description?: string;
+  count?: number;
+  goodsName?: string;
+}
+
+const router = useRouter();
+const userStore = useUserStore();
+
 // 状态变量
-const profile = ref<any>({ currentExp: 0, maxExp: 100, attack: 0, defense: 0, realmLevel: 0 });
-const realmName = ref('凡人');
-const logs = ref<LogItem[]>([]);
-const isBreaking = ref(false);
-const shakeEffect = ref(false);
-const lastEventType = ref(''); // 控制打坐特效
+const profile = ref<CultivationProfile>({} as CultivationProfile);
+const spiritRoots = ref<Record<string, number>>({});
+const bagItems = ref<BagItem[]>([]);
+const shopGoods = ref([]);
+const logs = ref<string[]>(['欢迎来到修仙世界，道途漫漫，唯勤是岸。']);
+const isMeditating = ref(false);
+const showShop = ref(false);
+const showTribulation = ref(false);
+const currentQuestion = ref<any>(null);
+const activeRightTab = ref('bag'); // 默认显示背包
+const logContainer = ref<HTMLElement | null>(null);
 
-
-// 【新增】心魔相关状态
-const showDemonDialog = ref(false);
-const demonQuestion = ref<any>(null);
-const demonAnswer = ref('');
-const answeringDemon = ref(false);
-// 突破弹窗相关
-const showBreakDialog = ref(false);
-const myPills = ref<any[]>([]);
-const selectedPillId = ref<number | undefined>(undefined);
-const breaking = ref(false);
-
-// 计算属性
-const expPercentage = computed(() => {
-  if (profile.value.maxExp === 0) return 100;
-  let p = (profile.value.currentExp / profile.value.maxExp) * 100;
-  return p > 100 ? 100 : p;
+// 计算属性：状态文本
+const gameStateText = computed(() => {
+  if (canBreakthrough.value) return '瓶颈期 - 需突破';
+  if (isMeditating.value) return '正在打坐吐纳...';
+  return '道心稳固';
 });
 
-const canBreak = computed(() => (profile.value.currentExp || 0) >= (profile.value.maxExp || 1));
-
-const formatExp = () => `${profile.value.currentExp}/${profile.value.maxExp}`;
-
-// 基础成功率 (需与后端 RealmEnum 逻辑保持一致)
-const baseSuccessRate = computed(() => {
-  const lvl = profile.value.realmLevel || 0;
-
-  // 【修复】核心修改：先除以 10 获取大境界索引，再查表
-  const realmIndex = Math.floor(lvl / 10);
-
-  // 对应 RealmEnum:
-  // 0:凡人(100%), 1:炼气(90%), 2:筑基(80%), 3:金丹(70%), 4:元婴(60%)
-  // 5:化神(50%), 6:炼虚(40%), 7:合体(30%), 8:大乘(20%), 9:渡劫(10%)
-  const rates = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10];
-
-  if (realmIndex < rates.length) {
-    return rates[realmIndex];
-  }
-  return 0; // 飞升后或异常情况
+const currentEventDescription = computed(() => {
+  if (canBreakthrough.value) return '修为已至圆满，感应到天劫将至，请准备丹药或直接尝试突破！';
+  if (isMeditating.value) return '天地灵气正在汇聚入体...';
+  return '当前无事发生，你可以选择打坐、练题或整理行囊。';
 });
 
+// 计算是否可以突破
+const canBreakthrough = computed(() => {
+  return profile.value.currentExp >= profile.value.maxExp;
+});
 
-// 解析选项的辅助函数
-const parseOptions = (optsStr: any) => {
-  if (!optsStr) return [];
+// 解析题目选项
+const currentQuestionOptions = computed(() => {
+  if (!currentQuestion.value || !currentQuestion.value.options) return [];
   try {
-    return typeof optsStr === 'string' ? JSON.parse(optsStr) : optsStr;
+    const opts = JSON.parse(currentQuestion.value.options);
+    if (Array.isArray(opts)) return opts;
+    return [];
   } catch (e) {
     return [];
   }
-};
-
-// 计算最终成功率
-const finalRate = computed(() => {
-  let rate = baseSuccessRate.value;
-  if (selectedPillId.value) {
-    const pill = myPills.value.find((p: any) => p.id === selectedPillId.value);
-    if (pill) {
-      rate += (parseFloat(pill.resourceValue) * 100);
-    }
-  }
-  return Math.min(95, rate); // 封顶95%
 });
 
-// --- 方法实现 ---
-
-const loadData = async () => {
-  const res = await fetchGameProfile();
-  if (res.code === 200) {
-    profile.value = res.data.data;
-    realmName.value = res.data.realmName;
-
-    // 【新增】处理离线收益
-    const afk = res.data.afkReward;
-    if (afk && afk !== 'NONE') {
-      ElNotification({
-        title: '闭关收益',
-        message: `道友离线闭关 ${afk.minutes} 分钟，自动运转周天，获得修为 +${afk.exp}`,
-        type: 'success',
-        duration: 6000
-      });
-      addLog(`[离线] 闭关 ${afk.minutes} 分钟，获得修为 +${afk.exp}`, 'success');
-    }
-  }
+// 辅助函数
+const formatProgress = (percentage: number) => {
+  if (percentage >= 100) return '圆满';
+  return `${percentage}%`;
 };
 
-const handleMeditate = async () => {
+const calculateProgress = (current: number, max: number) => {
+  if (!max) return 0;
+  return Math.min(Math.floor((current / max) * 100), 100);
+};
+
+const formatTime = (date: Date) => {
+  return date.toTimeString().split(' ')[0];
+};
+
+const getSpiritType = (type: string) => {
+  const map: Record<string, string> = {
+    '金': 'warning', '木': 'success', '水': 'primary', '火': 'danger', '土': 'info'
+  };
+  return map[type] || '';
+};
+
+const getLogClass = (text: string) => {
+  if (text.includes('失败') || text.includes('天劫')) return 'text-red-500';
+  if (text.includes('成功') || text.includes('突破')) return 'text-green-600 font-bold';
+  if (text.includes('获得')) return 'text-orange-500';
+  return 'text-gray-700';
+};
+
+const addLog = (msg: string) => {
+  logs.value.push(msg);
+  nextTick(() => {
+    if (logContainer.value) {
+      logContainer.value.scrollTop = logContainer.value.scrollHeight;
+    }
+  });
+};
+
+// API 调用
+const loadProfile = async () => {
   try {
-    const res = await meditate();
-    if (res.code === 200) {
-      // 后端返回结构: { msg: string, type: string }
-      const data = res.data;
+    const res = await fetchGameProfile();
+    if (res.data) {
+      profile.value = res.data.data || res.data;
+      if (res.data.realmName) profile.value.realmName = res.data.realmName;
 
-      // 触发特效
-      lastEventType.value = data.type;
-      setTimeout(() => lastEventType.value = '', 1000);
-
-      if (data.type === 'LUCKY') {
-        ElMessage.success(data.msg);
-        addLog(data.msg, 'event'); // 金色日志
-      } else if (data.type === 'BAD') {
-        ElMessage.error(data.msg);
-        triggerShake();
-        addLog(data.msg, 'danger');
-      } else {
-        ElMessage.info(data.msg);
-        addLog(data.msg, 'info');
+      if (profile.value.spiritRoots) {
+        try {
+          spiritRoots.value = JSON.parse(profile.value.spiritRoots);
+        } catch (e) {
+          spiritRoots.value = {};
+        }
       }
-      loadData();
     }
-  } catch (e) {
-    // 错误处理
+  } catch (error) {
+    console.error(error);
   }
 };
 
-// 打开突破弹窗
-const openBreakDialog = async () => {
-  if (!canBreak.value) {
-    ElMessage.warning('修为不足，切勿急躁！');
-    return;
-  }
-  // 获取背包中的丹药
+const loadBag = async () => {
   try {
     const res = await fetchMyPills();
-    if (res.code === 200) {
-      myPills.value = res.data || [];
-    }
+    bagItems.value = res.data || [];
+  } catch(e) {
+    console.error(e);
+  }
+};
+
+const loadShop = async () => {
+  try {
+    const res = await fetchGoodsList();
+    shopGoods.value = res.data || [];
+  } catch(e) {
+    console.error(e);
+  }
+};
+
+// 核心功能
+const handleMeditate = async () => {
+  isMeditating.value = true;
+  addLog('开始打坐，运转周天...');
+  try {
+    const res = await meditate();
+    setTimeout(() => {
+      if (res.code === 200) {
+        const gainMsg = typeof res.data === 'string' ? res.data : (res.data.msg || '修为提升');
+        addLog(`打坐结束: ${gainMsg}`);
+        loadProfile();
+      } else {
+        addLog(`打坐被打断：${res.msg}`);
+      }
+      isMeditating.value = false;
+    }, 1000);
   } catch (e) {
-    myPills.value = [];
+    isMeditating.value = false;
   }
-
-  selectedPillId.value = undefined;
-  showBreakDialog.value = true;
 };
 
-// 修改 confirmBreakthroughWithItem 方法
-const confirmBreakthroughWithItem = async () => {
-  breaking.value = true;
+const handleBreakthrough = async (itemId?: number) => {
   try {
-    const res = await breakthroughWithItem({
-      goodsId: selectedPillId.value
-    });
-
-    // 正常成功 (Code 200)
-    if (res.code === 200) {
-      handleBreakSuccess(res.data);
-    }
-    // 【新增】触发心魔 (Code 202)
-    else if (res.code === 202) {
-      showBreakDialog.value = false; // 关闭准备弹窗
-      // 打开心魔弹窗
-      demonQuestion.value = res.data.question;
-      demonAnswer.value = ''; // 重置答案
-      showDemonDialog.value = true;
-      // 播放心魔音效或震动特效
-      triggerShake();
-      addLog('突破遭遇心魔阻拦！', 'danger');
-    }
-    else {
-      ElMessage.error(res.msg);
-    }
-  } catch (e: any) {
-    // 网络错误或其他异常
-    showBreakDialog.value = false;
-    addLog(`[异常] ${e.message}`, 'danger');
-  } finally {
-    breaking.value = false;
-  }
-};
-
-// 抽离成功处理逻辑
-const handleBreakSuccess = (msg: string) => {
-  showBreakDialog.value = false;
-  showDemonDialog.value = false; // 同时也关闭心魔
-  isBreaking.value = true; // 播放全屏特效
-
-  setTimeout(() => {
-    isBreaking.value = false;
-    ElNotification({
-      title: '突破成功',
-      message: msg,
-      type: 'success',
-      duration: 5000
-    });
-    addLog(msg, 'success');
-    loadData();
-  }, 1500);
-};
-// 【新增】提交心魔答案
-const submitDemonAnswer = async () => {
-  if (!demonAnswer.value) {
-    ElMessage.warning('请先给出你的答案！');
-    return;
-  }
-
-  answeringDemon.value = true;
-  try {
-    // 复用后端的 breakthroughWithQuiz 接口 (它会校验答案，对->doSuccess, 错->doFail)
-    const res = await breakthroughWithQuiz({
-      questionId: demonQuestion.value.id,
-      answer: demonAnswer.value
-    });
+    const res = await breakthroughWithItem({ goodsId: itemId });
 
     if (res.code === 200) {
-      // 答对了，逆天改命
-      handleBreakSuccess("心魔已破！" + res.data);
+      ElNotification({
+        title: '突破成功',
+        message: '恭喜道友境界提升！',
+        type: 'success',
+      });
+      addLog('突破成功！境界提升！属性大幅增加！');
+      loadProfile();
+    } else if (res.code === 202) {
+      // 触发心魔答题
+      showTribulation.value = true;
+      currentQuestion.value = res.data.question;
+      addLog('突破遭遇心魔侵蚀，需通过考验！');
     } else {
-      // 答错了 (Controller可能会返回200但msg是失败，或者抛异常)
-      // 如果你的接口设计是失败抛错，会进 catch
       ElMessage.error(res.msg);
+      addLog(`突破失败：${res.msg}`);
     }
   } catch (e: any) {
-    // 答错失败，后端已扣除经验
-    showDemonDialog.value = false;
-    triggerShake();
-    ElMessage.error('道心破碎！突破失败，修为大损！');
-    addLog('心魔试炼失败，修为倒退。', 'danger');
-    loadData();
-  } finally {
-    answeringDemon.value = false;
+    ElMessage.error(e.message || '系统异常');
   }
 };
 
-
-
-// 1. 灵根相关计算属性
-// 解析后端返回的 JSON 字符串 (profile.value.spiritRoots)
-const spiritRootsData = computed(() => {
-  if (!profile.value?.spiritRoots) return {};
+const answerTribulation = async (option: string) => {
   try {
-    return typeof profile.value.spiritRoots === 'string'
-        ? JSON.parse(profile.value.spiritRoots)
-        : profile.value.spiritRoots;
+    const res = await breakthroughWithQuiz({
+      questionId: currentQuestion.value.id,
+      answer: option
+    });
+
+    if (res.code === 200) {
+      ElMessage.success('心魔已破，渡劫成功！');
+      showTribulation.value = false;
+      loadProfile();
+      addLog('回答正确，成功破除心魔，境界提升！');
+    } else {
+      ElMessage.error(res.msg || '回答错误');
+    }
+  } catch (e: any) {
+    ElMessage.error('回答错误，渡劫失败，修为受损！');
+    showTribulation.value = false;
+    loadProfile();
+    addLog('回答错误，心魔反噬，修为倒退！');
+  }
+};
+
+const handlePractice = () => {
+  router.push('/student/practice');
+};
+
+const handleBuyGoods = async (item: any) => {
+  try {
+    // 【修复】使用 exchangeGoods 兑换商品
+    await exchangeGoods(item.id);
+    ElMessage.success('购买成功');
+    addLog(`在坊市购得 [${item.name}]`);
+    loadBag(); // 刷新背包
   } catch (e) {
-    return {};
+    // 错误由 request 拦截器处理
   }
-});
-
-// 计算等级 Helper：例如 经验/100 开根号，或者每100经验升1级
-// 这里假设每 50 点经验升 1 级
-const calculateLevel = (exp: number) => Math.floor((exp || 0) / 50);
-
-// 计算进度条百分比 (当前经验 % 50) / 50
-const calculateProgress = (exp: number) => {
-  const current = (exp || 0) % 50;
-  return Math.floor((current / 50) * 100);
 };
 
-// 定义五行配置：包含名称、对应学科、图标、颜色类名
-const spiritConfig = [
-  { key: 'METAL', name: '金灵根', subject: '数学', icon: '⚔️', attr: '攻击力', class: 'metal' },
-  { key: 'WOOD',  name: '木灵根', subject: '语文', icon: '🌿', attr: '生命值', class: 'wood' },
-  { key: 'WATER', name: '水灵根', subject: '英语', icon: '💧', attr: '速度',   class: 'water' },
-  { key: 'FIRE',  name: '火灵根', subject: '理综', icon: '🔥', attr: '暴击',   class: 'fire' },
-  { key: 'EARTH', name: '土灵根', subject: '文综', icon: '🛡️', attr: '防御力', class: 'earth' },
-];
+const useItem = (item: BagItem) => {
+  const itemName = item.name || item.goodsName || '';
 
-// 获取某个灵根的当前数据
-const getSpiritInfo = (key: string) => {
-  const exp = spiritRootsData.value[key] || 0;
-  return {
-    level: calculateLevel(exp),
-    progress: calculateProgress(exp),
-    totalExp: exp
-  };
-};
-
-// --- 日志与辅助 ---
-const addLog = (msg: string, type: 'info' | 'success' | 'danger' | 'event' = 'info') => {
-  const time = new Date().toLocaleTimeString();
-  logs.value.unshift({
-    id: Date.now(),
-    content: `[${time}] ${msg}`,
-    type
-  });
-  if (logs.value.length > 50) logs.value.pop();
-  localStorage.setItem('cultivation_logs', JSON.stringify(logs.value));
-};
-
-const loadLogs = () => {
-  const saved = localStorage.getItem('cultivation_logs');
-  if (saved) {
-    try { logs.value = JSON.parse(saved); } catch (e) { logs.value = []; }
+  if (canBreakthrough.value) {
+    if (itemName.includes('丹') || itemName.includes('药')) {
+      ElMessage.info(`尝试使用 ${itemName} 辅助突破...`);
+      // 注意：breakthroughWithItem 需要的是 goodsId (商品ID)，
+      // api/game.ts 的 items 结构通常为 BizGoods 对象，直接传 item.id 即可
+      handleBreakthrough(item.id);
+    } else {
+      ElMessage.warning('此物品无法直接使用');
+    }
   } else {
-    addLog('欢迎回到修仙界，道友请入座。', 'info');
+    ElMessage.info('当前状态无需使用此物');
   }
-};
-
-const clearLogs = () => {
-  logs.value = [];
-  localStorage.removeItem('cultivation_logs');
-};
-
-const triggerShake = () => {
-  shakeEffect.value = true;
-  setTimeout(() => shakeEffect.value = false, 500);
 };
 
 onMounted(() => {
-  loadLogs();
-  loadData();
+  loadProfile();
+  loadBag();
+  loadShop();
 });
 </script>
 
 <style scoped>
-/* 原有基础样式保持不变... */
-.cultivation-container {
-  padding: 20px;
-  background: url('https://cdn.pixabay.com/photo/2016/11/14/03/46/fog-1822509_1280.jpg') center/cover no-repeat fixed;
-  min-height: calc(100vh - 60px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.game-panel {
-  width: 900px;
-  height: 600px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  display: flex;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  overflow: hidden;
-  position: relative;
-}
-
-/* === 新增特效样式 === */
-
-/* 打坐奇遇金光特效 */
-.glow-gold {
-  animation: glow 0.8s ease-in-out;
-  box-shadow: 0 0 20px #ffd700 !important;
-  border-color: #ffd700 !important;
-  background-color: #fffbf0 !important;
-}
-@keyframes glow {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); box-shadow: 0 0 30px #ffd700; }
-  100% { transform: scale(1); }
-}
-
-/* 震动动画 */
-.shake {
-  animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
-}
-@keyframes shake {
-  10%, 90% { transform: translate3d(-1px, 0, 0); }
-  20%, 80% { transform: translate3d(2px, 0, 0); }
-  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-  40%, 60% { transform: translate3d(4px, 0, 0); }
-}
-
-/* 呼吸灯 */
-.pulse-anim {
-  animation: pulse-border 2s infinite;
-  border-color: #e6a23c !important;
-}
-@keyframes pulse-border {
-  0% { box-shadow: 0 0 0 0 rgba(230, 162, 60, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(230, 162, 60, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(230, 162, 60, 0); }
-}
-
-/* 境界光环 */
-.aura-0 { text-shadow: 0 0 10px #fff; }
-.aura-1 { text-shadow: 0 0 15px #aaffaa; color: #aaffaa; }
-.aura-2 { text-shadow: 0 0 20px #00ffff; color: #00ffff; }
-.aura-3 { text-shadow: 0 0 25px #ffff00; color: #ffff00; }
-.aura-4 { text-shadow: 0 0 30px #ffaa00; color: #ffaa00; }
-.aura-5 { text-shadow: 0 0 35px #ff0000; color: #ff0000; }
-
-/* 闪电 */
-.lightning-effect {
-  position: fixed;
-  top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(255, 255, 255, 0.8);
-  z-index: 9999;
-  animation: lightning 0.2s infinite;
-  pointer-events: none;
-}
-@keyframes lightning {
-  0% { opacity: 0; background: #fff; }
-  10% { opacity: 0.8; }
-  20% { opacity: 0; background: #000; }
-  30% { opacity: 0.5; }
-  100% { opacity: 0; }
-}
-
-/* 左侧面板 */
-.panel-left {
-  width: 300px;
-  background: linear-gradient(180deg, #2c3e50 0%, #000000 100%);
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 40px 20px;
-}
-.meditation-visual {
-  font-size: 80px;
-  margin-bottom: 20px;
-  animation: float 3s ease-in-out infinite;
-}
-@keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
-}
-.realm-title {
-  font-size: 28px;
-  font-weight: bold;
-  color: #ffd700;
-  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
-  margin-bottom: 40px;
-}
-.stats-box {
-  width: 100%;
-  background: rgba(255,255,255,0.1);
-  padding: 20px;
-  border-radius: 8px;
-}
-.stat-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  font-size: 16px;
-}
-
-/* 右侧面板 */
-.panel-right {
-  flex: 1;
-  padding: 30px;
-  display: flex;
-  flex-direction: column;
-}
-.sect-title {
-  margin: 0 0 20px 0;
-  color: #333;
-  border-left: 5px solid #409eff;
-  padding-left: 10px;
-}
-.exp-section { margin-bottom: 30px; }
-.exp-label { margin-bottom: 8px; color: #666; font-size: 14px; }
-.action-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 15px;
-  margin-bottom: 20px;
-}
-.action-card {
-  border: 1px solid #dcdfe6;
-  border-radius: 8px;
-  padding: 15px;
-  text-align: center;
-  cursor: pointer;
+.box-card-custom {
   transition: all 0.3s;
-  background: #fff;
-}
-.action-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-.action-card .icon { font-size: 32px; margin-bottom: 5px; }
-.action-card .name { font-weight: bold; color: #303133; }
-.action-card .desc { font-size: 12px; color: #909399; margin-top: 4px; }
-.action-card.highlight {
-  border-color: #e6a23c;
-  background: #fdf6ec;
-}
-.action-card.highlight.disabled {
-  filter: grayscale(100%);
-  opacity: 0.7;
-  cursor: not-allowed;
-  border-color: #dcdfe6;
-  background: #f5f7fa;
 }
 
-/* 日志区域 */
-.log-box {
+/* 隐藏滚动条但保持可滚动 */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 3px;
+}
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 自定义 Element Tabs 样式使其充满高度 */
+:deep(.el-tabs__content) {
   flex: 1;
-  background: #f5f7fa;
-  border-radius: 4px;
-  padding: 10px;
-  overflow-y: auto;
-  border: 1px solid #eee;
-  font-size: 13px;
-}
-.log-title {
-  font-weight: bold;
-  margin-bottom: 8px;
-  color: #303133;
-}
-.log-item {
-  margin-bottom: 4px;
-  border-bottom: 1px dashed #e0e0e0;
-  padding-bottom: 2px;
-  color: #606266;
-}
-.log-item.success { color: #67C23A; font-weight: bold; }
-.log-item.danger { color: #F56C6C; font-weight: bold; }
-.log-item.event { color: #E6A23C; font-weight: bold; }
-
-/* 列表动画 */
-.list-enter-active, .list-leave-active { transition: all 0.5s ease; }
-.list-enter-from, .list-leave-to { opacity: 0; transform: translateX(-20px); }
-
-/* 弹窗样式 */
-.break-modal { padding: 10px; font-size: 16px; }
-.info-row { margin-bottom: 10px; }
-.rate-text { font-weight: bold; color: #F56C6C; }
-.no-pill-tip { font-size: 12px; color: #909399; margin-top: 8px; }
-.final-rate-box {
-  margin-top: 25px;
-  text-align: right;
-  font-size: 15px;
-  border-top: 1px solid #eee;
-  padding-top: 15px;
-}
-.high-rate { color: #67C23A; font-weight: bold; font-size: 22px; }
-.mid-rate { color: #E6A23C; font-weight: bold; font-size: 22px; }
-.low-rate { color: #F56C6C; font-weight: bold; font-size: 22px; }
-/* 心魔弹窗样式 */
-.demon-dialog :deep(.el-dialog__header) {
-  background-color: #2c3e50;
-  margin-right: 0;
-  padding: 20px;
-}
-.demon-dialog :deep(.el-dialog__title) {
-  color: #F56C6C;
-  font-weight: bold;
-  font-size: 24px;
-}
-.demon-content {
-  padding: 10px;
-  text-align: center;
-}
-.demon-alert {
-  font-size: 20px;
-  font-weight: bold;
-  color: #F56C6C;
-  margin-bottom: 20px;
-  animation: pulse 1s infinite;
-}
-.demon-alert small {
-  font-size: 14px;
-  color: #606266;
-  font-weight: normal;
-}
-
-.question-card {
-  background: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  border: 2px solid #F56C6C;
-  text-align: left;
-  box-shadow: 0 4px 12px rgba(245, 108, 108, 0.2);
-}
-.q-text {
-  font-size: 16px;
-  margin: 15px 0;
-  font-weight: 600;
-}
-.option-group {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  align-items: flex-start;
+  padding: 0 !important;
+  height: 100%;
 }
-.demon-option {
-  width: 100%;
-  margin-left: 0 !important;
-}
-.demon-btn {
-  width: 100%;
-  font-size: 18px;
-  letter-spacing: 2px;
-  background-color: #F56C6C;
-  border-color: #F56C6C;
-}
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-/* 五行灵根面板样式 */
-.spirit-panel {
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 20px;
-  border: 1px solid #ebeef5;
-}
-
-.spirit-header {
-  font-size: 15px;
-  font-weight: bold;
-  color: #303133;
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.spirit-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr); /* 5列布局 */
-  gap: 10px;
-}
-
-.spirit-card {
-  background: #fff;
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  transition: transform 0.2s;
-}
-
-.spirit-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-/* 五行配色边框 */
-.spirit-card.metal { border-top: 3px solid #ffd700; } /* 金 */
-.spirit-card.wood { border-top: 3px solid #67c23a; }  /* 木 */
-.spirit-card.water { border-top: 3px solid #409eff; } /* 水 */
-.spirit-card.fire { border-top: 3px solid #f56c6c; }  /* 火 */
-.spirit-card.earth { border-top: 3px solid #909399; } /* 土 */
-
-.sp-icon {
-  font-size: 20px;
-  margin-bottom: 4px;
-}
-
-.sp-info {
-  width: 100%;
-}
-
-.sp-name {
-  font-size: 12px;
-  font-weight: bold;
-  color: #303133;
-}
-.sp-sub {
-  font-size: 10px;
-  color: #909399;
-  font-weight: normal;
-}
-
-.sp-attr {
-  font-size: 10px;
-  color: #606266;
-  margin: 2px 0 4px;
-}
-
-.sp-progress {
-  margin-top: 2px;
+:deep(.el-tab-pane) {
+  height: 100%;
 }
 </style>

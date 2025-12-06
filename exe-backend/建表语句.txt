@@ -667,3 +667,6 @@ INSERT INTO `biz_goods` (`name`, `description`, `price`, `image_url`, `type`, `r
 
 ALTER TABLE biz_cultivation
 ADD COLUMN spirit_roots VARCHAR(1024) DEFAULT '{}' COMMENT '灵根数据JSON: {"METAL": 100, "WOOD": 20} 存储的是经验值';
+
+ALTER TABLE `biz_cultivation`
+ADD COLUMN `max_hp` INT DEFAULT 100 COMMENT '最大生命值';
