@@ -13,7 +13,6 @@
           <el-menu-item index="/student/wrong-records">我的错题本</el-menu-item>
           <el-menu-item index="/student/practice">在线练习</el-menu-item>
           <el-menu-item index="/student/battle"><el-icon><Lightning /></el-icon> 知识对战</el-menu-item>
-          <el-menu-item index="/student/cultivation"><el-icon><Moon /></el-icon> 洞府修炼</el-menu-item>
           <el-menu-item index="/student/exams">模拟考试</el-menu-item>
           <el-menu-item index="/student/favorites">我的收藏</el-menu-item>
         </el-menu>
@@ -51,29 +50,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'; // 【修改】导入 ref
+import { ref } from 'vue';
 import { computed } from 'vue';
 import { useStudentAuthStore } from '@/stores/studentAuth';
-import {School, ArrowDown, Lightning, Moon} from '@element-plus/icons-vue';
+import {School, ArrowDown, Lightning} from '@element-plus/icons-vue'; // 【修改】删除 Moon
 import { onMounted, onUnmounted } from 'vue';
 import { useNotificationSocketStore } from '@/stores/notificationSocket';
-// 【新增】导入我们新创建的弹窗组件
 import ProfileEditDialog from '@/components/student/ProfileEditDialog.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
 
 const studentAuth = useStudentAuthStore();
-// 【新增】控制弹窗显示的变量
 const isProfileDialogVisible = ref(false);
 
 const handleCommand = (command: string) => {
   if (command === 'logout') {
     studentAuth.logout();
   } else if (command === 'profile') {
-    // 【修改】点击后，将变量设为 true 来显示弹窗
     isProfileDialogVisible.value = true;
   }
 };
-// 【核心】计算背景样式
+
 const layoutStyle = computed(() => {
   const bgUrl = studentAuth.student?.backgroundUrl;
   if (bgUrl) {
@@ -84,18 +80,16 @@ const layoutStyle = computed(() => {
       backgroundPosition: 'center'
     };
   }
-  return {}; // 没有设置则使用默认 CSS 中的背景
+  return {};
 });
 
 const socketStore = useNotificationSocketStore();
 
 onMounted(() => {
-  // 页面加载时尝试连接 WebSocket
   socketStore.connect();
 });
 
 onUnmounted(() => {
-  // 页面卸载时断开
   socketStore.disconnect();
 });
 </script>
