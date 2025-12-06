@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ice.exebackend.entity.*;
 import com.ice.exebackend.enums.RealmEnum;
+import com.ice.exebackend.enums.SpiritRootEnum;
 import com.ice.exebackend.mapper.BizCultivationMapper;
 import com.ice.exebackend.mapper.BizGoodsMapper;
 import com.ice.exebackend.mapper.BizQuestionMapper;
@@ -69,6 +70,8 @@ public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, Bi
 
             this.save(profile);
         }
+        // 【新增】应用灵根加成
+        applySpiritRootBonuses(profile);
         return profile;
     }
 
@@ -378,4 +381,82 @@ public class CultivationServiceImpl extends ServiceImpl<BizCultivationMapper, Bi
         // 例如：炼气期 3层
         return realm.getName() + (smallLevel == 0 ? "初期" : " " + smallLevel + "层");
     }
+    // 解析灵根数据
+    private Map<String, Integer> parseSpiritRoots(String json) {
+        if (json == null || json.isEmpty()) {
+            return new HashMap<>();
+        }
+        return JSON.parseObject(json, new TypeReference<Map<String, Integer>>(){});
+    }
+
+    // 根据经验值计算等级 (例如: 等级 = 根号(经验/10))
+    private int calculateLevel(int exp) {
+        return (int) Math.sqrt(exp / 10.0);
+    }
+
+    // 计算灵根带来的属性加成
+    private void applySpiritRootBonuses(BizCultivation profile) {
+        Map<String, Integer> roots = parseSpiritRoots(profile.getSpiritRoots());
+
+        // 基础属性
+        int baseAttack = profile.getAttack() != null ? profile.getAttack() : 0;
+        int baseDefense = profile.getDefense() != null ? profile.getDefense() : 0;
+        int baseHp = profile.getMaxHp() != null ? profile.getMaxHp() : 100;
+
+        // 遍历枚举计算加成
+        for (SpiritRootEnum root : SpiritRootEnum.values()) {
+            int exp = roots.getOrDefault(root.name(), 0);
+            int level = calculateLevel(exp);
+
+            if (level > 0) {
+                switch (root) {
+                    case METAL: // 金生攻
+                        baseAttack += level * 5; // 每级加5点攻击
+                        break;
+                    case EARTH: // 土生防
+                        baseDefense += level * 3; // 每级加3点防御
+                        break;
+                    case WOOD: // 木生血
+                        baseHp += level * 20; // 每级加20点血
+                        break;
+                    // 水和火的特殊属性（暴击/速度）可能需要你在 Cultivation 实体里加新字段，
+                    // 这里暂时把火加到攻击，水加到防御演示
+                    case FIRE:
+                        baseAttack += level * 8; // 火系攻击加成更高
+                        break;
+                    case WATER:
+                        baseDefense += level * 2;
+                        break;
+                }
+            }
+        }
+
+        // 更新内存中的对象（不存库，只用于返回给前端展示或战斗计算）
+        profile.setAttack(baseAttack);
+        profile.setDefense(baseDefense);
+        profile.setMaxHp(baseHp);
+    }
+    @Override
+    public void addSpiritRootExp(Long studentId, String subjectName, int score) {
+        BizCultivation profile = getOrCreateProfile(studentId);
+        Map<String, Integer> roots = parseSpiritRoots(profile.getSpiritRoots());
+
+        // 1. 匹配灵根
+        SpiritRootEnum rootType = SpiritRootEnum.matchBySubject(subjectName);
+
+        // 2. 计算增加的经验 (假设分数即经验，可调整系数)
+        int expGain = score;
+
+        // 3. 更新数据
+        String key = rootType.name();
+        int currentExp = roots.getOrDefault(key, 0);
+        roots.put(key, currentExp + expGain);
+
+        // 4. 保存回数据库
+        profile.setSpiritRoots(JSON.toJSONString(roots));
+        this.updateById(profile);
+
+        // 可以在这里通过 WebSocket 推送通知： "恭喜！你的金灵根经验 +10"
+    }
+
 }

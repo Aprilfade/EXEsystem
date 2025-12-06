@@ -3,6 +3,7 @@ package com.ice.exebackend.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
 import lombok.Data;
 import java.time.LocalDateTime;
 
@@ -21,6 +22,22 @@ public class BizCultivation {
     private LocalDateTime updateTime;
     // 【新增】上次结算时间
     private LocalDateTime lastSettlementTime;
+    /**
+     * 五行灵根数据 (JSON存储)
+     * Key: 属性 (METAL, WOOD, WATER, FIRE, EARTH)
+     * Value: 经验值 (Integer)
+     */
+    @TableField("spirit_roots")
+    private String spiritRoots;
+
+    public String getSpiritRoots() {
+        return spiritRoots;
+    }
+
+    public void setSpiritRoots(String spiritRoots) {
+        this.spiritRoots = spiritRoots;
+    }
+
 
     // ... 手动 Getter/Setter (如果未启用 Lombok) ...
     public LocalDateTime getLastSettlementTime() { return lastSettlementTime; }

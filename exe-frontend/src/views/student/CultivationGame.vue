@@ -24,6 +24,39 @@
       <div class="panel-right">
         <h2 class="sect-title">我的洞府</h2>
 
+        <div class="spirit-panel">
+          <div class="spirit-header">
+            <span>五行灵根</span>
+            <el-tooltip content="刷对应学科题目可提升灵根，增加战斗属性" placement="top">
+              <el-icon><InfoFilled /></el-icon>
+            </el-tooltip>
+          </div>
+          <div class="spirit-grid">
+            <div
+                v-for="item in spiritConfig"
+                :key="item.key"
+                class="spirit-card"
+                :class="item.class"
+            >
+              <div class="sp-icon">{{ item.icon }}</div>
+              <div class="sp-info">
+                <div class="sp-name">{{ item.name }} <span class="sp-sub">({{ item.subject }})</span></div>
+                <div class="sp-attr">{{ item.attr }} Lv.{{ getSpiritInfo(item.key).level }}</div>
+                <el-progress
+                    :percentage="getSpiritInfo(item.key).progress"
+                    :show-text="false"
+                    :stroke-width="4"
+                    class="sp-progress"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+
+
+
         <div class="exp-section">
           <div class="exp-label">修为进度 ({{ profile.currentExp }} / {{ profile.maxExp }})</div>
           <el-progress
@@ -173,6 +206,13 @@
 import { ref, computed, onMounted } from 'vue';
 import { ElMessage, ElNotification } from 'element-plus';
 import { fetchGameProfile, meditate, breakthroughWithItem, breakthroughWithQuiz, fetchMyPills } from '@/api/game';
+// 引入图标（如果没有自动引入，可能需要手动import）
+import { Monitor, Reading, ChatDotRound, Lightning, Sunny } from '@element-plus/icons-vue';
+import { InfoFilled } from '@element-plus/icons-vue';
+
+
+
+
 // 定义接口
 interface LogItem {
   id: number;
@@ -409,6 +449,50 @@ const submitDemonAnswer = async () => {
   } finally {
     answeringDemon.value = false;
   }
+};
+
+
+
+// 1. 灵根相关计算属性
+// 解析后端返回的 JSON 字符串 (profile.value.spiritRoots)
+const spiritRootsData = computed(() => {
+  if (!profile.value?.spiritRoots) return {};
+  try {
+    return typeof profile.value.spiritRoots === 'string'
+        ? JSON.parse(profile.value.spiritRoots)
+        : profile.value.spiritRoots;
+  } catch (e) {
+    return {};
+  }
+});
+
+// 计算等级 Helper：例如 经验/100 开根号，或者每100经验升1级
+// 这里假设每 50 点经验升 1 级
+const calculateLevel = (exp: number) => Math.floor((exp || 0) / 50);
+
+// 计算进度条百分比 (当前经验 % 50) / 50
+const calculateProgress = (exp: number) => {
+  const current = (exp || 0) % 50;
+  return Math.floor((current / 50) * 100);
+};
+
+// 定义五行配置：包含名称、对应学科、图标、颜色类名
+const spiritConfig = [
+  { key: 'METAL', name: '金灵根', subject: '数学', icon: '⚔️', attr: '攻击力', class: 'metal' },
+  { key: 'WOOD',  name: '木灵根', subject: '语文', icon: '🌿', attr: '生命值', class: 'wood' },
+  { key: 'WATER', name: '水灵根', subject: '英语', icon: '💧', attr: '速度',   class: 'water' },
+  { key: 'FIRE',  name: '火灵根', subject: '理综', icon: '🔥', attr: '暴击',   class: 'fire' },
+  { key: 'EARTH', name: '土灵根', subject: '文综', icon: '🛡️', attr: '防御力', class: 'earth' },
+];
+
+// 获取某个灵根的当前数据
+const getSpiritInfo = (key: string) => {
+  const exp = spiritRootsData.value[key] || 0;
+  return {
+    level: calculateLevel(exp),
+    progress: calculateProgress(exp),
+    totalExp: exp
+  };
 };
 
 // --- 日志与辅助 ---
@@ -728,5 +812,83 @@ onMounted(() => {
   0% { transform: scale(1); }
   50% { transform: scale(1.05); }
   100% { transform: scale(1); }
+}
+/* 五行灵根面板样式 */
+.spirit-panel {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+  border: 1px solid #ebeef5;
+}
+
+.spirit-header {
+  font-size: 15px;
+  font-weight: bold;
+  color: #303133;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.spirit-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* 5列布局 */
+  gap: 10px;
+}
+
+.spirit-card {
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: transform 0.2s;
+}
+
+.spirit-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* 五行配色边框 */
+.spirit-card.metal { border-top: 3px solid #ffd700; } /* 金 */
+.spirit-card.wood { border-top: 3px solid #67c23a; }  /* 木 */
+.spirit-card.water { border-top: 3px solid #409eff; } /* 水 */
+.spirit-card.fire { border-top: 3px solid #f56c6c; }  /* 火 */
+.spirit-card.earth { border-top: 3px solid #909399; } /* 土 */
+
+.sp-icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.sp-info {
+  width: 100%;
+}
+
+.sp-name {
+  font-size: 12px;
+  font-weight: bold;
+  color: #303133;
+}
+.sp-sub {
+  font-size: 10px;
+  color: #909399;
+  font-weight: normal;
+}
+
+.sp-attr {
+  font-size: 10px;
+  color: #606266;
+  margin: 2px 0 4px;
+}
+
+.sp-progress {
+  margin-top: 2px;
 }
 </style>

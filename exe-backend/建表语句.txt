@@ -663,3 +663,7 @@ UPDATE `biz_cultivation` SET last_settlement_time = NOW() WHERE last_settlement_
 INSERT INTO `biz_goods` (`name`, `description`, `price`, `image_url`, `type`, `resource_value`, `is_enabled`) VALUES
 ('筑基丹', '突破辅助：增加 20% 突破成功率', 100, 'https://cdn-icons-png.flaticon.com/512/3055/3055374.png', 'PILL', '0.20', 1),
 ('天雷子', '突破辅助：强行抵消天劫，增加 40% 成功率', 300, 'https://cdn-icons-png.flaticon.com/512/1175/1175470.png', 'PILL', '0.40', 1);
+
+
+ALTER TABLE biz_cultivation
+ADD COLUMN spirit_roots VARCHAR(1024) DEFAULT '{}' COMMENT '灵根数据JSON: {"METAL": 100, "WOOD": 20} 存储的是经验值';

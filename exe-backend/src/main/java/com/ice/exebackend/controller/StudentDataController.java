@@ -296,10 +296,28 @@ public class StudentDataController {
         learningActivityService.save(log);
 
         // --- 2. 【核心修改】修仙挂钩：计算并发放修为 ---
-        // 规则：基础分 10 + 每答对一题 10 修为
         int expGain = 10 + (correctCount * 10);
         cultivationService.addExp(student.getId(), expGain);
 
+        // ================== 【新增】灵根经验结算 START ==================
+        // 只有答对题目才增加灵根经验
+        if (correctCount > 0 && !results.isEmpty()) {
+            // 假设一次练习的所有题目属于同一个科目（取第一题的科目即可）
+            // 注意：results 中包含 AnswerResult，AnswerResult 中包含 BizQuestion
+            BizQuestion firstQ = results.get(0).getQuestion();
+            if (firstQ != null && firstQ.getSubjectId() != null) {
+                BizSubject subject = subjectService.getById(firstQ.getSubjectId());
+                if (subject != null) {
+                    // 练习模式：每答对1题增加 2 点灵根经验
+                    int spiritExp = correctCount * 2;
+                    cultivationService.addSpiritRootExp(student.getId(), subject.getName(), spiritExp);
+                    // (可选) 将灵根获取情况放入返回结果，供前端提示
+                    // resultDTO.setSpiritExpGain(spiritExp);
+                    // resultDTO.setSpiritName(subject.getName());
+                }
+            }
+        }
+        // ================== 【新增】灵根经验结算 END ==================
         // --- 3. 【核心修改】发放积分 ---
         int pointsGain = 5; // 练习固定奖励 5 积分
         student.setPoints((student.getPoints() == null ? 0 : student.getPoints()) + pointsGain);
@@ -640,6 +658,22 @@ public class StudentDataController {
 
         examResult.setCreateTime(LocalDateTime.now());
         examResultService.save(examResult);
+
+        // ================== 【新增】灵根经验结算 START ==================
+        // 考试模式：根据得分率给予大量灵根经验
+        // 只有及格（60%）以上才加灵根，模拟“有效学习”
+        if (totalScore > 0 && studentScore >= totalScore * 0.6) {
+            // 获取试卷对应的科目
+            BizSubject subject = subjectService.getById(paper.getSubjectId());
+            if (subject != null) {
+                // 公式：考试得分 * 0.5 作为灵根经验
+                int spiritExp = (int) (studentScore * 0.5);
+                cultivationService.addSpiritRootExp(student.getId(), subject.getName(), spiritExp);
+                logger.info("学生 {} 通过考试 {} 获得 {} 灵根经验 ({})",
+                        student.getName(), paper.getName(), spiritExp, subject.getName());
+            }
+        }
+        // ================== 【新增】灵根经验结算 END ==================
 
         // --- 记录学习积分和日志 (保持不变) ---
         BizLearningActivity activity = new BizLearningActivity();

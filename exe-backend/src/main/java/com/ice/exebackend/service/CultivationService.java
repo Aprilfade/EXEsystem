@@ -19,4 +19,6 @@ public interface CultivationService extends IService<BizCultivation> {
 
     // 【新增】结算离线收益
     Map<String, Object> settleAfkReward(Long studentId);
+
+    void addSpiritRootExp(Long studentId, String subjectName, int score);
 }
