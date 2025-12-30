@@ -1,6 +1,9 @@
 package com.ice.exebackend.service.impl;
 
 import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.context.AnalysisContext;
+import com.alibaba.excel.read.listener.ReadListener;
+import com.alibaba.excel.util.ListUtils;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -101,29 +104,87 @@ public class BizQuestionServiceImpl extends ServiceImpl<BizQuestionMapper, BizQu
             }
         }
     }
+    /**
+     * 【优化后】Excel 导入试题
+     * 使用 ReadListener 实现分批处理，防止大文件导致 OOM
+     */
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void importQuestions(MultipartFile file) throws IOException {
-        List<QuestionExcelDTO> excelData = EasyExcel.read(file.getInputStream())
-                .head(QuestionExcelDTO.class)
-                .sheet()
-                .doReadSync();
+        // 定义每批处理的数量
+        final int BATCH_COUNT = 100;
 
-        for (QuestionExcelDTO dto : excelData) {
-            QuestionDTO questionDTO = new QuestionDTO();
-            BeanUtils.copyProperties(dto, questionDTO);
+        // 使用匿名内部类实现 ReadListener（也可以抽离成单独的类）
+        EasyExcel.read(file.getInputStream(), QuestionExcelDTO.class, new ReadListener<QuestionExcelDTO>() {
 
-            // 处理知识点ID
-            if (StringUtils.hasText(dto.getKnowledgePointIds())) {
+            // 缓存数据的 List，大小固定为 BATCH_COUNT，防止扩容消耗性能
+            private List<QuestionExcelDTO> cachedDataList = ListUtils.newArrayListWithExpectedSize(BATCH_COUNT);
+
+            @Override
+            public void invoke(QuestionExcelDTO data, AnalysisContext context) {
+                cachedDataList.add(data);
+                // 达到 BATCH_COUNT 了，需要去存储一次了，防止数据几万条数据在内存，容易OOM
+                if (cachedDataList.size() >= BATCH_COUNT) {
+                    saveData();
+                    // 存储完成清理 list
+                    cachedDataList = ListUtils.newArrayListWithExpectedSize(BATCH_COUNT);
+                }
+            }
+
+            @Override
+            public void doAfterAllAnalysed(AnalysisContext context) {
+                // 这里也要 save 一次，确保最后遗留的数据也存储到数据库
+                saveData();
+            }
+
+            /**
+             * 将缓存的数据保存到数据库
+             * 注意：这里调用的是外部类的 saveSingleQuestion 方法
+             */
+            private void saveData() {
+                if (CollectionUtils.isEmpty(cachedDataList)) {
+                    return;
+                }
+
+                // 遍历当前批次的数据进行处理
+                for (QuestionExcelDTO dto : cachedDataList) {
+                    // 这里复用你原有的转换和保存逻辑
+                    // 建议将转换逻辑抽离成一个小方法，或者直接写在这里
+                    processAndSaveSingle(dto);
+                }
+
+                // 提示：如果你想进一步优化数据库性能，可以将 createQuestionWithKnowledgePoints
+                // 改造成支持 List<QuestionDTO> 的批量插入，但这涉及两张表的操作，逻辑会复杂一些。
+                // 目前这个方案已经解决了 OOM 问题。
+            }
+        }).sheet().doRead();
+    }
+
+    /**
+     * 辅助方法：处理单个 DTO 的转换并保存
+     */
+    private void processAndSaveSingle(QuestionExcelDTO dto) {
+        QuestionDTO questionDTO = new QuestionDTO();
+        BeanUtils.copyProperties(dto, questionDTO);
+
+        // 处理知识点ID字符串转 List<Long>
+        if (StringUtils.hasText(dto.getKnowledgePointIds())) {
+            try {
                 List<Long> kpIds = Arrays.stream(dto.getKnowledgePointIds().split(","))
                         .map(String::trim)
                         .map(Long::parseLong)
                         .collect(Collectors.toList());
                 questionDTO.setKnowledgePointIds(kpIds);
+            } catch (NumberFormatException e) {
+                // 【修改点】这里改成了 dto.getContent()
+                // 如果没有 log 对象，可以使用 System.err.println 代替，或者在类上加 @Slf4j
+                System.err.println("试题导入格式错误，跳过该条，Question: " + dto.getContent());
+                // log.error("试题导入格式错误，跳过该条，Question: {}", dto.getContent(), e);
+                return;
             }
-
-            this.createQuestionWithKnowledgePoints(questionDTO);
         }
+
+        this.createQuestionWithKnowledgePoints(questionDTO);
     }
     @Override
     public List<QuestionExcelDTO> getQuestionsForExport(QuestionPageParams params) {
