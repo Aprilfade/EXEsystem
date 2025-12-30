@@ -122,23 +122,28 @@ public class BattleGameManager {
     }
 
     /**
-     * 1. 用户加入匹配队列 (替换原 joinQueue)
+     * 核心轮询匹配逻辑 (之前代码中缺失)
      */
-    public void joinQueue(WebSocketSession session) {
-        String studentNo = (String) session.getAttributes().get("username");
-        String userId = String.valueOf(getStudentId(session)); // 假设有个辅助方法获取ID
+    private void processMatchMaking() {
+        // 简单匹配逻辑：遍历每个段位的队列，尝试两两匹配
+        for (String tier : ORDERED_TIERS) {
+            // 这里演示基于 Redis 队列的匹配逻辑 (配合 joinQueue 使用)
+            String p1Id = redisTemplate.opsForList().rightPop(QUEUE_PREFIX + tier);
+            if (p1Id != null) {
+                // 尝试取第二个
+                String p2Id = redisTemplate.opsForList().rightPop(QUEUE_PREFIX + tier);
+                if (p2Id != null) {
+                    // 匹配成功 -> 创建分布式房间
+                    createRoomDistributed(p1Id, p2Id);
+                } else {
+                    // 没有对手，放回队列头部等待 (或者安排机器人)
+                    redisTemplate.opsForList().rightPush(QUEUE_PREFIX + tier, p1Id);
 
-        // 1.1 把 Session 存入本地 Map，供 Subscriber 使用
-        BattleMessageSubscriber.LOCAL_SESSION_MAP.put(userId, session);
-
-        // 1.2 计算段位
-        String tier = calculateTier(getPoints(studentNo));
-
-        // 1.3 存入 Redis 队列 (仅存 UserId，不存 Session 对象)
-        // 使用 List: LPUSH
-        redisTemplate.opsForList().leftPush(QUEUE_PREFIX + tier, userId);
+                    // TODO: 这里可以判断等待时间，如果太久则触发 createBotMatch
+                }
+            }
+        }
     }
-
     /**
      * 3. 创建房间并广播
      */
@@ -178,6 +183,49 @@ public class BattleGameManager {
 
         String json = toJson(pubMsg);
         redisTemplate.convertAndSend(CHANNEL_NAME, json);
+    }
+
+    /**
+     * 获取用户ID
+     */
+    private Long getStudentId(WebSocketSession session) {
+        BizStudent student = getStudentBySession(session);
+        return student != null ? student.getId() : null;
+    }
+
+    /**
+     * 获取用户积分
+     */
+    private int getPoints(String studentNo) {
+        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
+        return (student != null && student.getPoints() != null) ? student.getPoints() : 0;
+    }
+
+    /**
+     * 对象转 JSON 字符串
+     */
+    private String toJson(Object object) {
+        try {
+            return objectMapper.writeValueAsString(object);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "{}";
+        }
+    }
+
+    /**
+     * 构造用户信息 (用于发送给前端)
+     */
+    private Map<String, Object> buildUserInfo(String userId) {
+        if ("-1".equals(userId)) {
+            // 机器人信息
+            Map<String, Object> bot = new HashMap<>();
+            bot.put("name", "AI 智能助教");
+            bot.put("avatar", "https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png");
+            return bot;
+        }
+        BizStudent s = studentService.getById(userId);
+        return buildStudentInfoMap(s);
     }
     private WaitingPlayer findOpponent(WaitingPlayer p1, List<String> targetTiers) {
         for (String targetTier : targetTiers) {

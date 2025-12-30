@@ -633,4 +633,6 @@ CREATE TABLE `biz_battle_record` (
 ALTER TABLE `biz_battle_record`
 ADD COLUMN `opponent_name` VARCHAR(64) DEFAULT NULL COMMENT '对手名称/机器人名称' AFTER `opponent_id`
 
+ALTER TABLE `biz_battle_record`
+ADD INDEX `idx_player_id` (`player_id`) USING BTREE COMMENT '用于加速查询个人战绩';
 
