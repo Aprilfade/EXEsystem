@@ -1,0 +1,26 @@
+spring:
+  cache:
+    type: redis
+  datasource:
+    # 生产环境通常连接 Docker 容器名或云数据库地址
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:exam_system}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    # 【核心】强制从环境变量获取，如果没有设置则报错或使用空
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      # Redis 地址也应该可配
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD} # 如果 Redis 有密码
+      lettuce:
+        pool:
+          max-active: 100
+          max-idle: 20
+          min-idle: 5
+
+jwt:
+  # 【核心】生产环境必须注入高强度密钥
+  secret: ${JWT_SECRET}
+  expiration: 86400000

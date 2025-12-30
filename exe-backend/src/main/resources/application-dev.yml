@@ -1,0 +1,23 @@
+spring:
+  cache:
+    type: redis
+  datasource:
+    # 开发环境连本地库
+    url: jdbc:mysql://localhost:3306/exam_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: llf5201314  # 开发环境可以直接写，方便调试
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      lettuce:
+        pool:
+          max-active: 100
+          max-idle: 100
+          min-idle: 0
+
+jwt:
+  # 开发环境使用的简单密钥
+  secret: OThiY2RkYjU5ZDIxZDA4YmRhMGE3YjQxZWRiNTViMTE5YzgzMjgxYjM3MjM5ZDE4OTI5M2ExZDAxYjY1ZGMxZA==
+  expiration: 86400000

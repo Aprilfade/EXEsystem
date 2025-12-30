@@ -2,30 +2,16 @@ server:
   port: 8080
 
 spring:
-  # 【修复点】: 在这里添加下面这行配置
-  cache:
-    type: redis
-  datasource:
-    url: jdbc:mysql://localhost:3306/exam_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    # 实际部署时建议通过环境变量配置数据库用户名
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:llf5201314}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+  profiles:
+    active: dev # 【关键】默认激活 dev 开发环境，方便你本地直接运行
   servlet:
     multipart:
       max-file-size: 10240MB
       max-request-size: 10240MB
-  redis:
-    # 配置Redis连接池
-    lettuce:
-      pool:
-        max-active: 100
-        max-idle: 100
-        min-idle: 0
+  # Redis 基础配置（如果开发和生产端口一致，可以放在这里，也可以拆分）
   data:
     redis:
-      port: 6379
-      host: localhost
+      database: 0
 
 mybatis-plus:
   mapper-locations: classpath:/mapper/**/*.xml
@@ -35,12 +21,6 @@ mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
-# 实际部署时应使用更安全的JWT密钥
-jwt:
-  # 使用一个新的、符合Base64规范的、更安全的密钥
-  secret: OThiY2RkYjU5ZDIxZDA4YmRhMGE3YjQxZWRiNTViMTE5YzgzMjgxYjM3MjM5ZDE4OTI5M2ExZDAxYjY1ZGMxZA==
-  expiration: 86400000
-
-# 文件上传配置
+# 文件上传路径（如果开发和生产不同，也可以移出去）
 file:
   upload-dir: ./uploads/
