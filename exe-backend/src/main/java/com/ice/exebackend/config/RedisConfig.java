@@ -3,10 +3,14 @@ package com.ice.exebackend.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.ice.exebackend.service.BattleMessageSubscriber;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.listener.PatternTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import org.springframework.data.redis.listener.adapter.MessageListenerAdapter;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -42,4 +46,26 @@ public class RedisConfig {
 
         return template;
     }
+    /**
+     * 配置 Redis 消息监听容器
+     */
+    @Bean
+    RedisMessageListenerContainer container(RedisConnectionFactory connectionFactory,
+                                            MessageListenerAdapter listenerAdapter) {
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(connectionFactory);
+        // 订阅 "battle:channel" 频道
+        container.addMessageListener(listenerAdapter, new PatternTopic("battle:channel"));
+        return container;
+    }
+
+    /**
+     * 绑定消息处理器
+     */
+    @Bean
+    MessageListenerAdapter listenerAdapter(BattleMessageSubscriber subscriber) {
+        // 指定处理消息的方法名为 "onMessage"
+        return new MessageListenerAdapter(subscriber, "onMessage");
+    }
+
 }

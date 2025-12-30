@@ -2,10 +2,12 @@ package com.ice.exebackend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ice.exebackend.dto.BattleMessage;
+import com.ice.exebackend.dto.BattleRoomData;
 import com.ice.exebackend.entity.BizBattleRecord;
 import com.ice.exebackend.entity.BizQuestion;
 import com.ice.exebackend.entity.BizStudent;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -29,6 +31,9 @@ public class BattleGameManager {
     @Autowired
     private BizBattleRecordService battleRecordService;
 
+    @Autowired
+    private StringRedisTemplate redisTemplate; // 注入 Redis
+
     // 线程池：用于倒计时和匹配轮询
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(4);
 
@@ -48,6 +53,11 @@ public class BattleGameManager {
     public static final String TIER_MASTER = "MASTER";
     public static final String TIER_GRANDMASTER = "GRANDMASTER";
     public static final String TIER_CHALLENGER = "CHALLENGER";
+
+
+    private static final String CHANNEL_NAME = "battle:channel";
+    private static final String QUEUE_PREFIX = "battle:queue:";
+    private static final String ROOM_PREFIX = "battle:room:";
 
     private static final List<String> ORDERED_TIERS = Arrays.asList(
             TIER_IRON, TIER_BRONZE, TIER_SILVER, TIER_GOLD,
@@ -94,54 +104,81 @@ public class BattleGameManager {
     }
 
     /**
-     * 用户申请匹配
+     * 1. 用户加入匹配队列 (替换原 joinQueue)
      */
     public void joinQueue(WebSocketSession session) {
-        if (sessionWaitingMap.containsKey(session.getId()) || playerRoomMap.containsKey(session.getId())) {
-            return;
-        }
-
         String studentNo = (String) session.getAttributes().get("username");
-        BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
-        int points = (student != null && student.getPoints() != null) ? student.getPoints() : 0;
-        String tier = calculateTier(points);
+        String userId = String.valueOf(getStudentId(session)); // 假设有个辅助方法获取ID
 
-        WaitingPlayer player = new WaitingPlayer(session, student, tier);
-        tierQueues.get(tier).add(player);
-        sessionWaitingMap.put(session.getId(), player);
+        // 1.1 把 Session 存入本地 Map，供 Subscriber 使用
+        BattleMessageSubscriber.LOCAL_SESSION_MAP.put(userId, session);
+
+        // 1.2 计算段位
+        String tier = calculateTier(getPoints(studentNo));
+
+        // 1.3 存入 Redis 队列 (仅存 UserId，不存 Session 对象)
+        // 使用 List: LPUSH
+        redisTemplate.opsForList().leftPush(QUEUE_PREFIX + tier, userId);
     }
 
     /**
-     * 匹配核心逻辑
+     * 1. 用户加入匹配队列 (替换原 joinQueue)
      */
-    private void processMatchMaking() {
-        long now = System.currentTimeMillis();
-        for (String tier : tierQueues.keySet()) {
-            List<WaitingPlayer> queue = tierQueues.get(tier);
-            for (WaitingPlayer p1 : queue) {
-                if (!sessionWaitingMap.containsKey(p1.session.getId())) continue;
+    public void joinQueue(WebSocketSession session) {
+        String studentNo = (String) session.getAttributes().get("username");
+        String userId = String.valueOf(getStudentId(session)); // 假设有个辅助方法获取ID
 
-                // 超过10秒匹配机器人
-                if (now - p1.joinTime > 10000) {
-                    createBotMatch(p1);
-                    continue;
-                }
+        // 1.1 把 Session 存入本地 Map，供 Subscriber 使用
+        BattleMessageSubscriber.LOCAL_SESSION_MAP.put(userId, session);
 
-                long waitTime = now - p1.joinTime;
-                List<String> targetTiers = new ArrayList<>();
-                targetTiers.add(p1.tier);
+        // 1.2 计算段位
+        String tier = calculateTier(getPoints(studentNo));
 
-                if (waitTime > 5000) addAdjacentTiers(targetTiers, p1.tier, 1);
-                if (waitTime > 8000) addAdjacentTiers(targetTiers, p1.tier, 2);
-
-                WaitingPlayer opponent = findOpponent(p1, targetTiers);
-                if (opponent != null) {
-                    createRoom(p1, opponent);
-                }
-            }
-        }
+        // 1.3 存入 Redis 队列 (仅存 UserId，不存 Session 对象)
+        // 使用 List: LPUSH
+        redisTemplate.opsForList().leftPush(QUEUE_PREFIX + tier, userId);
     }
 
+    /**
+     * 3. 创建房间并广播
+     */
+    private void createRoomDistributed(String user1Id, String user2Id) {
+        String roomId = UUID.randomUUID().toString();
+
+        // 3.1 初始化房间数据
+        BattleRoomData roomData = new BattleRoomData(); // 创建一个纯数据POJO，不含Session
+        roomData.setRoomId(roomId);
+        roomData.setP1Id(user1Id);
+        roomData.setP2Id(user2Id);
+        // ... 加载题目等 ...
+
+        // 3.2 保存房间状态到 Redis
+        String roomJson = toJson(roomData);
+        redisTemplate.opsForValue().set(ROOM_PREFIX + roomId, roomJson, 10, TimeUnit.MINUTES);
+
+        // 3.3 记录玩家当前所在的房间ID (用于重连或答题时查找)
+        redisTemplate.opsForValue().set("player:room:" + user1Id, roomId, 10, TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set("player:room:" + user2Id, roomId, 10, TimeUnit.MINUTES);
+
+        // 3.4 广播“匹配成功”消息
+        // 我们不知道 user1 和 user2 连在哪个服务器，所以广播给所有服务器
+        broadcastMessage(user1Id, BattleMessage.of("MATCH_SUCCESS", buildUserInfo(user2Id)));
+        broadcastMessage(user2Id, BattleMessage.of("MATCH_SUCCESS", buildUserInfo(user1Id)));
+
+        // 3.5 启动倒计时 (略：可以使用 Redis 的过期监听或延迟队列实现)
+    }
+
+    /**
+     * 辅助：广播消息到 Redis
+     */
+    private void broadcastMessage(String targetUserId, BattleMessage msg) {
+        Map<String, Object> pubMsg = new HashMap<>();
+        pubMsg.put("targetUserId", targetUserId);
+        pubMsg.put("payload", msg);
+
+        String json = toJson(pubMsg);
+        redisTemplate.convertAndSend(CHANNEL_NAME, json);
+    }
     private WaitingPlayer findOpponent(WaitingPlayer p1, List<String> targetTiers) {
         for (String targetTier : targetTiers) {
             List<WaitingPlayer> targetQueue = tierQueues.get(targetTier);
