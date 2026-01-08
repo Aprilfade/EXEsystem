@@ -14,11 +14,11 @@ public class StudentExportDTO {
     @ExcelProperty("学号")
     private String studentNo;
 
-    @ExcelProperty("所属科目")
-    private String subjectName;
-
     @ExcelProperty("年级")
     private String grade;
+
+    @ExcelProperty("班级")
+    private String className;
 
     @ExcelProperty("联系方式")
     private String contact;
@@ -41,11 +41,11 @@ public class StudentExportDTO {
     public void setGrade(String grade) {
         this.grade = grade;
     }
-    public String getSubjectName(){
-        return subjectName;
+    public String getClassName() {
+        return className;
     }
-    public void setSubjectName(String subjectName){
-        this.subjectName = subjectName;
+    public void setClassName(String className) {
+        this.className = className;
     }
     public String getContact() {
         return contact;

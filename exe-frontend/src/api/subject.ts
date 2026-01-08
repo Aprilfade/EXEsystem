@@ -82,11 +82,16 @@ export function fetchAllSubjects(): Promise<ApiResult<Subject[]>> {
 }
 
 /**
- * 【新增】调用新接口，根据科目ID获取其关联的试题列表
+ * 【优化】根据科目ID获取其关联的试题列表 - 支持分页
  */
-export function fetchQuestionsForSubject(subjectId: number): Promise<ApiResult<Question[]>> {
+export function fetchQuestionsForSubject(
+    subjectId: number,
+    current: number = 1,
+    size: number = 50
+): Promise<ApiResult<Question[]>> {
     return request({
         url: `/api/v1/subjects/${subjectId}/questions`,
         method: 'get',
+        params: { current, size }
     });
 }

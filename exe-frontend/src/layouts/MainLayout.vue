@@ -1,6 +1,6 @@
 <template>
   <el-container class="main-layout">
-    <el-aside :width="isCollapsed ? '64px' : '220px'" class="aside">
+    <el-aside v-if="!isMobile" :width="isCollapsed ? '64px' : '220px'" class="aside">
       <div class="logo-area">
         <el-icon :size="32" color="#409eff"><Management /></el-icon>
         <h1 v-show="!isCollapsed">试题管理系统</h1>
@@ -36,15 +36,84 @@
         </div>
       </div>
     </el-aside>
+    <!-- 移动端：抽屉菜单 -->
+    <el-drawer
+        v-if="isMobile"
+        v-model="drawerVisible"
+        direction="left"
+        :size="280"
+        :show-close="false"
+        class="mobile-drawer"
+    >
+      <template #header>
+        <div class="drawer-header">
+          <el-icon :size="28" color="#409eff"><Management /></el-icon>
+          <h3>试题管理系统</h3>
+        </div>
+      </template>
+
+      <el-menu :default-active="$route.path" @select="handleMobileMenuSelect" class="mobile-menu">
+        <template v-for="menu in visibleMenus" :key="menu.path">
+          <el-menu-item v-if="!menu.children" :index="menu.path">
+            <el-icon><component :is="menu.icon" /></el-icon>
+            <span>{{ menu.name }}</span>
+          </el-menu-item>
+          <el-sub-menu v-else :index="menu.path">
+            <template #title>
+              <el-icon><component :is="menu.icon" /></el-icon>
+              <span>{{ menu.name }}</span>
+            </template>
+            <el-menu-item v-for="child in menu.children" :key="child.path" :index="child.path">
+              <el-icon v-if="child.icon"><component :is="child.icon" /></el-icon>
+              <span>{{ child.name }}</span>
+            </el-menu-item>
+          </el-sub-menu>
+        </template>
+      </el-menu>
+
+      <template #footer>
+        <div class="drawer-footer">
+          <div class="user-info-mobile">
+            <el-avatar v-if="authStore.user?.avatar" :size="40" :src="authStore.user.avatar" />
+            <el-avatar v-else :size="40">{{ authStore.userNickname.charAt(0) }}</el-avatar>
+            <div class="user-details">
+              <span class="nickname">{{ authStore.userNickname }}</span>
+              <span class="email">{{ authStore.user?.username }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
+    </el-drawer>
 
     <el-container>
-      <el-header class="header">
+      <el-header class="header" :class="{ 'mobile-header': isMobile }">
         <div class="header-left">
-          <el-icon class="collapse-btn" @click="isCollapsed = !isCollapsed" :size="22">
+          <!-- 移动端：汉堡菜单按钮 -->
+          <el-button
+              v-if="isMobile"
+              :icon="Menu"
+              circle
+              @click="drawerVisible = true"
+              class="mobile-menu-btn"
+          />
+
+          <!-- 桌面端：折叠按钮 -->
+          <el-icon v-else class="collapse-btn" @click="isCollapsed = !isCollapsed" :size="22">
             <component :is="isCollapsed ? Expand : Fold" />
           </el-icon>
         </div>
+
         <div class="header-right">
+          <!-- 主题切换按钮 -->
+          <el-tooltip :content="isDark ? '切换到浅色模式' : '切换到深色模式'" placement="bottom">
+            <el-button
+              :icon="isDark ? Sunny : Moon"
+              circle
+              @click="toggleDarkMode"
+              class="theme-toggle-btn"
+            />
+          </el-tooltip>
+
           <el-dropdown @command="handleCommand">
             <span class="avatar-dropdown">
               <el-avatar v-if="authStore.user?.avatar" :src="authStore.user.avatar" />
@@ -79,13 +148,18 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import ProfileEditDialog from '@/components/user/ProfileEditDialog.vue';
+import { useResponsive } from '@/composables/useResponsive';
+import { useDarkMode } from '@/composables/useDarkMode';
+
 // 2. 引入图标和 WebSocket Store
 import {
   Management, House, Collection, Reading, Tickets, DocumentCopy, Avatar, CircleClose, DataLine,
   User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting, Fold, Expand, Document, Medal,
-  VideoPlay,DataBoard ,Share
+  VideoPlay, DataBoard, Share, Menu, Moon, Sunny  // 添加 Menu, Moon, Sunny
 } from '@element-plus/icons-vue';
 import { useNotificationSocketStore } from '@/stores/notificationSocket';
+const drawerVisible = ref(false);
+const { isMobile } = useResponsive();
 
 const isCollapsed = ref(false);
 
@@ -93,6 +167,13 @@ const authStore = useAuthStore();
 const router = useRouter();
 const isProfileDialogVisible = ref(false);
 const socketStore = useNotificationSocketStore();
+const { isDark, toggleDarkMode } = useDarkMode();
+
+// 移动端菜单点击处理
+const handleMobileMenuSelect = (path: string) => {
+  router.push(path);
+  drawerVisible.value = false;
+};
 
 const allMenus = [
   { path: '/home', name: '工作台', permission: 'sys:home', icon: House },
@@ -113,6 +194,7 @@ const allMenus = [
     ]
   },
   { path: '/statistics', name: '教学统计分析', permission: 'sys:stats:list', icon: DataLine },
+  { path: '/ai-monitor', name: 'AI监控', permission: 'sys:stats:list', icon: DataBoard },
   { path: '/notifications', name: '通知管理', permission: 'sys:notify:list', icon: Bell },
   {
     path: '/system', name: '系统管理', permission: 'sys:user:list', icon: Setting,
@@ -139,7 +221,7 @@ const handleCommand = (command: string) => {
   if (command === 'logout') {
     authStore.logout();
   } else if (command === 'profile') {
-    isProfileDialogVisible.value = true;
+    router.push('/profile');
   }
 };
 // 4. 【核心逻辑】组件挂载时建立连接
@@ -156,6 +238,92 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* === 移动端样式 === */
+.mobile-header {
+  padding: 0 12px;
+}
+
+.mobile-menu-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-color-primary);
+}
+
+.mobile-menu-btn:hover,
+.mobile-menu-btn:focus {
+  background: rgba(64, 158, 255, 0.1);
+  color: var(--brand-color);
+}
+
+.mobile-content {
+  padding: 12px;
+}
+
+.mobile-drawer :deep(.el-drawer__header) {
+  margin-bottom: 0;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.drawer-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-color-primary);
+}
+
+.mobile-menu {
+  border-right: none;
+}
+
+.mobile-menu .el-menu-item {
+  min-height: 48px;
+  line-height: 48px;
+}
+
+.mobile-menu .el-menu-item.is-active {
+  background-color: #ecf5ff;
+  color: var(--brand-color);
+}
+
+.drawer-footer {
+  padding: 16px;
+  border-top: 1px solid var(--border-color);
+  background-color: #f5f7fa;
+}
+
+.user-info-mobile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-info-mobile .user-details {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.user-info-mobile .nickname {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-color-primary);
+}
+
+.user-info-mobile .email {
+  font-size: 13px;
+  color: var(--text-color-regular);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .main-layout { height: 100vh; background-color: var(--bg-color); }
 .aside { background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; transition: width 0.3s ease; }
 .logo-area { display: flex; align-items: center; padding: 20px; gap: 12px; transition: padding 0.3s ease; }
@@ -188,5 +356,16 @@ onUnmounted(() => {
 .collapse-btn {
   cursor: pointer;
   color: var(--text-color-regular);
+}
+
+.theme-toggle-btn {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.theme-toggle-btn:hover {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-light);
 }
 </style>

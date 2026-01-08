@@ -1,10 +1,24 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title></title>
+
+    <!-- DNS 预解析 -->
+    <link rel="dns-prefetch" href="//localhost:8080" />
+
+    <!-- 预连接到 API 服务器 -->
+    <link rel="preconnect" href="//localhost:8080" crossorigin />
+
+    <!-- 预加载关键资源 -->
+    <link rel="preload" href="/src/main.ts" as="script" crossorigin />
+
+    <!-- 性能优化：资源提示 -->
+    <meta name="description" content="试题管理系统 - 高效的在线考试和题库管理平台" />
+    <meta name="theme-color" content="#409eff" />
+
+    <title>试题管理系统</title>
   </head>
   <body>
     <div id="app"></div>

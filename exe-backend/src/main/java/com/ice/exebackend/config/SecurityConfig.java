@@ -85,7 +85,19 @@ public class SecurityConfig {
                                 "/api/v1/auth/register",
                                 "/api/v1/student/auth/login",
                                 "/api/v1/files/**",
-                                "/ws/**"
+                                "/ws/**",
+                                // Swagger API 文档白名单
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**",
+                                "/swagger-resources/**",
+                                "/webjars/**",
+                                // Spring Boot Actuator 健康检查和监控端点
+                                "/actuator/health",
+                                "/actuator/health/**",
+                                "/actuator/info",
+                                "/actuator/metrics",
+                                "/actuator/metrics/**"
                         ).permitAll()
                         // 【核心修改1】将 /api/v1/files/** 的规则拆分
                         // GET请求（查看图片）对所有人开放

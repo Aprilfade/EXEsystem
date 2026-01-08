@@ -138,3 +138,42 @@ export function generateKnowledgePointsFromText(data: { text: string; count: num
         }
     });
 }
+
+/**
+ * 【知识点功能增强】知识点全局统计接口
+ */
+export interface KnowledgePointGlobalStats {
+    totalKpCount: number; // 知识点总数
+    kpWithQuestionsCount: number; // 有题目的知识点数量
+    totalQuestionCount: number; // 总题目数量
+    avgQuestionsPerKp: number; // 平均每个知识点的题目数
+    coverageRate: number; // 知识点覆盖率（百分比）
+}
+
+/**
+ * 【知识点功能增强】获取知识点全局统计数据
+ */
+export function fetchKnowledgePointGlobalStats(): Promise<ApiResult<KnowledgePointGlobalStats>> {
+    return request({
+        url: '/api/v1/knowledge-points/global-stats',
+        method: 'get'
+    });
+}
+
+/**
+ * 【批量编辑】批量更新知识点
+ */
+export interface KnowledgePointBatchUpdateParams {
+    knowledgePointIds: number[];
+    subjectId?: number;
+    grade?: string;
+    tags?: string;
+}
+
+export function batchUpdateKnowledgePoints(data: KnowledgePointBatchUpdateParams): Promise<ApiResult<null>> {
+    return request({
+        url: '/api/v1/knowledge-points/batch-update',
+        method: 'put',
+        data
+    });
+}

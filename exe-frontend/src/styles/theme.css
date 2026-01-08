@@ -1,0 +1,184 @@
+/* 主题 CSS 变量定义 */
+
+:root {
+  /* 背景色 */
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #fafafa;
+  --bg-overlay: rgba(255, 255, 255, 0.9);
+
+  /* 文字颜色 */
+  --text-primary: #303133;
+  --text-secondary: #606266;
+  --text-tertiary: #909399;
+  --text-disabled: #c0c4cc;
+
+  /* 边框颜色 */
+  --border-color: #dcdfe6;
+  --border-light: #e4e7ed;
+  --border-lighter: #ebeef5;
+
+  /* 阴影 */
+  --shadow-light: 0 2px 12px rgba(0, 0, 0, 0.04);
+  --shadow-base: 0 2px 12px rgba(0, 0, 0, 0.08);
+  --shadow-dark: 0 4px 24px rgba(0, 0, 0, 0.12);
+
+  /* 卡片 */
+  --card-bg: #ffffff;
+  --card-hover-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* 图表 */
+  --chart-bg: #ffffff;
+  --chart-grid: #f0f0f0;
+  --chart-text: #606266;
+
+  /* 输入框 */
+  --input-bg: #ffffff;
+  --input-border: #dcdfe6;
+  --input-hover-border: #c0c4cc;
+
+  /* 表格 */
+  --table-header-bg: #fafafa;
+  --table-row-hover: #f5f7fa;
+  --table-border: #ebeef5;
+}
+
+/* 深色主题 */
+.dark {
+  /* 背景色 */
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #2d2d2d;
+  --bg-tertiary: #242424;
+  --bg-overlay: rgba(45, 45, 45, 0.95);
+
+  /* 文字颜色 */
+  --text-primary: #e5e5e5;
+  --text-secondary: #c0c0c0;
+  --text-tertiary: #a0a0a0;
+  --text-disabled: #606060;
+
+  /* 边框颜色 */
+  --border-color: #404040;
+  --border-light: #383838;
+  --border-lighter: #303030;
+
+  /* 阴影 */
+  --shadow-light: 0 2px 12px rgba(0, 0, 0, 0.3);
+  --shadow-base: 0 2px 12px rgba(0, 0, 0, 0.4);
+  --shadow-dark: 0 4px 24px rgba(0, 0, 0, 0.5);
+
+  /* 卡片 */
+  --card-bg: #2d2d2d;
+  --card-hover-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  /* 图表 */
+  --chart-bg: #2d2d2d;
+  --chart-grid: #404040;
+  --chart-text: #c0c0c0;
+
+  /* 输入框 */
+  --input-bg: #242424;
+  --input-border: #404040;
+  --input-hover-border: #505050;
+
+  /* 表格 */
+  --table-header-bg: #242424;
+  --table-row-hover: #333333;
+  --table-border: #404040;
+}
+
+/* Element Plus 组件深色模式适配 */
+.dark .el-card {
+  background-color: var(--card-bg);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.dark .el-button--default {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.dark .el-button--default:hover {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-light);
+}
+
+.dark .el-input__wrapper {
+  background-color: var(--input-bg);
+  border-color: var(--input-border);
+}
+
+.dark .el-input__inner {
+  color: var(--text-primary);
+}
+
+.dark .el-table {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.dark .el-table th {
+  background-color: var(--table-header-bg);
+  color: var(--text-primary);
+}
+
+.dark .el-table tr:hover > td {
+  background-color: var(--table-row-hover) !important;
+}
+
+.dark .el-dialog {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.dark .el-dialog__header {
+  color: var(--text-primary);
+}
+
+.dark .el-dialog__body {
+  color: var(--text-secondary);
+}
+
+.dark .el-menu {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+.dark .el-menu-item {
+  color: var(--text-secondary);
+}
+
+.dark .el-menu-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.dark .el-menu-item.is-active {
+  color: var(--el-color-primary);
+  background-color: var(--bg-tertiary);
+}
+
+/* 滚动条样式 */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #505050;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #606060;
+}
+
+/* 平滑过渡 */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}

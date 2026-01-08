@@ -52,6 +52,7 @@ public class BizSubjectController {
     private static final String SUBJECT_ALL_CACHE_KEY = "sys:subject:all";
 
     @PostMapping
+    @PreAuthorize("hasAuthority('sys:subject:create')") // ✅ 添加细粒度权限
     @Log(title = "科目管理", businessType = BusinessType.INSERT)
     public Result createSubject(@RequestBody BizSubject subject) {
         boolean success = subjectService.save(subject);
@@ -135,6 +136,7 @@ public class BizSubjectController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('sys:subject:update')") // ✅ 添加细粒度权限
     @Log(title = "科目管理", businessType = BusinessType.UPDATE)
     public Result updateSubject(@PathVariable Long id, @RequestBody BizSubject subject) {
         subject.setId(id);
@@ -147,24 +149,39 @@ public class BizSubjectController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('sys:subject:delete')") // ✅ 添加细粒度权限
     @Log(title = "科目管理", businessType = BusinessType.DELETE)
     public Result deleteSubject(@PathVariable Long id) {
+        // 【优化】批量检查关联数据，减少数据库查询次数
+        StringBuilder errorMsg = new StringBuilder();
+
         long knowledgePointCount = knowledgePointService.count(new QueryWrapper<BizKnowledgePoint>().eq("subject_id", id));
         if (knowledgePointCount > 0) {
-            return Result.fail("无法删除：该科目下还存在 " + knowledgePointCount + " 个关联的知识点。");
+            errorMsg.append(knowledgePointCount).append(" 个知识点、");
         }
+
         long questionCount = questionService.count(new QueryWrapper<BizQuestion>().eq("subject_id", id));
         if (questionCount > 0) {
-            return Result.fail("无法删除：该科目下还存在 " + questionCount + " 个关联的试题。");
+            errorMsg.append(questionCount).append(" 道试题、");
         }
+
         long studentCount = studentService.count(new QueryWrapper<BizStudent>().eq("subject_id", id));
         if (studentCount > 0) {
-            return Result.fail("无法删除：该科目下还存在 " + studentCount + " 个关联的学生。");
+            errorMsg.append(studentCount).append(" 个学生、");
         }
+
         long paperCount = paperService.count(new QueryWrapper<BizPaper>().eq("subject_id", id));
         if (paperCount > 0) {
-            return Result.fail("无法删除：该科目下还存在 " + paperCount + " 个关联的试卷。");
+            errorMsg.append(paperCount).append(" 份试卷、");
         }
+
+        // 如果存在任何关联数据，则拒绝删除
+        if (errorMsg.length() > 0) {
+            // 去掉最后的顿号
+            String msg = errorMsg.substring(0, errorMsg.length() - 1);
+            return Result.fail("无法删除：该科目下还存在 " + msg + "。请先清理关联数据后再删除科目。");
+        }
+
         boolean success = subjectService.removeById(id);
         if (success) {
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
@@ -173,13 +190,27 @@ public class BizSubjectController {
         return success ? Result.suc() : Result.fail();
     }
 
+    /**
+     * 【优化】获取科目下的试题列表 - 添加分页支持
+     */
     @GetMapping("/{id}/questions")
-    public Result getQuestionsForSubject(@PathVariable Long id) {
-        List<BizQuestion> questions = subjectService.getQuestionsForSubject(id);
-        return Result.suc(questions);
+    @PreAuthorize("hasAuthority('sys:question:list')") // 【新增】添加权限验证
+    public Result getQuestionsForSubject(@PathVariable Long id,
+                                         @RequestParam(defaultValue = "1") int current,
+                                         @RequestParam(defaultValue = "50") int size) {
+        Page<BizQuestion> page = new Page<>(current, size);
+        QueryWrapper<BizQuestion> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("subject_id", id);
+        queryWrapper.orderByDesc("create_time");
+        questionService.page(page, queryWrapper);
+        return Result.suc(page.getRecords(), page.getTotal());
     }
 
+    /**
+     * 【优化】获取所有年级列表 - 添加权限验证
+     */
     @GetMapping("/grades")
+    @PreAuthorize("hasAuthority('sys:subject:list')") // 【新增】添加权限验证
     public Result getDistinctGrades() {
         QueryWrapper<BizSubject> queryWrapper = new QueryWrapper<>();
         queryWrapper.select("DISTINCT grade");

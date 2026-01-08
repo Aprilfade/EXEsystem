@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
+import com.ice.exebackend.dto.KnowledgePointBatchUpdateDTO;
 import com.ice.exebackend.dto.KnowledgePointStatsDTO;
 import com.ice.exebackend.entity.BizKnowledgePoint;
 import com.ice.exebackend.entity.BizQuestion;
@@ -14,6 +15,8 @@ import com.ice.exebackend.service.BizKnowledgePointService;
 import com.ice.exebackend.service.BizQuestionService;
 import com.ice.exebackend.service.AiService; // 【新增】导入 AiService
 import jakarta.servlet.http.HttpServletRequest; // 【新增】导入 HttpServletRequest
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,6 +32,8 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/knowledge-points")
 @PreAuthorize("hasAuthority('sys:kp:list')")
 public class BizKnowledgePointController {
+
+    private static final Logger logger = LoggerFactory.getLogger(BizKnowledgePointController.class);
 
     @Autowired
     private BizKnowledgePointService knowledgePointService;
@@ -49,6 +54,7 @@ public class BizKnowledgePointController {
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
     @PostMapping
+    @PreAuthorize("hasAuthority('sys:kp:create')") // ✅ 添加细粒度权限
     @Log(title = "知识点管理", businessType = BusinessType.INSERT)
     public Result createKnowledgePoint(@RequestBody BizKnowledgePoint knowledgePoint) {
         boolean success = knowledgePointService.save(knowledgePoint);
@@ -83,6 +89,16 @@ public class BizKnowledgePointController {
         return Result.suc(statsPage.getRecords(), statsPage.getTotal());
     }
 
+    /**
+     * 【知识点功能增强】获取知识点全局统计数据
+     */
+    @GetMapping("/global-stats")
+    @PreAuthorize("hasAuthority('sys:kp:list')")
+    public Result<Map<String, Object>> getGlobalStats() {
+        Map<String, Object> stats = knowledgePointService.getGlobalStats();
+        return Result.ok(stats);
+    }
+
     @GetMapping("/{id}")
     public Result getKnowledgePointById(@PathVariable Long id) {
         BizKnowledgePoint knowledgePoint = knowledgePointService.getById(id);
@@ -90,6 +106,7 @@ public class BizKnowledgePointController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('sys:kp:update')") // ✅ 添加细粒度权限
     @Log(title = "知识点管理", businessType = BusinessType.UPDATE)
     public Result updateKnowledgePoint(@PathVariable Long id, @RequestBody BizKnowledgePoint knowledgePoint) {
         knowledgePoint.setId(id);
@@ -101,6 +118,7 @@ public class BizKnowledgePointController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('sys:kp:delete')") // ✅ 添加细粒度权限
     @Log(title = "知识点管理", businessType = BusinessType.DELETE)
     public Result deleteKnowledgePoint(@PathVariable Long id) {
         QueryWrapper<BizQuestionKnowledgePoint> queryWrapper = new QueryWrapper<>();
@@ -164,6 +182,20 @@ public class BizKnowledgePointController {
         return Result.suc(knowledgePointService.findPrerequisitePoints(id));
     }
 
+    /**
+     * 【批量编辑】批量更新知识点
+     */
+    @PutMapping("/batch-update")
+    @PreAuthorize("hasAuthority('sys:kp:update')")
+    @Log(title = "知识点管理", businessType = BusinessType.UPDATE)
+    public Result batchUpdateKnowledgePoints(@RequestBody KnowledgePointBatchUpdateDTO dto) {
+        boolean success = knowledgePointService.batchUpdateKnowledgePoints(dto);
+        if (success) {
+            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+        }
+        return success ? Result.suc("批量更新成功") : Result.fail("批量更新失败");
+    }
+
     // 【新增】AI 智能生成知识点 (注意：这段代码必须在类的最后一个大括号之前)
     @PostMapping("/ai-generate")
     @Log(title = "知识点管理", businessType = BusinessType.OTHER)
@@ -186,7 +218,7 @@ public class BizKnowledgePointController {
             );
             return Result.suc(points);
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("AI生成知识点失败", e);
             return Result.fail("生成失败: " + e.getMessage());
         }
     }

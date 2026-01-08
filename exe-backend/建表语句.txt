@@ -1,9 +1,9 @@
 
 -- ----------------------------
--- 数据库: exam_system
+-- 数据库: exe_system
 -- ----------------------------
-CREATE DATABASE IF NOT EXISTS exam_system DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE exam_system;
+CREATE DATABASE IF NOT EXISTS exe_system DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE exe_system;
 
 -- ----------------------------
 -- 1. 用户表
@@ -13,6 +13,7 @@ CREATE TABLE `sys_user` (
   `username` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户名, 唯一',
   `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '密码, BCrypt加密存储',
   `nick_name` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '昵称',
+  `avatar` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '头像URL',
   `is_enabled` tinyint(1) DEFAULT '1' COMMENT '账户是否启用 (1:是, 0:否)',
   `is_deleted` tinyint(1) DEFAULT '0' COMMENT '逻辑删除标记 (0:否, 1:是)',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -73,12 +74,20 @@ CREATE TABLE `biz_student` (
   `student_no` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '学号, 唯一',
   `name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '姓名',
   `contact` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '联系方式',
-  `subject_id` bigint NOT NULL COMMENT '所属科目ID',
-  `grade` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '年级 (例如: 2009级)',
+  `grade` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '年级 (例如: 高一、高二、高三)',
+  `class_name` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '班级名称',
+  `points` int DEFAULT 0 COMMENT '学习积分',
+  `total_answered` int DEFAULT 0 COMMENT '累计答题数',
+  `avatar_frame_style` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '当前头像框CSS',
+  `background_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '当前背景图URL',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_student_no` (`student_no`)
+  UNIQUE KEY `uk_student_no` (`student_no`),
+  INDEX `idx_student_grade` (`grade`),
+  INDEX `idx_student_name` (`name`),
+  INDEX `idx_student_class` (`class_name`),
+  INDEX `idx_student_create_time` (`create_time` DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学生表';
 -- ----------------------------
 -- 7. 试题表
@@ -86,13 +95,18 @@ CREATE TABLE `biz_student` (
 CREATE TABLE `biz_question` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `subject_id` bigint NOT NULL COMMENT '关联科目ID',
+  `grade` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '年级 (例如: 高一、高二、高三)',
   `question_type` int NOT NULL COMMENT '题型: 1-单选, 2-多选, 3-填空, 4-判断, 5-主观题',
   `content` text COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '题干',
   `image_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '题目图片地址,多个逗号隔开',
   `options` json DEFAULT NULL COMMENT '选项, 仅对选择题有效, 格式: [{"key":"A","value":"选项一"},{"key":"B","value":"选项二"}]',
   `answer` text COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '参考答案, 多选题答案用逗号隔开, 填空题答案用###隔开',
+  `answer_image_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '答案图片地址',
   `description` text COLLATE utf8mb4_unicode_ci COMMENT '题目解析',
-  PRIMARY KEY (`id`)
+  `difficulty` double DEFAULT 0.5 COMMENT '难度系数(0.1-1.0)',
+  PRIMARY KEY (`id`),
+  INDEX `idx_question_subject_id` (`subject_id`),
+  INDEX `idx_question_grade` (`grade`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试题表';
 
 -- ----------------------------
@@ -105,7 +119,6 @@ CREATE TABLE `biz_question_knowledge_point` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试题知识点关联表';
 
 -- ----------------------------
--- ----------------------------
 -- 9. 试卷表
 -- ----------------------------
 CREATE TABLE `biz_paper` (
@@ -113,11 +126,18 @@ CREATE TABLE `biz_paper` (
   `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '试卷名称',
   `code` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '试卷编码',
   `subject_id` bigint NOT NULL COMMENT '所属科目ID',
+  `grade` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '年级 (例如: 高一、高二、高三)',
   `description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `total_score` int DEFAULT '100' COMMENT '总分',
+  `paper_type` int DEFAULT 1 COMMENT '试卷类型: 1-手动选题, 2-图片拼接',
+  `status` int DEFAULT 0 COMMENT '状态: 0-草稿, 1-已发布',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  INDEX `idx_paper_subject_grade` (`subject_id`, `grade`),
+  INDEX `idx_paper_status` (`status`),
+  INDEX `idx_paper_name` (`name`),
+  INDEX `idx_paper_create_time` (`create_time` DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试卷表';
 
 -- ----------------------------
@@ -129,7 +149,11 @@ CREATE TABLE `biz_paper_question` (
   `question_id` bigint NOT NULL,
   `score` int NOT NULL COMMENT '分值',
   `sort_order` int DEFAULT '0' COMMENT '排序',
-  PRIMARY KEY (`id`)
+  `group_id` bigint DEFAULT NULL COMMENT '所属分组ID',
+  PRIMARY KEY (`id`),
+  INDEX `idx_pq_paper_sort` (`paper_id`, `sort_order`),
+  INDEX `idx_pq_group` (`group_id`),
+  INDEX `idx_pq_question` (`question_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试卷题目关联表';
 
 -- ----------------------------
@@ -158,27 +182,21 @@ CREATE TABLE `biz_paper_image` (
   `paper_id` bigint NOT NULL COMMENT '试卷ID',
   `image_url` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '图片访问地址',
   `sort_order` int DEFAULT '0' COMMENT '图片排序',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  INDEX `idx_pi_paper_sort` (`paper_id`, `sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试卷图片关联表';
 
--- 同时，为试卷表增加一个字段，用于区分试卷类型
-ALTER TABLE `biz_paper` ADD COLUMN `paper_type` INT DEFAULT 1 COMMENT '试卷类型: 1-手动选题, 2-图片拼接';
 -- ----------------------------
--- 13. 【新增】试卷题目分组表
+-- 13. 试卷题目分组表
 -- ----------------------------
 CREATE TABLE `biz_paper_group` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `paper_id` bigint NOT NULL COMMENT '所属试卷ID',
   `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分组标题 (例如: 一、选择题)',
   `sort_order` int DEFAULT '0' COMMENT '分组排序',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  INDEX `idx_group_paper_sort` (`paper_id`, `sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试卷题目分组表';
-
--- ----------------------------
--- 【修改】试卷题目关联表
--- ----------------------------
--- 为 biz_paper_question 表添加 group_id 字段
-ALTER TABLE `biz_paper_question` ADD COLUMN `group_id` bigint DEFAULT NULL COMMENT '所属分组ID';
 
 
 CREATE TABLE `sys_notification` (
@@ -188,28 +206,9 @@ CREATE TABLE `sys_notification` (
   `is_published` tinyint(1) DEFAULT '0' COMMENT '是否发布 (1:是, 0:否)',
   `publish_time` datetime DEFAULT NULL COMMENT '发布时间',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `target_type` varchar(20) DEFAULT 'ALL' COMMENT '发布对象: ALL-全体, STUDENT-学生, TEACHER-教师/管理员',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统通知表';
-
-
-
--- ----------------------------
--- 1. 【新增】试卷题目分组表
--- ----------------------------
-CREATE TABLE `biz_paper_group` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `paper_id` bigint NOT NULL COMMENT '所属试卷ID',
-  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分组标题 (例如: 一、选择题)',
-  `sort_order` int DEFAULT '0' COMMENT '分组排序',
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='试卷题目分组表';
-
-
--- ----------------------------
--- 2. 【修改】试卷题目关联表
--- ----------------------------
--- 为 biz_paper_question 表添加 group_id 字段，用于关联 biz_paper_group
-ALTER TABLE `biz_paper_question` ADD COLUMN `group_id` bigint DEFAULT NULL COMMENT '所属分组ID';
 
 
 -- ----------------------------
@@ -244,6 +243,7 @@ INSERT INTO `sys_permission` (id, name, code, type, parent_id) VALUES
 (11, '新增用户', 'sys:user:create', 2, 2),
 (12, '编辑用户', 'sys:user:update', 2, 2),
 (13, '删除用户', 'sys:user:delete', 2, 2),
+(14, '角色权限', 'sys:role:perm', 2, 2),
 (20, '科目管理', 'sys:subject:list', 1, 0),
 (21, '知识点管理', 'sys:kp:list', 1, 0),
 (22, '题库管理', 'sys:question:list', 1, 0),
@@ -251,7 +251,12 @@ INSERT INTO `sys_permission` (id, name, code, type, parent_id) VALUES
 (24, '学生管理', 'sys:student:list', 1, 0),
 (25, '错题管理', 'sys:wrong:list', 1, 0),
 (26, '教学统计', 'sys:stats:list', 1, 0),
-(27, '通知管理', 'sys:notify:list', 1, 0);
+(27, '通知管理', 'sys:notify:list', 1, 0),
+(28, '班级管理', 'sys:class:list', 1, 0),
+(29, '编辑班级', 'sys:class:edit', 2, 28),
+(30, '删除班级', 'sys:class:delete', 2, 28),
+(31, '课程管理', 'sys:course:edit', 1, 0),
+(32, '操作日志', 'sys:log:oper', 1, 1);
 
 
 -- ----------------------------
@@ -264,6 +269,7 @@ INSERT INTO `sys_role_permission` (role_id, permission_id) VALUES
 (2, 11),
 (2, 12),
 (2, 13),
+(2, 14),
 (2, 20),
 (2, 21),
 (2, 22),
@@ -271,17 +277,12 @@ INSERT INTO `sys_role_permission` (role_id, permission_id) VALUES
 (2, 24),
 (2, 25),
 (2, 26),
-(2, 27);
-
--- ----------------------------
--- 为角色管理新增权限标识
--- ----------------------------
-INSERT INTO `sys_permission` (id, name, code, type, parent_id) VALUES (14, '角色权限', 'sys:role:perm', 2, 2);
-
--- ----------------------------
--- 为 ADMIN 角色分配新的权限
--- ----------------------------
-INSERT INTO `sys_role_permission` (role_id, permission_id) VALUES (2, 14);
+(2, 27),
+(2, 28),
+(2, 29),
+(2, 30),
+(2, 31),
+(2, 32);
 
 CREATE TABLE `sys_login_log` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
@@ -322,12 +323,14 @@ CREATE TABLE `biz_exam_result` (
   PRIMARY KEY (`id`),
   INDEX `idx_student_paper` (`student_id`, `paper_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='考试成绩记录表';
+-- ----------------------------
+-- 考试成绩记录表增强
+-- ----------------------------
 ALTER TABLE `biz_exam_result` ADD COLUMN `violation_count` INT DEFAULT 0 COMMENT '违规/切屏次数';
-
-ALTER TABLE `biz_student` ADD COLUMN `points` INT DEFAULT 0 COMMENT '学习积分';
+ALTER TABLE `biz_exam_result` ADD COLUMN `result_details` LONGTEXT COMMENT '考试结果详情(存储AI评分和建议 JSON)';
 
 -- ----------------------------
--- 18. 【新增】题目收藏表
+-- 18. 题目收藏表
 -- ----------------------------
 CREATE TABLE `biz_favorite` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -368,17 +371,11 @@ CREATE TABLE `biz_user_goods` (
   UNIQUE KEY `uk_student_goods` (`student_id`, `goods_id`) -- 限制每个商品每人只能换一次(针对虚拟物品)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户商品持有表';
 
--- 初始化几个测试商品数据
 INSERT INTO `biz_goods` (`name`, `description`, `price`, `type`, `resource_value`) VALUES
 ('青铜学者框', '象征勤奋的青铜头像框', 50, 'AVATAR_FRAME', 'border: 3px solid #cd7f32; border-radius: 50%;'),
 ('白银学霸框', '只有前10%的学生才能拥有', 200, 'AVATAR_FRAME', 'border: 3px solid #c0c0c0; box-shadow: 0 0 10px #c0c0c0; border-radius: 50%;'),
 ('黄金战神框', '传说中的学神', 1000, 'AVATAR_FRAME', 'border: 3px solid #ffd700; box-shadow: 0 0 15px #ffd700; border-radius: 50%;'),
 ('星空背景', '让你的主页充满科技感', 500, 'BACKGROUND', '/bg/star.jpg');
-
--- 给学生表增加两个字段，存储当前使用的装扮
-ALTER TABLE `biz_student`
-ADD COLUMN `avatar_frame_style` varchar(500) DEFAULT NULL COMMENT '当前头像框CSS',
-ADD COLUMN `background_url` varchar(500) DEFAULT NULL COMMENT '当前背景图URL';
 
 
 -- ----------------------------
@@ -412,23 +409,6 @@ CREATE TABLE `biz_course_resource` (
   PRIMARY KEY (`id`),
   INDEX `idx_course_id` (`course_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='课程资源表';
-
-
--- 1. 在权限表插入“课程管理”菜单权限
--- id=30 (确保不重复即可), type=1 (表示菜单), parent_id=0 (表示一级菜单)
-INSERT INTO `sys_permission` (`id`, `name`, `code`, `type`, `parent_id`)
-VALUES (30, '课程管理', 'sys:course:edit', 1, 0);
-
--- 2. 为管理员角色（假设 ID 为 2）分配该权限
--- 如果您有其他角色需要此权限，请重复此语句并修改 role_id
-INSERT INTO `sys_role_permission` (`role_id`, `permission_id`)
-VALUES (2, 30);
-
--- 如果还没加索引，建议执行：
-CREATE INDEX idx_question_subject_id ON biz_question(subject_id);
-
--- 添加联合唯一索引
-ALTER TABLE `biz_subject` ADD UNIQUE INDEX `uk_grade_name` (`grade`, `name`);
 
 
 -- ----------------------------
@@ -479,34 +459,14 @@ CREATE TABLE `sys_oper_log` (
 ) ENGINE=InnoDB AUTO_INCREMENT=100 DEFAULT CHARSET=utf8mb4 COMMENT='操作日志记录';
 
 
-
-ALTER TABLE `biz_exam_result`
-ADD COLUMN `result_details` LONGTEXT COMMENT '考试结果详情(存储AI评分和建议 JSON)';
-
-
--- 为错题表增加复习计数字段，默认为 0
-ALTER TABLE biz_wrong_record ADD COLUMN review_count INT DEFAULT 0 COMMENT '已成功复习次数';
-
--- 为错题表增加下次复习时间字段，默认为创建后的第2天
-ALTER TABLE biz_wrong_record ADD COLUMN next_review_time DATETIME DEFAULT NULL COMMENT '计划下次复习时间';
+-- ----------------------------
+-- 错题记录表增强 (艾宾浩斯复习)
+-- ----------------------------
+ALTER TABLE biz_wrong_record ADD COLUMN `review_count` INT DEFAULT 0 COMMENT '已成功复习次数';
+ALTER TABLE biz_wrong_record ADD COLUMN `next_review_time` DATETIME DEFAULT NULL COMMENT '计划下次复习时间';
 
 -- 初始化旧数据：将所有旧错题的下次复习时间设为当前，以便立即复习
 UPDATE biz_wrong_record SET next_review_time = NOW() WHERE next_review_time IS NULL;
-
-ALTER TABLE `sys_notification`
-ADD COLUMN `target_type` VARCHAR(20) DEFAULT 'ALL' COMMENT '发布对象: ALL-全体, STUDENT-学生, TEACHER-教师/管理员';
-
-
--- 1. 插入权限数据 (id 自动递增或指定一个未使用的ID)
-INSERT INTO `sys_permission` (`name`, `code`, `type`, `parent_id`)
-VALUES ('操作日志', 'sys:log:oper', 1, 1);
--- 假设 parent_id=1 是 "系统管理" 的ID
-
--- 2. 为管理员角色 (假设 ID=2) 分配权限
--- 先查询刚才插入的权限 ID
--- SELECT id FROM sys_permission WHERE code = 'sys:log:oper';
--- 假设查出来的 ID 是 31
-INSERT INTO `sys_role_permission` (`role_id`, `permission_id`) VALUES (2, 31);
 
 
 -- ----------------------------
@@ -614,10 +574,6 @@ INSERT INTO `biz_achievement` (`name`, `description`, `icon_url`, `type`, `thres
 ('持之以恒', '连续签到 7 天', '📅', 'SIGN_IN_STREAK', 7, 50),
 ('月度模范', '连续签到 30 天', '🌕', 'SIGN_IN_STREAK', 30, 200),
 ('完美主义', '获得 1 次试卷满分', '💯', 'PERFECT_PAPER', 1, 50);
-
-ALTER TABLE biz_student ADD COLUMN total_answered INT DEFAULT 0 COMMENT '累计答题数';
-
-ALTER TABLE `biz_question` ADD COLUMN `difficulty` DOUBLE DEFAULT 0.5 COMMENT '难度系数(0.1-1.0)';
 
 
 CREATE TABLE `biz_battle_record` (

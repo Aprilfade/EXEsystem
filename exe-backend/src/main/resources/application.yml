@@ -24,3 +24,93 @@ mybatis-plus:
 # 文件上传路径（如果开发和生产不同，也可以移出去）
 file:
   upload-dir: ./uploads/
+
+# Springdoc OpenAPI (Swagger) 配置
+springdoc:
+  # API 文档配置
+  api-docs:
+    enabled: true                    # 启用 API 文档
+    path: /v3/api-docs              # API 文档 JSON 路径
+  # Swagger UI 配置
+  swagger-ui:
+    enabled: true                    # 启用 Swagger UI
+    path: /swagger-ui.html          # Swagger UI 访问路径
+    tags-sorter: alpha              # 标签排序：按字母顺序
+    operations-sorter: alpha        # 操作排序：按字母顺序
+    doc-expansion: none             # 文档展开方式：none(默认折叠)、list(展开标签)、full(展开所有)
+    filter: true                    # 启用过滤功能
+    display-request-duration: true  # 显示请求耗时
+    persistAuthorization: true      # 持久化认证信息（刷新页面后保留 Token）
+  # 默认显示分组
+  default-flat-param-object: true
+  # 解析包路径
+  packages-to-scan: com.ice.exebackend.controller
+
+# AI 功能配置
+ai:
+  enabled: true
+  default-provider: deepseek
+  providers:
+    deepseek:
+      url: https://api.deepseek.com/chat/completions
+      model: deepseek-chat
+      temperature: 0.7
+      max-tokens: 2000
+      enabled: true
+      priority: 1
+    qwen:
+      url: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
+      model: qwen-plus
+      temperature: 0.7
+      max-tokens: 2000
+      enabled: true
+      priority: 2
+  cache:
+    enabled: true
+    ttl: 3600
+    key-prefix: "ai:cache:"
+  retry:
+    enabled: true
+    max-attempts: 3
+    backoff: 1000
+    multiplier: 2.0
+  rate-limit:
+    enabled: true
+    max-concurrent: 10
+    max-per-user: 2
+    max-per-minute: 100
+    max-per-user-per-minute: 10
+  timeout:
+    connect: 10
+    analyze: 30
+    generate: 60
+    grading: 30
+    extract: 30
+
+# Spring Boot Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        # 暴露更多端点用于监控（包括连接池、数据源等）
+        include: health,info,metrics,hikaricp
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized  # 认证后显示详细信息
+      show-components: when-authorized
+    metrics:
+      enabled: true
+  health:
+    defaults:
+      enabled: true
+    # 启用数据库健康检查
+    db:
+      enabled: true
+  # 启用 HikariCP 指标监控
+  metrics:
+    enable:
+      hikaricp: true
+    export:
+      simple:
+        enabled: true

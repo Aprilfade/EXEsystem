@@ -4,18 +4,60 @@
       <template #header>
         <h2>我的错题本</h2>
       </template>
-      <el-table :data="wrongRecords" v-loading="loading">
+      <ResponsiveTable :data="wrongRecords" :loading="loading">
+        <!-- 桌面端表格列 -->
         <el-table-column type="index" label="序号" width="80" />
         <el-table-column prop="questionContent" label="题干" show-overflow-tooltip />
-        <el-table-column prop="paperName" label="来源试卷" />
-        <el-table-column prop="wrongReason" label="错误原因" />
-        <el-table-column prop="createTime" label="记录时间" />
-        <el-table-column label="操作" width="220"> <template #default="scope">
-          <el-button link type="primary" @click="handleReview(scope.row)">详情</el-button>
-          <el-button link type="warning" :icon="MagicStick" @click="handleAiAnalysis(scope.row)">AI 解析</el-button>
-        </template>
+        <el-table-column prop="paperName" label="来源试卷" width="150" />
+        <el-table-column prop="wrongReason" label="错误原因" width="120" />
+        <el-table-column prop="createTime" label="记录时间" width="180" />
+        <el-table-column label="操作" width="220">
+          <template #default="scope">
+            <el-button link type="primary" @click="handleReview(scope.row)">详情</el-button>
+            <el-button link type="warning" :icon="MagicStick" @click="handleAiAnalysis(scope.row)">AI 解析</el-button>
+          </template>
         </el-table-column>
-      </el-table>
+
+        <!-- 移动端卡片插槽 -->
+        <template #card="{ row, index }">
+          <div class="wrong-record-card">
+            <!-- 卡片头部 -->
+            <div class="card-header">
+              <el-tag type="info" size="small">{{ index + 1 }}</el-tag>
+              <el-tag type="warning" size="small">{{ row.paperName }}</el-tag>
+            </div>
+
+            <!-- 题目内容 -->
+            <div class="card-question">
+              <div class="question-label">题干：</div>
+              <div class="question-text text-ellipsis-3">{{ row.questionContent }}</div>
+            </div>
+
+            <!-- 错误原因 -->
+            <div class="card-reason">
+              <span class="reason-label">错误原因：</span>
+              <span class="reason-text">{{ row.wrongReason }}</span>
+            </div>
+
+            <!-- 时间 -->
+            <div class="card-time">
+              <el-icon><Clock /></el-icon>
+              <span>{{ row.createTime }}</span>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="card-actions">
+              <el-button type="primary" size="small" @click="handleReview(row)">
+                <el-icon><View /></el-icon>
+                查看详情
+              </el-button>
+              <el-button type="warning" size="small" :icon="MagicStick" @click="handleAiAnalysis(row)">
+                AI 解析
+              </el-button>
+            </div>
+          </div>
+        </template>
+      </ResponsiveTable>
 
       <el-pagination
           class="pagination"
@@ -101,7 +143,8 @@
 </template>
 
 <script setup lang="ts">
-// 【修改】导入 reactive
+import { Clock, View } from '@element-plus/icons-vue';
+import ResponsiveTable from '@/components/common/ResponsiveTable.vue';
 import { ref, onMounted, reactive } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 // 【修改】导入类型 WrongRecordPageParams
@@ -293,5 +336,91 @@ onMounted(getMyRecords);
   padding: 10px;
   background-color: #f9f9fa;
   border-radius: 8px;
+}
+/* === 移动端错题卡片样式 === */
+.wrong-record-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.card-question {
+  padding: 12px;
+  background-color: #f5f7fa;
+  border-radius: 6px;
+}
+
+.question-label {
+  font-weight: 600;
+  color: #606266;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.question-text {
+  color: #303133;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.card-reason {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #fef0f0;
+  border-left: 3px solid #f56c6c;
+  border-radius: 4px;
+}
+
+.reason-label {
+  font-weight: 600;
+  color: #f56c6c;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.reason-text {
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.card-time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #909399;
+  font-size: 12px;
+}
+
+.card-time .el-icon {
+  font-size: 14px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e4e7ed;
+}
+
+.card-actions .el-button {
+  flex: 1;
+}
+
+/* 文本截断工具类 */
+.text-ellipsis-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

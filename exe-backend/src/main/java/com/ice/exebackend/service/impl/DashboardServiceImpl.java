@@ -1,7 +1,7 @@
 package com.ice.exebackend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.ice.exebackend.dto.DashboardStatsDTO;
+import com.ice.exebackend.dto.*;
 import com.ice.exebackend.entity.SysNotification;
 import com.ice.exebackend.mapper.DashboardMapper;
 import com.ice.exebackend.service.DashboardService;
@@ -10,9 +10,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.TimeUnit; // 1. 导入 TimeUnit 用于设置过期时间
 import java.util.stream.Collectors;
@@ -150,6 +152,164 @@ public class DashboardServiceImpl implements DashboardService {
             return notificationDto;
         }).collect(Collectors.toList()));
 
+        // 7. 数据趋势（周同比）
+        Map<String, Object> trendsData = dashboardMapper.getDataTrends();
+        DashboardStatsDTO.TrendData trends = new DashboardStatsDTO.TrendData();
+        trends.setStudentCountTrend(getDoubleValue(trendsData, "studentCountTrend"));
+        trends.setQuestionCountTrend(getDoubleValue(trendsData, "questionCountTrend"));
+        trends.setPaperCountTrend(getDoubleValue(trendsData, "paperCountTrend"));
+        trends.setSubjectCountTrend(0.0);  // 暂无数据
+        trends.setKnowledgePointCountTrend(0.0);  // 暂无数据
+        trends.setOnlineCountTrend(0.0);  // 暂无数据
+        dto.setTrends(trends);
+
         return dto;
+    }
+
+    @Override
+    public TodoListDTO getTodoList() {
+        TodoListDTO dto = new TodoListDTO();
+        List<TodoItemDTO> items = new ArrayList<>();
+
+        // 1. 待批改试卷
+        Map<String, Object> pendingPapers = dashboardMapper.getPendingPapersCount();
+        if (pendingPapers != null) {
+            Long count = ((Number) pendingPapers.get("count")).longValue();
+            if (count > 0) {
+                TodoItemDTO item = new TodoItemDTO();
+                item.setType("pending_papers");
+                item.setTitle("待批改试卷");
+                item.setCount(count.intValue());
+                item.setIcon("Document");
+                item.setColor("linear-gradient(135deg, #667eea 0%, #764ba2 100%)");
+                item.setAction("/paper-manage");
+                // 计算时间差
+                Object latestTime = pendingPapers.get("latestTime");
+                if (latestTime != null) {
+                    item.setTime(formatTimeAgo((LocalDateTime) latestTime));
+                }
+                items.add(item);
+            }
+        }
+
+        // 2. 待审核题目
+        Map<String, Object> pendingQuestions = dashboardMapper.getPendingQuestionsCount();
+        if (pendingQuestions != null) {
+            Long count = ((Number) pendingQuestions.get("count")).longValue();
+            if (count > 0) {
+                TodoItemDTO item = new TodoItemDTO();
+                item.setType("pending_questions");
+                item.setTitle("待审核题目");
+                item.setCount(count.intValue());
+                item.setIcon("Files");
+                item.setColor("linear-gradient(135deg, #f093fb 0%, #f5576c 100%)");
+                item.setAction("/question-manage");
+                Object latestTime = pendingQuestions.get("latestTime");
+                if (latestTime != null) {
+                    item.setTime(formatTimeAgo((LocalDateTime) latestTime));
+                }
+                items.add(item);
+            }
+        }
+
+        dto.setItems(items);
+        dto.setTotalCount(items.stream().mapToInt(TodoItemDTO::getCount).sum());
+        return dto;
+    }
+
+    @Override
+    public ActivityListDTO getRecentActivities(int limit) {
+        ActivityListDTO dto = new ActivityListDTO();
+        List<Map<String, Object>> activitiesData = dashboardMapper.getRecentActivities(limit);
+
+        List<RecentActivityDTO> activities = activitiesData.stream().map(data -> {
+            RecentActivityDTO activity = new RecentActivityDTO();
+            activity.setType((String) data.get("type"));
+            activity.setContent((String) data.get("content"));
+            Object createTime = data.get("createTime");
+            if (createTime != null) {
+                LocalDateTime time = (LocalDateTime) createTime;
+                activity.setCreateTime(time);
+                activity.setTime(formatTimeAgo(time));
+            }
+            Object userId = data.get("userId");
+            if (userId != null) {
+                activity.setUserId(((Number) userId).longValue());
+            }
+            activity.setUserName((String) data.get("userName"));
+
+            // 根据类型设置图标和颜色
+            switch (activity.getType()) {
+                case "submit_paper":
+                    activity.setIcon("Document");
+                    activity.setColor("primary");
+                    break;
+                case "create_question":
+                    activity.setIcon("Edit");
+                    activity.setColor("success");
+                    break;
+                case "import_student":
+                    activity.setIcon("Upload");
+                    activity.setColor("warning");
+                    break;
+                default:
+                    activity.setIcon("InfoFilled");
+                    activity.setColor("info");
+            }
+
+            return activity;
+        }).collect(Collectors.toList());
+
+        dto.setActivities(activities);
+        dto.setTotal(activities.size());
+        return dto;
+    }
+
+    /**
+     * 格式化时间为"xx前"的形式
+     */
+    private String formatTimeAgo(LocalDateTime time) {
+        if (time == null) {
+            return "未知时间";
+        }
+
+        Duration duration = Duration.between(time, LocalDateTime.now());
+        long seconds = duration.getSeconds();
+
+        if (seconds < 60) {
+            return "刚刚";
+        } else if (seconds < 3600) {
+            return (seconds / 60) + "分钟前";
+        } else if (seconds < 86400) {
+            return (seconds / 3600) + "小时前";
+        } else if (seconds < 2592000) {
+            return (seconds / 86400) + "天前";
+        } else {
+            return time.format(DateTimeFormatter.ofPattern("MM-dd"));
+        }
+    }
+
+    /**
+     * 安全地从 Map 中获取 Double 值
+     */
+    private Double getDoubleValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) {
+            return 0.0;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        return 0.0;
+    }
+
+    @Override
+    public List<Map<String, Object>> getKnowledgePointCoverage() {
+        return dashboardMapper.getKnowledgePointCoverage();
+    }
+
+    @Override
+    public List<Map<String, Object>> getWeakKnowledgePointsTop10() {
+        return dashboardMapper.getWeakKnowledgePointsTop10();
     }
 }

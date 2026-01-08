@@ -2,6 +2,7 @@ package com.ice.exebackend.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ice.exebackend.dto.PaperDTO;
+import com.ice.exebackend.dto.PaperKnowledgePointDTO;
 import com.ice.exebackend.dto.SmartPaperReq;
 import com.ice.exebackend.entity.BizPaper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -43,4 +44,11 @@ public interface BizPaperService extends IService<BizPaper> {
      * 智能生成试卷结构
      */
     List<PaperDTO.PaperGroupDTO> generateSmartPaper(SmartPaperReq req);
+
+    /**
+     * 获取试卷的知识点分布
+     * @param paperId 试卷ID
+     * @return 知识点分布列表
+     */
+    List<PaperKnowledgePointDTO> getPaperKnowledgePoints(Long paperId);
 }

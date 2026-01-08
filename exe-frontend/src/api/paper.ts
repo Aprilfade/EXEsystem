@@ -156,3 +156,24 @@ export function downloadAnswerSheet(id: number): Promise<any> {
         responseType: 'blob' // 必须设置为 blob
     });
 }
+
+/**
+ * 【知识点功能增强】试卷知识点分布DTO
+ */
+export interface PaperKnowledgePointDTO {
+    knowledgePointId: number;
+    knowledgePointName: string;
+    questionCount: number;
+    totalScore: number;
+    percentage: number; // 占比（百分比）
+}
+
+/**
+ * 【知识点功能增强】获取试卷的知识点分布
+ */
+export function fetchPaperKnowledgePoints(paperId: number): Promise<ApiResult<PaperKnowledgePointDTO[]>> {
+    return request({
+        url: `/api/v1/papers/${paperId}/knowledge-points`,
+        method: 'get'
+    });
+}

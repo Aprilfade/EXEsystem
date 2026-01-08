@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.PaperDTO;
+import com.ice.exebackend.dto.PaperKnowledgePointDTO;
 import com.ice.exebackend.dto.SmartPaperReq;
 import com.ice.exebackend.entity.BizPaper;
 import com.ice.exebackend.enums.BusinessType;
@@ -12,6 +13,8 @@ import com.ice.exebackend.service.BizPaperService;
 import com.ice.exebackend.service.PdfService; // 【1. 新增导入】
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate; // 1. 导入 RedisTemplate
 import org.springframework.http.HttpHeaders;
@@ -30,6 +33,8 @@ import java.util.List;
 @RequestMapping("/api/v1/papers")
 @PreAuthorize("hasAuthority('sys:paper:list')")
 public class BizPaperController {
+
+    private static final Logger logger = LoggerFactory.getLogger(BizPaperController.class);
 
     @Autowired
     private BizPaperService paperService;
@@ -61,7 +66,8 @@ public class BizPaperController {
     public Result getPaperList(@RequestParam(defaultValue = "1") int current,
                                @RequestParam(defaultValue = "10") int size,
                                @RequestParam(required = false) Long subjectId,
-                               @RequestParam(required = false) String grade) {
+                               @RequestParam(required = false) String grade,
+                               @RequestParam(required = false) String keyword) {  // ✅ 新增keyword参数
         Page<BizPaper> page = new Page<>(current, size);
         QueryWrapper<BizPaper> queryWrapper = new QueryWrapper<>();
         if (subjectId != null) {
@@ -69,6 +75,14 @@ public class BizPaperController {
         }
         if (StringUtils.hasText(grade)) {
             queryWrapper.eq("grade", grade);
+        }
+        // ✅ 新增：支持按试卷名称或编码搜索
+        if (StringUtils.hasText(keyword)) {
+            queryWrapper.and(wrapper -> wrapper
+                .like("name", keyword)
+                .or()
+                .like("code", keyword)
+            );
         }
         queryWrapper.orderByDesc("create_time");
         paperService.page(page, queryWrapper);
@@ -79,6 +93,16 @@ public class BizPaperController {
     public Result getPaperById(@PathVariable Long id) {
         PaperDTO paperDTO = paperService.getPaperWithQuestionsById(id);
         return Result.suc(paperDTO);
+    }
+
+    /**
+     * 【知识点功能增强】获取试卷的知识点分布
+     */
+    @GetMapping("/{id}/knowledge-points")
+    @PreAuthorize("hasAuthority('sys:paper:list')")
+    public Result<List<PaperKnowledgePointDTO>> getPaperKnowledgePoints(@PathVariable Long id) {
+        List<PaperKnowledgePointDTO> knowledgePoints = paperService.getPaperKnowledgePoints(id);
+        return Result.ok(knowledgePoints);
     }
 
     @GetMapping("/export/{id}")
@@ -183,7 +207,7 @@ public class BizPaperController {
                     .body(out.toByteArray());
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("导出PDF试卷失败, paperId: {}", id, e);
             return ResponseEntity.status(500).build();
         }
     }
@@ -207,7 +231,7 @@ public class BizPaperController {
                     .body(out.toByteArray());
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("导出答题卡PDF失败, paperId: {}", id, e);
             return ResponseEntity.status(500).build();
         }
     }

@@ -36,6 +36,9 @@ public class BizStudent {
     @ExcelProperty("年级")
     private String grade;
 
+    @ExcelProperty("班级")
+    private String className;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;
@@ -120,5 +123,13 @@ public class BizStudent {
     }
     public void setUpdateTime(LocalDateTime updateTime){
         this.updateTime = updateTime;
+    }
+
+    public String getClassName() {
+        return className;
+    }
+
+    public void setClassName(String className) {
+        this.className = className;
     }
 }

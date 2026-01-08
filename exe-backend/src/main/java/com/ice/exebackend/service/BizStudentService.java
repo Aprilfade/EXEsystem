@@ -13,18 +13,16 @@ public interface BizStudentService extends IService<BizStudent> {
     /**
      * 通过 Excel 批量导入学生
      * @param file Excel 文件
-     * @param subjectId 关联的科目ID
      * @throws IOException
      */
-    void importStudents(MultipartFile file, Long subjectId) throws IOException;
+    void importStudents(MultipartFile file) throws IOException;
 
     /**
      * 【新增】根据条件查询用于导出的学生列表
-     * @param subjectId 科目ID (可选)
      * @param name 学生姓名 (可选)
      * @return 用于导出的学生DTO列表
      */
-    List<StudentExportDTO> getStudentExportList(Long subjectId, String name);
+    List<StudentExportDTO> getStudentExportList(String name);
     /**
      * 【新增】获取学生仪表盘的统计数据
      * @param studentId 学生ID

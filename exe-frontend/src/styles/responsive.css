@@ -1,0 +1,538 @@
+/* ==========================================
+   移动端响应式设计 CSS 框架
+   EXEsystem 试题管理系统
+   ========================================== */
+
+/* CSS 变量定义 - 响应式断点 */
+:root {
+  --breakpoint-xs: 480px;
+  --breakpoint-sm: 768px;
+  --breakpoint-md: 992px;
+  --breakpoint-lg: 1200px;
+  --breakpoint-xl: 1920px;
+
+  /* 桌面端间距 */
+  --page-padding: 20px;
+  --card-padding: 20px;
+  --element-gap: 16px;
+}
+
+/* 移动端变量覆盖 */
+@media (max-width: 768px) {
+  :root {
+    --page-padding: 12px;
+    --card-padding: 12px;
+    --element-gap: 8px;
+    --touch-target-min: 44px; /* iOS 人机界面指南最小触摸尺寸 */
+  }
+}
+
+/* ==========================================
+   响应式工具类
+   ========================================== */
+
+/* 显示/隐藏工具类 */
+.mobile-only {
+  display: none !important;
+}
+
+.desktop-only {
+  display: block !important;
+}
+
+.tablet-only {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: block !important;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1199px) {
+  .tablet-only {
+    display: block !important;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* Flex 工具类的响应式变体 */
+.mobile-flex-column {
+  display: flex;
+}
+
+@media (max-width: 768px) {
+  .mobile-flex-column {
+    flex-direction: column;
+  }
+}
+
+/* ==========================================
+   移动端触摸优化
+   ========================================== */
+
+@media (max-width: 768px) {
+  /* 移除点击高亮 */
+  * {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    -webkit-touch-callout: none;
+  }
+
+  /* 按钮最小触摸区域 */
+  button,
+  .el-button,
+  a {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+  }
+
+  /* 滚动优化 */
+  .scrollable {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+  }
+
+  /* 禁用文本选择（某些交互场景） */
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
+  /* 启用硬件加速 */
+  .accelerated {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
+}
+
+/* ==========================================
+   响应式容器
+   ========================================== */
+
+.responsive-container {
+  padding: var(--page-padding);
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+@media (min-width: 1200px) {
+  .responsive-container {
+    max-width: 1200px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .responsive-container {
+    max-width: 1600px;
+  }
+}
+
+/* ==========================================
+   响应式卡片
+   ========================================== */
+
+.responsive-card {
+  margin-bottom: var(--element-gap);
+  padding: var(--card-padding);
+}
+
+@media (max-width: 768px) {
+  .responsive-card {
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* ==========================================
+   响应式网格系统
+   ========================================== */
+
+.responsive-grid {
+  display: grid;
+  gap: var(--element-gap);
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+}
+
+@media (max-width: 768px) {
+  .responsive-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1199px) {
+  .responsive-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 2列网格 */
+.responsive-grid-2 {
+  display: grid;
+  gap: var(--element-gap);
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (max-width: 768px) {
+  .responsive-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 3列网格 */
+.responsive-grid-3 {
+  display: grid;
+  gap: var(--element-gap);
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 768px) {
+  .responsive-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1199px) {
+  .responsive-grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 4列网格 */
+.responsive-grid-4 {
+  display: grid;
+  gap: var(--element-gap);
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 768px) {
+  .responsive-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1199px) {
+  .responsive-grid-4 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ==========================================
+   响应式间距工具类
+   ========================================== */
+
+.responsive-padding {
+  padding: var(--page-padding);
+}
+
+.responsive-margin {
+  margin: var(--element-gap);
+}
+
+.responsive-gap {
+  gap: var(--element-gap);
+}
+
+/* ==========================================
+   移动端表单优化
+   ========================================== */
+
+@media (max-width: 768px) {
+  /* 表单项垂直布局 */
+  .el-form-item {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .el-form-item__label {
+    text-align: left !important;
+    margin-bottom: 8px;
+  }
+
+  /* 输入框字体大小（防止iOS自动缩放） */
+  input,
+  textarea,
+  select,
+  .el-input__inner,
+  .el-textarea__inner {
+    font-size: 16px !important;
+  }
+
+  /* 按钮组响应式 */
+  .el-button-group {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .el-button-group > .el-button {
+    width: 100%;
+    margin-left: 0 !important;
+    margin-bottom: 8px;
+  }
+
+  .el-button-group > .el-button:last-child {
+    margin-bottom: 0;
+  }
+}
+
+/* ==========================================
+   移动端导航优化
+   ========================================== */
+
+@media (max-width: 768px) {
+  /* 面包屑隐藏 */
+  .el-breadcrumb {
+    display: none;
+  }
+
+  /* 分页器调整 */
+  .el-pagination {
+    justify-content: center;
+  }
+
+  .el-pagination .el-pagination__total,
+  .el-pagination .el-pagination__sizes {
+    display: none;
+  }
+}
+
+/* ==========================================
+   移动端对话框/抽屉优化
+   ========================================== */
+
+@media (max-width: 768px) {
+  /* 对话框全屏 */
+  .el-dialog {
+    width: 95% !important;
+    max-width: 95% !important;
+    margin: 5vh auto !important;
+  }
+
+  .el-dialog__body {
+    padding: 16px !important;
+  }
+
+  .el-dialog__header {
+    padding: 16px !important;
+  }
+
+  .el-dialog__footer {
+    padding: 12px 16px !important;
+  }
+
+  /* 消息框优化 */
+  .el-message-box {
+    width: 90% !important;
+    max-width: 90% !important;
+  }
+
+  /* 抽屉优化 */
+  .el-drawer {
+    width: 90% !important;
+  }
+
+  .el-drawer.rtl {
+    width: 90% !important;
+  }
+
+  .el-drawer__body {
+    padding: 16px !important;
+  }
+}
+
+/* ==========================================
+   移动端卡片列表优化
+   ========================================== */
+
+@media (max-width: 768px) {
+  .card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .card-list-item {
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .card-list-item:active {
+    background: #f5f7fa;
+  }
+}
+
+/* ==========================================
+   响应式图片
+   ========================================== */
+
+.responsive-image {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .responsive-image {
+    border-radius: 8px;
+  }
+}
+
+/* ==========================================
+   移动端浮动按钮
+   ========================================== */
+
+@media (max-width: 768px) {
+  .floating-button {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    z-index: 999;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-radius: 50%;
+  }
+
+  .floating-button.bottom-left {
+    left: 20px;
+    right: auto;
+  }
+
+  .floating-button.top-right {
+    top: 80px;
+    bottom: auto;
+  }
+}
+
+/* ==========================================
+   移动端固定底部操作栏
+   ========================================== */
+
+@media (max-width: 768px) {
+  .mobile-bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-top: 1px solid #ebeef5;
+    padding: 12px 16px;
+    z-index: 1000;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .mobile-bottom-bar .el-button {
+    flex: 1;
+  }
+
+  /* 为固定底部栏留出空间 */
+  .has-mobile-bottom-bar {
+    padding-bottom: 70px;
+  }
+}
+
+/* ==========================================
+   文本截断工具类
+   ========================================== */
+
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-ellipsis-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.text-ellipsis-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==========================================
+   响应式字体大小
+   ========================================== */
+
+@media (max-width: 768px) {
+  .responsive-title {
+    font-size: 18px;
+    line-height: 1.4;
+  }
+
+  .responsive-subtitle {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .responsive-body {
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .responsive-caption {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+}
+
+/* ==========================================
+   移动端安全区域适配（iPhone X 刘海屏）
+   ========================================== */
+
+@supports (padding: max(0px)) {
+  @media (max-width: 768px) {
+    .safe-area-bottom {
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+
+    .safe-area-top {
+      padding-top: max(12px, env(safe-area-inset-top));
+    }
+
+    .mobile-bottom-bar {
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+  }
+}
+
+/* ==========================================
+   性能优化 - 减少重绘
+   ========================================== */
+
+@media (max-width: 768px) {
+  .will-change-transform {
+    will-change: transform;
+  }
+
+  .will-change-scroll {
+    will-change: scroll-position;
+  }
+}
+
+/* ==========================================
+   移动端禁用双击缩放
+   ========================================== */
+
+@media (max-width: 768px) {
+  body {
+    touch-action: manipulation;
+  }
+}

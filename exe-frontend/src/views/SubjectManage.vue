@@ -197,11 +197,25 @@ const handleUpdate = (subject: Subject) => {
 };
 
 const handleDelete = (id: number) => {
-  ElMessageBox.confirm('确定要删除该科目吗? 这会一并删除所有关联数据。', '提示', { type: 'warning' })
+  ElMessageBox.confirm('确定要删除该科目吗？系统会检查是否存在关联数据，如有关联数据将无法删除。', '确认删除', {
+    type: 'warning',
+    confirmButtonText: '确定',
+    cancelButtonText: '取消'
+  })
       .then(async () => {
-        await deleteSubject(id);
-        ElMessage.success('删除成功');
-        getList();
+        try {
+          const result = await deleteSubject(id);
+          if (result.code === 200) {
+            ElMessage.success('删除成功');
+            getList();
+          }
+          // 错误信息由拦截器自动处理
+        } catch (error) {
+          // 异常已由拦截器处理
+        }
+      })
+      .catch(() => {
+        // 用户取消删除
       });
 };
 

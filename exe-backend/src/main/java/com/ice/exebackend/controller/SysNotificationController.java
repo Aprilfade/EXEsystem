@@ -8,6 +8,8 @@ import com.ice.exebackend.entity.SysNotification;
 import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.handler.NotificationWebSocketHandler;
 import com.ice.exebackend.service.SysNotificationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +22,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/notifications")
 public class SysNotificationController {
+
+    private static final Logger logger = LoggerFactory.getLogger(SysNotificationController.class);
 
     @Autowired
     private SysNotificationService notificationService;
@@ -136,7 +140,7 @@ public class SysNotificationController {
             webSocketHandler.broadcast(msg, notification.getTargetType());
         } catch (Exception e) {
             // 捕获异常，防止通知发送失败影响主业务流程
-            e.printStackTrace();
+            logger.error("广播通知失败", e);
         }
     }
 }

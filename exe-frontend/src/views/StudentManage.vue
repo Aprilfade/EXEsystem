@@ -21,14 +21,16 @@
         <el-card shadow="never">
           <div class="stat-item">
             <p class="label">学生信息完整度</p>
-            <p class="value">60%</p> </div>
+            <p class="value">{{ completenessRate }}</p>
+          </div>
         </el-card>
       </el-col>
       <el-col :span="8">
         <el-card shadow="never">
           <div class="stat-item">
             <p class="label">学生账号激活率</p>
-            <p class="value">80%</p> </div>
+            <p class="value">{{ activationRate }}</p>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -37,16 +39,17 @@
       <div class="content-header">
         <el-input v-model="queryParams.name" placeholder="输入姓名或学号搜索" size="large" style="width: 300px;" @keyup.enter="handleQuery" />
         <div>
-          <el-select
-              v-model="queryParams.subjectId"
-              placeholder="按科目筛选"
-              clearable
-              @change="handleQuery"
+          <el-button
+              type="danger"
               size="large"
-              style="width: 150px; margin-right: 20px;"
+              :icon="Delete"
+              :disabled="selectedStudents.length === 0"
+              @click="handleBatchDelete"
+              style="margin-right: 12px;"
           >
-            <el-option v-for="sub in allSubjects" :key="sub.id" :label="sub.name" :value="sub.id" />
-          </el-select>
+            批量删除 {{ selectedStudents.length > 0 ? `(${selectedStudents.length})` : '' }}
+          </el-button>
+          <el-button size="large" :icon="Download" @click="handleDownloadTemplate" plain style="margin-right: 12px;">下载模板</el-button>
           <el-upload
               :action="''"
               :show-file-list="false"
@@ -60,7 +63,7 @@
         </div>
       </div>
 
-      <el-table v-loading="loading" :data="studentList" style="width: 100%; margin-top: 20px;">
+      <el-table v-loading="loading" :data="studentList" style="width: 100%; margin-top: 20px;" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="55" />
         <el-table-column prop="name" label="姓名" />
         <el-table-column prop="studentNo" label="学号" />
@@ -71,12 +74,8 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="所属科目">
-          <template #default="scope">
-            {{ getSubjectName(scope.row.subjectId) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="grade" label="年级" />
+        <el-table-column prop="grade" label="年级" width="120" />
+        <el-table-column prop="className" label="班级" width="120" />
         <el-table-column prop="contact" label="联系方式" />
         <el-table-column label="操作" width="250" align="center">
           <template #default="scope">
@@ -102,7 +101,6 @@
     <student-edit-dialog
         v-model:visible="isDialogVisible"
         :student-data="editingStudent"
-        :subjects="allSubjects"
         @success="getList"
     />
 
@@ -135,18 +133,22 @@
 <script lang="ts" setup>
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { fetchStudentList, deleteStudent, importStudents, exportStudentsExcel, addStudentPoints } from '@/api/student';
-import type { Student, StudentPageParams } from '@/api/student';
-import { fetchAllSubjects } from '@/api/subject';
-import type { Subject } from '@/api/subject';
+import { fetchStudentList, deleteStudent, importStudents, exportStudentsExcel, addStudentPoints, fetchStudentStats, batchDeleteStudents, downloadStudentTemplate } from '@/api/student';
+import type { Student, StudentPageParams, StudentStats } from '@/api/student';
 import { Plus, Edit, Delete, Search, Refresh, Upload, Download, Trophy } from '@element-plus/icons-vue';
 import StudentEditDialog from '@/components/student/StudentEditDialog.vue';
 import type { UploadRequestOptions } from 'element-plus';
 
 const studentList = ref<Student[]>([]);
-const allSubjects = ref<Subject[]>([]);
 const total = ref(0);
 const loading = ref(true);
+
+// 【新增】学生统计数据
+const completenessRate = ref('0%');
+const activationRate = ref('0%');
+
+// 【新增】批量选择相关
+const selectedStudents = ref<Student[]>([]);
 
 const isDialogVisible = ref(false);
 const editingStudent = ref<Student | undefined>(undefined);
@@ -163,7 +165,6 @@ const pointsForm = reactive({
 const queryParams = reactive<StudentPageParams>({
   current: 1,
   size: 10,
-  subjectId: undefined,
   name: ''
 });
 
@@ -178,16 +179,17 @@ const getList = async () => {
   }
 };
 
-const getAllSubjects = async () => {
-  const res = await fetchAllSubjects();
-  if (res.code === 200) {
-    allSubjects.value = res.data;
+// 【新增】获取学生统计数据
+const getStats = async () => {
+  try {
+    const res = await fetchStudentStats();
+    if (res.code === 200) {
+      completenessRate.value = res.data.completenessRate;
+      activationRate.value = res.data.activationRate;
+    }
+  } catch (error) {
+    console.error('获取统计数据失败:', error);
   }
-}
-
-const getSubjectName = (subjectId: number) => {
-  const subject = allSubjects.value.find(s => s.id === subjectId);
-  return subject ? subject.name : '未知';
 }
 
 const handleQuery = () => {
@@ -211,14 +213,39 @@ const handleDelete = (id: number) => {
         await deleteStudent(id);
         ElMessage.success('删除成功');
         getList();
+        getStats(); // 【新增】更新统计数据
       });
 };
 
-const handleBeforeUpload = (file: File) => {
-  if (!queryParams.subjectId) {
-    ElMessage.warning('请先选择一个科目再导入');
-    return false;
+// 【新增】处理表格选择变化
+const handleSelectionChange = (selection: Student[]) => {
+  selectedStudents.value = selection;
+};
+
+// 【新增】批量删除学生
+const handleBatchDelete = () => {
+  if (selectedStudents.value.length === 0) {
+    ElMessage.warning('请先选择要删除的学生');
+    return;
   }
+
+  ElMessageBox.confirm(`确定要删除选中的 ${selectedStudents.value.length} 个学生吗？`, '批量删除', {
+    type: 'warning',
+    confirmButtonText: '确定',
+    cancelButtonText: '取消'
+  }).then(async () => {
+    const ids = selectedStudents.value.map(s => s.id);
+    const res = await batchDeleteStudents(ids);
+    if (res.code === 200) {
+      ElMessage.success(res.data || '删除成功');
+      selectedStudents.value = [];
+      getList();
+      getStats();
+    }
+  });
+};
+
+const handleBeforeUpload = (file: File) => {
   const isExcel = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.type === 'application/vnd.ms-excel';
   if (!isExcel) {
     ElMessage.error('只能上传 .xlsx 或 .xls 格式的Excel文件');
@@ -229,11 +256,11 @@ const handleBeforeUpload = (file: File) => {
 const handleImport = async (options: UploadRequestOptions) => {
   const formData = new FormData();
   formData.append('file', options.file);
-  formData.append('subjectId', queryParams.subjectId!.toString());
   try {
     await importStudents(formData);
     ElMessage.success('导入成功');
     getList();
+    getStats(); // 【新增】更新统计数据
   } catch (error) {
     console.error('导入失败', error);
     ElMessage.error('导入失败');
@@ -244,7 +271,6 @@ const handleExport = async () => {
   try {
     ElMessage.info('正在生成Excel文件，请稍候...');
     const response = await exportStudentsExcel({
-      subjectId: queryParams.subjectId,
       name: queryParams.name
     });
 
@@ -263,6 +289,30 @@ const handleExport = async () => {
   } catch (error) {
     console.error('导出失败:', error);
     ElMessage.error('导出失败，请稍后重试。');
+  }
+};
+
+// 【新增】下载导入模板
+const handleDownloadTemplate = async () => {
+  try {
+    ElMessage.info('正在下载模板...');
+    const response = await downloadStudentTemplate();
+
+    const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', '学生导入模板.xlsx');
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    ElMessage.success('模板下载成功');
+  } catch (error) {
+    console.error('下载模板失败:', error);
+    ElMessage.error('下载模板失败，请稍后重试。');
   }
 };
 
@@ -295,7 +345,8 @@ const submitPoints = async () => {
 };
 
 onMounted(() => {
-  getAllSubjects().then(getList);
+  getList();
+  getStats(); // 【新增】获取统计数据
 });
 </script>
 

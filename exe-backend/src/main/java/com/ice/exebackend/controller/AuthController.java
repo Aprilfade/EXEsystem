@@ -9,6 +9,8 @@ import com.ice.exebackend.mapper.SysRoleMapper;
 import com.ice.exebackend.service.SysLoginLogService;
 import com.ice.exebackend.service.SysUserService;
 import com.ice.exebackend.utils.JwtUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+@Tag(name = "管理员认证", description = "管理员登录、注册、登出、获取用户信息等接口")
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -94,6 +97,7 @@ public class AuthController {
      * 登录接口优化
      * 保留 try-catch 仅为了记录失败日志，最后 re-throw 异常
      */
+    @Operation(summary = "管理员登录", description = "管理员用户名密码登录，返回JWT Token")
     @PostMapping("/login")
     public Result login(@RequestBody Map<String, String> loginRequest) {
         String username = loginRequest.get("username");
@@ -121,6 +125,7 @@ public class AuthController {
         }
     }
 
+    @Operation(summary = "管理员登出", description = "管理员退出登录，记录登出日志")
     @PostMapping("/logout")
     public Result logout() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -132,12 +137,15 @@ public class AuthController {
      * 注册接口优化
      * 移除了 try-catch，代码更清爽
      */
+    @Operation(summary = "管理员注册", description = "新用户注册管理员账号")
     @PostMapping("/register")
     public Result register(@RequestBody SysUser user) {
         // 如果 createUser 抛出 "用户名已存在" 等异常，会被 GlobalExceptionHandler 捕获并返回给前端
         sysUserService.createUser(user);
         return Result.suc("注册成功，请登录！");
     }
+
+    @Operation(summary = "获取当前用户信息", description = "获取当前登录用户的详细信息，包括角色和权限")
     @GetMapping("/me")
     public Result getUserInfo() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();

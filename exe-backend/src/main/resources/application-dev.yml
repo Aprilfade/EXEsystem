@@ -3,10 +3,33 @@ spring:
     type: redis
   datasource:
     # 开发环境连本地库
-    url: jdbc:mysql://localhost:3306/exam_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/exam_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: llf5201314  # 开发环境可以直接写，方便调试
     driver-class-name: com.mysql.cj.jdbc.Driver
+
+    # HikariCP 连接池优化配置（开发环境）
+    hikari:
+      # 连接池名称，便于监控识别
+      pool-name: ExeSystemHikariCP-Dev
+      # 最小空闲连接数（开发环境适当降低以节省资源）
+      minimum-idle: 5
+      # 最大连接池大小（开发环境设置较小值）
+      maximum-pool-size: 20
+      # 连接超时时间（毫秒）- 客户端等待连接的最大时间
+      connection-timeout: 30000
+      # 空闲连接超时时间（毫秒）- 连接在池中空闲的最大时间
+      idle-timeout: 600000
+      # 连接最大存活时间（毫秒）- 连接在池中的最大生命周期
+      max-lifetime: 1800000
+      # 连接测试查询（用于验证连接有效性）
+      connection-test-query: SELECT 1
+      # 自动提交
+      auto-commit: true
+      # 连接初始化 SQL
+      connection-init-sql: SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci
+      # 泄漏检测阈值（毫秒）- 超过此时间未归还的连接将被记录
+      leak-detection-threshold: 60000
   data:
     redis:
       host: localhost

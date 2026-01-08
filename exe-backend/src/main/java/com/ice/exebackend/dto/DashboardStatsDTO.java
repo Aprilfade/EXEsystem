@@ -29,6 +29,9 @@ public class DashboardStatsDTO implements Serializable {
     // 【新增】"科目统计" 图表数据
     private ChartData subjectStatsByGrade;
 
+    // 【新增】趋势数据
+    private TrendData trends;
+
     // --- 手动添加所有 Getter 和 Setter ---
 
     public ChartData getSubjectStatsByGrade() {
@@ -111,6 +114,14 @@ public class DashboardStatsDTO implements Serializable {
         this.notifications = notifications;
     }
 
+    public TrendData getTrends() {
+        return trends;
+    }
+
+    public void setTrends(TrendData trends) {
+        this.trends = trends;
+    }
+
 
     // --- 内部类也需要手动添加 Getter 和 Setter ---
 
@@ -186,6 +197,68 @@ public class DashboardStatsDTO implements Serializable {
 
         public void setDate(String date) {
             this.date = date;
+        }
+    }
+
+    /**
+     * 趋势数据（周同比增长率）
+     */
+    public static class TrendData implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private Double studentCountTrend;
+        private Double subjectCountTrend;
+        private Double knowledgePointCountTrend;
+        private Double questionCountTrend;
+        private Double paperCountTrend;
+        private Double onlineCountTrend;
+
+        public Double getStudentCountTrend() {
+            return studentCountTrend;
+        }
+
+        public void setStudentCountTrend(Double studentCountTrend) {
+            this.studentCountTrend = studentCountTrend;
+        }
+
+        public Double getSubjectCountTrend() {
+            return subjectCountTrend;
+        }
+
+        public void setSubjectCountTrend(Double subjectCountTrend) {
+            this.subjectCountTrend = subjectCountTrend;
+        }
+
+        public Double getKnowledgePointCountTrend() {
+            return knowledgePointCountTrend;
+        }
+
+        public void setKnowledgePointCountTrend(Double knowledgePointCountTrend) {
+            this.knowledgePointCountTrend = knowledgePointCountTrend;
+        }
+
+        public Double getQuestionCountTrend() {
+            return questionCountTrend;
+        }
+
+        public void setQuestionCountTrend(Double questionCountTrend) {
+            this.questionCountTrend = questionCountTrend;
+        }
+
+        public Double getPaperCountTrend() {
+            return paperCountTrend;
+        }
+
+        public void setPaperCountTrend(Double paperCountTrend) {
+            this.paperCountTrend = paperCountTrend;
+        }
+
+        public Double getOnlineCountTrend() {
+            return onlineCountTrend;
+        }
+
+        public void setOnlineCountTrend(Double onlineCountTrend) {
+            this.onlineCountTrend = onlineCountTrend;
         }
     }
 }

@@ -6,6 +6,8 @@ import com.ice.exebackend.dto.BattleRoomData;
 import com.ice.exebackend.entity.BizBattleRecord;
 import com.ice.exebackend.entity.BizQuestion;
 import com.ice.exebackend.entity.BizStudent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -21,6 +23,8 @@ import java.util.concurrent.*;
 
 @Component
 public class BattleGameManager {
+
+    private static final Logger logger = LoggerFactory.getLogger(BattleGameManager.class);
 
     @Autowired
     private BizQuestionService questionService;
@@ -208,7 +212,7 @@ public class BattleGameManager {
         try {
             return objectMapper.writeValueAsString(object);
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("对象转JSON失败", e);
             return "{}";
         }
     }
@@ -631,8 +635,9 @@ public class BattleGameManager {
 
     private void updatePlayerPoints(WebSocketSession session, String result) {
         if (session == null) return;
+        String studentNo = null;
         try {
-            String studentNo = (String) session.getAttributes().get("username");
+            studentNo = (String) session.getAttributes().get("username");
             if (studentNo == null) return;
             BizStudent student = studentService.getOne(
                     new QueryWrapper<BizStudent>().eq("student_no", studentNo)
@@ -651,7 +656,7 @@ public class BattleGameManager {
                 studentService.updateById(student);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("更新对战积分失败, studentNo: {}", studentNo, e);
         }
     }
 
@@ -679,7 +684,7 @@ public class BattleGameManager {
                 session.sendMessage(new TextMessage(objectMapper.writeValueAsString(msg)));
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("发送WebSocket消息失败", e);
         }
     }
 
@@ -786,7 +791,7 @@ public class BattleGameManager {
             record.setCreateTime(LocalDateTime.now());
             battleRecordService.save(record);
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("保存对战记录失败, playerId: {}", player != null ? player.getId() : null, e);
         }
     }
 }

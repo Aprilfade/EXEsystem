@@ -2,6 +2,8 @@ package com.ice.exebackend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ice.exebackend.dto.BattleMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -11,6 +13,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class BattleMessageSubscriber {
+
+    private static final Logger logger = LoggerFactory.getLogger(BattleMessageSubscriber.class);
 
     // 用来存放本地的 Session，Key 是用户 ID (String)
     public static final Map<String, WebSocketSession> LOCAL_SESSION_MAP = new ConcurrentHashMap<>();
@@ -38,7 +42,7 @@ public class BattleMessageSubscriber {
                 session.sendMessage(new TextMessage(jsonMsg));
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("处理Redis广播消息失败", e);
         }
     }
 }

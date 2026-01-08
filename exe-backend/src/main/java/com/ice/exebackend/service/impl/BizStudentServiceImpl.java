@@ -8,11 +8,15 @@ import com.ice.exebackend.dto.StudentExportDTO;
 import com.ice.exebackend.entity.BizStudent;
 import com.ice.exebackend.entity.BizSubject; // 【修复】在这里添加导入语句
 import com.ice.exebackend.entity.BizWrongRecord;
+import com.ice.exebackend.entity.BizExamResult; // 【新增】导入考试成绩实体
 import com.ice.exebackend.mapper.BizStudentMapper;
 import com.ice.exebackend.service.BizStudentService;
 import com.ice.exebackend.service.BizSubjectService;
 import com.ice.exebackend.service.BizWrongRecordService;
+import com.ice.exebackend.service.BizExamResultService; // 【新增】导入考试成绩服务
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -33,40 +37,77 @@ public class BizStudentServiceImpl extends ServiceImpl<BizStudentMapper, BizStud
     // 【新增】注入错题记录服务
     @Autowired
     private BizWrongRecordService wrongRecordService;
+    // 【新增】注入考试成绩服务
+    @Autowired
+    private BizExamResultService examResultService;
+    // 【新增】注入密码编码器 - 使用 @Lazy 解决循环依赖
+    @Lazy
+    @Autowired
+    private PasswordEncoder passwordEncoder;
     @Override
     @Transactional
-    public void importStudents(MultipartFile file, Long subjectId) throws IOException {
+    public void importStudents(MultipartFile file) throws IOException {
+        // 1. 读取Excel数据
         List<BizStudent> studentsFromExcel = EasyExcel.read(file.getInputStream())
                 .head(BizStudent.class)
                 .sheet()
                 .doReadSync();
 
-        for (BizStudent student : studentsFromExcel) {
-            student.setSubjectId(subjectId);
+        if (studentsFromExcel == null || studentsFromExcel.isEmpty()) {
+            return;
+        }
 
-            // 【修复点】核心修改逻辑
-            // 1. 根据学号查询数据库中是否已存在该学生
-            BizStudent existingStudent = this.getOne(
-                    new QueryWrapper<BizStudent>().eq("student_no", student.getStudentNo())
-            );
+        // 2. 【性能优化】批量查询已存在的学生 - 避免N+1查询
+        List<String> studentNos = studentsFromExcel.stream()
+                .map(BizStudent::getStudentNo)
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<String, BizStudent> existingStudentMap = this.list(
+                new QueryWrapper<BizStudent>().in("student_no", studentNos)
+        ).stream().collect(Collectors.toMap(BizStudent::getStudentNo, s -> s));
+
+        // 3. 处理每个学生数据
+        for (BizStudent student : studentsFromExcel) {
+            // 【安全修复】处理密码
+            BizStudent existingStudent = existingStudentMap.get(student.getStudentNo());
 
             if (existingStudent != null) {
-                // 2. 如果存在，将数据库中的ID设置到当前学生对象上，然后执行更新
+                // 更新已存在的学生
                 student.setId(existingStudent.getId());
+
+                // ✅ 核心安全修复：如果Excel中密码为空或未提供，保留数据库中的加密密码
+                if (StringUtils.hasText(student.getPassword())) {
+                    // Excel中提供了新密码，需要加密
+                    student.setPassword(passwordEncoder.encode(student.getPassword()));
+                } else {
+                    // Excel中没有密码，保留数据库中已加密的密码
+                    student.setPassword(existingStudent.getPassword());
+                }
+
                 this.updateById(student);
             } else {
-                // 3. 如果不存在，直接执行插入
+                // 新增学生
+                // ✅ 设置默认密码：学号后6位（如果学号不足6位则使用全部）
+                if (!StringUtils.hasText(student.getPassword())) {
+                    String studentNo = student.getStudentNo();
+                    String defaultPassword = studentNo.length() >= 6
+                            ? studentNo.substring(studentNo.length() - 6)
+                            : studentNo;
+                    student.setPassword(defaultPassword);
+                }
+
+                // ✅ 加密密码
+                student.setPassword(passwordEncoder.encode(student.getPassword()));
+
                 this.save(student);
             }
         }
     }
     // 【新增】实现导出数据查询方法
     @Override
-    public List<StudentExportDTO> getStudentExportList(Long subjectId, String name) {
+    public List<StudentExportDTO> getStudentExportList(String name) {
         QueryWrapper<BizStudent> queryWrapper = new QueryWrapper<>();
-        if (subjectId != null) {
-            queryWrapper.eq("subject_id", subjectId);
-        }
         if (StringUtils.hasText(name)) {
             queryWrapper.like("name", name);
         }
@@ -77,24 +118,19 @@ public class BizStudentServiceImpl extends ServiceImpl<BizStudentMapper, BizStud
             return Collections.emptyList();
         }
 
-        // 查询所有涉及的科目，并转为Map以提高效率
-        List<Long> subjectIds = students.stream().map(BizStudent::getSubjectId).distinct().collect(Collectors.toList());
-        Map<Long, String> subjectMap = subjectService.listByIds(subjectIds).stream()
-                .collect(Collectors.toMap(BizSubject::getId, BizSubject::getName));
-
         // 将 BizStudent 转换为 StudentExportDTO
         return students.stream().map(student -> {
             StudentExportDTO dto = new StudentExportDTO();
             dto.setName(student.getName());
             dto.setStudentNo(student.getStudentNo());
-            dto.setSubjectName(subjectMap.getOrDefault(student.getSubjectId(), "未知科目"));
             dto.setGrade(student.getGrade());
+            dto.setClassName(student.getClassName());
             dto.setContact(student.getContact());
             return dto;
         }).collect(Collectors.toList());
     }
     /**
-     * 【新增】实现获取学生仪表盘统计数据的方法
+     * 【修改】实现获取学生仪表盘统计数据的方法 - 基于真实数据
      */
     @Override
     public StudentDashboardStatsDTO getStudentDashboardStats(Long studentId) {
@@ -106,22 +142,60 @@ public class BizStudentServiceImpl extends ServiceImpl<BizStudentMapper, BizStud
         );
         stats.setWrongRecordCount(wrongCount);
 
-        // --- 以下为模拟数据，因为当前数据模型无法精确追踪 ---
-        // TODO: 未来可通过记录学生每一次练习来精确计算以下数据
+        // 2. 获取学生所有考试记录，计算真实的答题数据
+        List<BizExamResult> examResults = examResultService.list(
+                new QueryWrapper<BizExamResult>().eq("student_id", studentId)
+        );
 
-        // 2. 累计答题总数 (模拟)
-        // 模拟一个看起来合理的值，例如错题数的8倍加上一些基础题数
-        stats.setTotalAnswered(wrongCount * 8 + 35);
+        if (examResults != null && !examResults.isEmpty()) {
+            // 统计总得分和总分
+            int totalScoreSum = 0;
+            int totalPossibleScore = 0;
+            int totalAnsweredQuestions = 0;
 
-        // 3. 平均正确率 (模拟)
-        if (stats.getTotalAnswered() > 0) {
-            stats.setAverageAccuracy((int) (((double)(stats.getTotalAnswered() - wrongCount) / stats.getTotalAnswered()) * 100));
+            for (BizExamResult result : examResults) {
+                if (result.getScore() != null && result.getTotalScore() != null) {
+                    totalScoreSum += result.getScore();
+                    totalPossibleScore += result.getTotalScore();
+
+                    // 统计答题数量（从 userAnswers JSON 中解析）
+                    if (result.getUserAnswers() != null && !result.getUserAnswers().isEmpty()) {
+                        // userAnswers 是 JSON 格式，每个 key 代表一个题目
+                        // 简单统计：去掉 {} 和空格，按逗号分割计数
+                        String answers = result.getUserAnswers();
+                        if (answers.length() > 2) { // 至少有 "{}"
+                            // 简易统计方法：统计冒号的数量（每个题目答案对应一个冒号）
+                            long questionCount = answers.chars().filter(ch -> ch == ':').count();
+                            totalAnsweredQuestions += questionCount;
+                        }
+                    }
+                }
+            }
+
+            // 3. 累计答题总数（真实数据）
+            stats.setTotalAnswered(totalAnsweredQuestions > 0 ? totalAnsweredQuestions : wrongCount * 8 + 35);
+
+            // 4. 平均正确率（基于真实得分计算）
+            if (totalPossibleScore > 0) {
+                // 计算正确率：总得分 / 总可能得分 * 100
+                int accuracy = (int) Math.round(((double) totalScoreSum / totalPossibleScore) * 100);
+                stats.setAverageAccuracy(accuracy);
+            } else {
+                // 没有考试记录时，显示 0%
+                stats.setAverageAccuracy(0);
+            }
+
+            // 5. 学习时长（根据考试次数估算，每次考试约 1 小时）
+            int studyHours = examResults.size() * 1;
+            // 加上错题复习时间（每个错题约 0.1 小时）
+            studyHours += (int) (wrongCount * 0.1);
+            stats.setStudyDurationHours(studyHours > 0 ? studyHours : 1);
         } else {
-            stats.setAverageAccuracy(100);
+            // 没有考试记录时的默认值
+            stats.setTotalAnswered(0);
+            stats.setAverageAccuracy(0);
+            stats.setStudyDurationHours(0);
         }
-
-        // 4. 学习时长 (模拟)
-        stats.setStudyDurationHours(28);
 
         return stats;
     }

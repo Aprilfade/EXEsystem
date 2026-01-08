@@ -55,6 +55,27 @@
           </el-form-item>
         </el-col>
       </el-row>
+
+      <!-- ✅ 新增：实时显示试卷统计信息 -->
+      <el-row :gutter="20" v-if="form.paperType === 1" style="margin-bottom: 20px;">
+        <el-col :span="12">
+          <el-form-item label="试卷总分">
+            <el-tag type="success" size="large" effect="dark" style="font-size: 16px; padding: 10px 20px;">
+              <el-icon><Trophy /></el-icon>
+              {{ totalScore }} 分
+            </el-tag>
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="题目总数">
+            <el-tag type="info" size="large" style="font-size: 16px; padding: 10px 20px;">
+              <el-icon><Document /></el-icon>
+              {{ totalQuestions }} 道
+            </el-tag>
+          </el-form-item>
+        </el-col>
+      </el-row>
+
       <el-form-item label="试卷描述" prop="description">
         <el-input v-model="form.description" type="textarea" placeholder="请输入试卷描述" />
       </el-form-item>
@@ -62,7 +83,10 @@
 
     <el-divider />
 
-    <div v-if="form.paperType === 1">
+    <!-- 【知识点功能增强】当编辑已有试卷时，显示Tab切换 -->
+    <el-tabs v-if="props.paperId" v-model="activeTab" type="border-card">
+      <el-tab-pane label="试卷内容" name="content">
+        <div v-if="form.paperType === 1">
       <div class="smart-entry-bar" style="margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; background: #f0f9eb; padding: 10px; border-radius: 4px; border: 1px solid #e1f3d8;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <el-icon color="#67C23A"><MagicStick /></el-icon>
@@ -80,6 +104,36 @@
       />
       <el-alert v-else title="请先选择一个科目来管理试题" type="info" show-icon :closable="false" />
     </div>
+      </el-tab-pane>
+
+      <!-- 【知识点功能增强】知识点分布Tab -->
+      <el-tab-pane label="知识点分布" name="knowledge">
+        <paper-knowledge-point-chart :paper-id="props.paperId" />
+      </el-tab-pane>
+    </el-tabs>
+
+    <!-- 新建试卷时不显示Tabs，直接显示内容 -->
+    <div v-else>
+      <div v-if="form.paperType === 1">
+        <div class="smart-entry-bar" style="margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; background: #f0f9eb; padding: 10px; border-radius: 4px; border: 1px solid #e1f3d8;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <el-icon color="#67C23A"><MagicStick /></el-icon>
+            <span style="font-size: 14px; color: #606266;">想快速创建试卷？试试智能生成功能。</span>
+          </div>
+          <el-button type="success" size="small" @click="openSmartDialog">
+            <el-icon style="margin-right: 4px"><MagicStick /></el-icon> 一键智能组卷
+          </el-button>
+        </div>
+        <paper-question-manager
+            v-if="form.paperType === 1 && form.subjectId"
+            :paper-groups="form.groups"
+            :subject-id="form.subjectId"
+            @update:groups="updateGroups"
+        />
+        <el-alert v-else title="请先选择一个科目来管理试题" type="info" show-icon :closable="false" />
+      </div>
+    </div>
+
     <el-dialog v-model="showSmartDialog" title="智能组卷配置" width="480px" append-to-body>
       <el-form :model="smartForm" label-width="100px">
         <el-alert title="系统将根据当前选择的科目和年级，结合遗传算法生成最优试卷" type="info" :closable="false" style="margin-bottom: 20px;" />
@@ -186,8 +240,9 @@ import draggable from 'vuedraggable';
 
 import type { Subject } from '@/api/subject';
 import PaperQuestionManager from './PaperQuestionManager.vue';
+import PaperKnowledgePointChart from './PaperKnowledgePointChart.vue'; // 【知识点功能增强】
 import { useAuthStore } from '@/stores/auth';
-import { UploadFilled, Delete } from '@element-plus/icons-vue';
+import { UploadFilled, Delete, Trophy, Document } from '@element-plus/icons-vue';  // ✅ 新增Trophy和Document图标
 
 
 
@@ -202,8 +257,31 @@ const authStore = useAuthStore();
 const formRef = ref<FormInstance>();
 const form = ref<Partial<Paper>>({ name: '', subjectId: undefined, description: '', paperType: 1, groups: [], paperImages: [],status: 0 });
 const fileList = ref<UploadUserFile[]>([]);
+const activeTab = ref('content'); // 【知识点功能增强】当前激活的Tab
 
 const dialogTitle = computed(() => (props.paperId ? '编辑试卷' : '新增试卷'));
+
+// ✅ 实时计算试卷总分
+const totalScore = computed(() => {
+  if (form.value.paperType === 1 && form.value.groups) {
+    return form.value.groups.reduce((total, group) => {
+      return total + (group.questions?.reduce((sum, q) => sum + (q.score || 0), 0) || 0);
+    }, 0);
+  } else if (form.value.paperType === 2) {
+    return 100; // 图片试卷默认100分
+  }
+  return 0;
+});
+
+// ✅ 实时计算题目总数
+const totalQuestions = computed(() => {
+  if (form.value.paperType === 1 && form.value.groups) {
+    return form.value.groups.reduce((total, group) => {
+      return total + (group.questions?.length || 0);
+    }, 0);
+  }
+  return 0;
+});
 
 const rules = reactive<FormRules>({
   name: [{ required: true, message: '请输入试卷名称', trigger: 'blur' }],

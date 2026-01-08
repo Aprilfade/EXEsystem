@@ -56,7 +56,7 @@ public class BizQuestionController {
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
     @PostMapping
-    @PreAuthorize("hasAuthority('sys:question:list')")
+    @PreAuthorize("hasAuthority('sys:question:create')") // ✅ 修改为细粒度权限
     @Log(title = "题库管理", businessType = BusinessType.INSERT) // 新增
     public Result createQuestion(@RequestBody QuestionDTO questionDTO) {
         boolean success = questionService.createQuestionWithKnowledgePoints(questionDTO);
@@ -73,9 +73,10 @@ public class BizQuestionController {
                                   @RequestParam(defaultValue = "10") int size,
                                   @RequestParam(required = false) Long subjectId,
                                   @RequestParam(required = false) Integer questionType,
-                                  @RequestParam(required = false) String grade) {
+                                  @RequestParam(required = false) String grade,
+                                  @RequestParam(required = false) String content) {  // ✅ 新增题干内容搜索参数
 
-        logger.info("开始查询试题列表... subjectId: {}, grade: {}, questionType: {}", subjectId, grade, questionType);
+        logger.info("开始查询试题列表... subjectId: {}, grade: {}, questionType: {}, content: {}", subjectId, grade, questionType, content);
         Page<BizQuestion> page = new Page<>(current, size);
         QueryWrapper<BizQuestion> queryWrapper = new QueryWrapper<>();
         if (subjectId != null) {
@@ -86,6 +87,10 @@ public class BizQuestionController {
         }
         if (StringUtils.hasText(grade)) {
             queryWrapper.eq("grade", grade);
+        }
+        // ✅ 新增：题干内容模糊搜索
+        if (StringUtils.hasText(content)) {
+            queryWrapper.like("content", content);
         }
         queryWrapper.orderByDesc("id");
         questionService.page(page, queryWrapper);
@@ -124,6 +129,7 @@ public class BizQuestionController {
     }
 
     @GetMapping("/export")
+    @PreAuthorize("hasAuthority('sys:question:list')") // ✅ 添加权限控制
     @Log(title = "题库管理", businessType = BusinessType.EXPORT) // 导出
     public void exportQuestions(HttpServletResponse response, QuestionPageParams params) throws IOException {
         List<QuestionExcelDTO> list = questionService.getQuestionsForExport(params);
@@ -135,7 +141,7 @@ public class BizQuestionController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('sys:question:list')") // 这里您之前的代码可能没有加权限，建议加上
+    @PreAuthorize("hasAuthority('sys:question:update')") // ✅ 修改为细粒度权限
     @Log(title = "题库管理", businessType = BusinessType.UPDATE) // 修改
     public Result updateQuestion(@PathVariable Long id, @RequestBody QuestionDTO questionDTO) {
         questionDTO.setId(id);
@@ -148,6 +154,7 @@ public class BizQuestionController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('sys:question:delete')") // ✅ 添加细粒度权限
     @Log(title = "题库管理", businessType = BusinessType.DELETE) // 删除
     public Result deleteQuestion(@PathVariable Long id) {
         boolean success = questionService.removeById(id);
@@ -172,7 +179,7 @@ public class BizQuestionController {
     }
 
     @PutMapping("/batch-update")
-    @PreAuthorize("hasAuthority('sys:question:list')")
+    @PreAuthorize("hasAuthority('sys:question:update')") // ✅ 修改为细粒度权限
     @Log(title = "题库管理", businessType = BusinessType.UPDATE) // 批量修改
     public Result batchUpdateQuestions(@RequestBody QuestionBatchUpdateDTO dto) {
         boolean success = questionService.batchUpdateQuestions(dto);
@@ -210,10 +217,27 @@ public class BizQuestionController {
             );
             return Result.suc(questions);
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("AI生成题目失败", e);
             return Result.fail("生成失败: " + e.getMessage());
         }
     }
+
+    /**
+     * 【新增】批量查询题目详情（用于试卷管理等场景）
+     */
+    @PostMapping("/batch")
+    @PreAuthorize("hasAuthority('sys:question:list')")
+    public Result getQuestionsByIds(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Result.fail("题目ID列表不能为空");
+        }
+        if (ids.size() > 1000) {
+            return Result.fail("单次查询题目数量不能超过1000");
+        }
+        List<BizQuestion> questions = questionService.listByIds(ids);
+        return Result.suc(questions);
+    }
+
     /**
      * 【新增】批量删除试题
      */

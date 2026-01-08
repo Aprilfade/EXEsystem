@@ -98,9 +98,7 @@ public class LogAspect {
             // 保存数据库
             operLogService.save(operLog);
         } catch (Exception exp) {
-            log.error("==前置通知异常==");
-            log.error("异常信息:{}", exp.getMessage());
-            exp.printStackTrace();
+            log.error("日志记录切面异常", exp);
         }
     }
 

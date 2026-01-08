@@ -13,7 +13,7 @@
         <el-card shadow="never">
           <div class="stat-item">
             <p class="label">知识点总数</p>
-            <p class="value">{{ total }}</p>
+            <p class="value">{{ globalStats.totalCount }}</p>
           </div>
         </el-card>
       </el-col>
@@ -21,7 +21,7 @@
         <el-card shadow="never">
           <div class="stat-item">
             <p class="label">关联试题总数量</p>
-            <p class="value">{{ totalAssociatedQuestions }}</p>
+            <p class="value">{{ globalStats.totalQuestionCount }}</p>
           </div>
         </el-card>
       </el-col>
@@ -29,7 +29,7 @@
         <el-card shadow="never">
           <div class="stat-item">
             <p class="label">未关联试题的知识点占比</p>
-            <p class="value">{{ unassociatedPercentage }}%</p>
+            <p class="value">{{ globalStats.unassociatedPercentage }}%</p>
           </div>
         </el-card>
       </el-col>
@@ -39,6 +39,16 @@
       <div class="content-header">
         <el-button type="success" :icon="MagicStick" size="large" @click="openAiDialog" style="margin-right: 12px;">
           AI 智能提取
+        </el-button>
+        <el-button
+          v-if="selectedKnowledgePoints.length > 0 && viewMode === 'list'"
+          type="warning"
+          :icon="Edit"
+          size="large"
+          @click="openBatchEditDialog"
+          style="margin-right: 12px;"
+        >
+          批量编辑 ({{ selectedKnowledgePoints.length }})
         </el-button>
 
         <el-dialog
@@ -152,10 +162,12 @@
         </div>
       </div>
 
-      <el-table v-if="viewMode === 'list'" :data="knowledgePointList" v-loading="loading" style="width: 100%; margin-top: 20px;">
+      <el-table v-if="viewMode === 'list'" :data="knowledgePointList" v-loading="loading" style="width: 100%; margin-top: 20px;" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="55" align="center" />
         <el-table-column type="index" label="序号" width="80" align="center" />
         <el-table-column prop="name" label="知识点名称" />
-        <el-table-column prop="grade" label="年级" width="120" /> <el-table-column prop="code" label="编码" />
+        <el-table-column prop="grade" label="年级" width="120" />
+        <el-table-column prop="code" label="编码" />
         <el-table-column prop="questionCount" label="关联题目数" width="120" align="center"/>
         <el-table-column prop="description" label="描述" show-overflow-tooltip />
         <el-table-column prop="tags" label="标签" />
@@ -193,14 +205,46 @@
         :knowledge-point-id="selectedKpId"
     />
 
+    <!-- 批量编辑对话框 -->
+    <el-dialog
+      v-model="batchEditDialogVisible"
+      title="批量编辑知识点"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-alert title="批量编辑提示" type="info" :closable="false" style="margin-bottom: 15px;">
+        <p>已选中 {{ selectedKnowledgePoints.length }} 个知识点</p>
+        <p>留空的字段将不会被修改</p>
+      </el-alert>
+      <el-form :model="batchEditForm" label-width="100px">
+        <el-form-item label="所属科目">
+          <el-select v-model="batchEditForm.subjectId" placeholder="请选择科目（不修改请留空）" clearable style="width: 100%">
+            <el-option v-for="s in allSubjects" :key="s.id" :label="s.name" :value="s.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="适用年级">
+          <el-select v-model="batchEditForm.grade" placeholder="请选择年级（不修改请留空）" clearable style="width: 100%">
+            <el-option v-for="g in ['七年级','八年级','九年级','高一','高二','高三']" :key="g" :label="g" :value="g" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="标签">
+          <el-input v-model="batchEditForm.tags" placeholder="请输入标签（不修改请留空）" clearable />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchEditDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleBatchUpdate" :loading="batchUpdating">确认更新</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
 <script lang="ts" setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'; // 确保导入 watch
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { fetchKnowledgePointList, deleteKnowledgePoint } from '@/api/knowledgePoint';
-import type { KnowledgePoint, KnowledgePointPageParams } from '@/api/knowledgePoint';
+import { fetchKnowledgePointList, deleteKnowledgePoint, fetchKnowledgePointGlobalStats, batchUpdateKnowledgePoints } from '@/api/knowledgePoint';
+import type { KnowledgePoint, KnowledgePointPageParams, KnowledgePointGlobalStats } from '@/api/knowledgePoint';
 import { fetchAllSubjects } from '@/api/subject';
 import type { Subject } from '@/api/subject';
 import { Plus, Edit, Delete, Search, Refresh, Grid, Menu, MoreFilled, MagicStick } from '@element-plus/icons-vue';
@@ -224,6 +268,14 @@ const allSubjects = ref<Subject[]>([]);
 const total = ref(0);
 const loading = ref(true);
 
+// 【知识点功能增强】全局统计数据
+const globalStats = ref<KnowledgePointGlobalStats>({
+  totalCount: 0,
+  totalQuestionCount: 0,
+  unassociatedCount: 0,
+  unassociatedPercentage: 0
+});
+
 const isDialogVisible = ref(false);
 const editingId = ref<number | undefined>(undefined);
 const viewMode = ref<'grid' | 'list'>('grid');
@@ -239,6 +291,16 @@ const queryParams = reactive<KnowledgePointPageParams>({
 
 const isDetailDialogVisible = ref(false);
 const selectedKpId = ref<number | null>(null);
+
+// 批量编辑相关
+const selectedKnowledgePoints = ref<KnowledgePoint[]>([]);
+const batchEditDialogVisible = ref(false);
+const batchUpdating = ref(false);
+const batchEditForm = reactive({
+  subjectId: undefined as number | undefined,
+  grade: '',
+  tags: ''
+});
 
 // AI 相关方法保持不变 ...
 const openAiDialog = () => {
@@ -296,17 +358,17 @@ const batchSaveAiPoints = async () => {
   }
 };
 
-// 计算属性保持不变，但在分页模式下，这些统计只能反映当前页
-// 为了准确性，可以考虑后端返回统计概览，或者在前端提示 "当前页统计"
-const totalAssociatedQuestions = computed(() => {
-  return knowledgePointList.value.reduce((sum, kp) => sum + (kp.questionCount || 0), 0);
-});
-
-const unassociatedPercentage = computed(() => {
-  if (knowledgePointList.value.length === 0) return 0;
-  const unassociatedCount = knowledgePointList.value.filter(kp => !kp.questionCount || kp.questionCount === 0).length;
-  return ((unassociatedCount / knowledgePointList.value.length) * 100).toFixed(0);
-});
+// 【知识点功能增强】加载全局统计数据
+const loadGlobalStats = async () => {
+  try {
+    const res = await fetchKnowledgePointGlobalStats();
+    if (res.code === 200 && res.data) {
+      globalStats.value = res.data;
+    }
+  } catch (error) {
+    console.error('获取全局统计失败:', error);
+  }
+};
 
 // 【修改】核心数据加载方法：使用 queryParams 调用后端接口
 const getList = async () => {
@@ -316,6 +378,8 @@ const getList = async () => {
     const response = await fetchKnowledgePointList(queryParams);
     knowledgePointList.value = response.data;
     total.value = response.total;
+    // 【知识点功能增强】加载全局统计
+    await loadGlobalStats();
   } finally {
     loading.value = false;
   }
@@ -374,6 +438,51 @@ const handleDelete = (id: number) => {
 const handlePreview = (id: number) => {
   selectedKpId.value = id;
   isDetailDialogVisible.value = true;
+};
+
+// 批量编辑相关方法
+const handleSelectionChange = (selection: KnowledgePoint[]) => {
+  selectedKnowledgePoints.value = selection;
+};
+
+const openBatchEditDialog = () => {
+  // 重置表单
+  batchEditForm.subjectId = undefined;
+  batchEditForm.grade = '';
+  batchEditForm.tags = '';
+  batchEditDialogVisible.value = true;
+};
+
+const handleBatchUpdate = async () => {
+  if (selectedKnowledgePoints.value.length === 0) {
+    ElMessage.warning('请先选择要编辑的知识点');
+    return;
+  }
+
+  // 检查是否至少有一个字段要更新
+  if (!batchEditForm.subjectId && !batchEditForm.grade && !batchEditForm.tags) {
+    ElMessage.warning('请至少填写一个要更新的字段');
+    return;
+  }
+
+  batchUpdating.value = true;
+  try {
+    const knowledgePointIds = selectedKnowledgePoints.value.map(kp => kp.id);
+    await batchUpdateKnowledgePoints({
+      knowledgePointIds,
+      subjectId: batchEditForm.subjectId,
+      grade: batchEditForm.grade || undefined,
+      tags: batchEditForm.tags || undefined
+    });
+    ElMessage.success('批量更新成功');
+    batchEditDialogVisible.value = false;
+    selectedKnowledgePoints.value = [];
+    getList();
+  } catch (error) {
+    console.error('批量更新失败:', error);
+  } finally {
+    batchUpdating.value = false;
+  }
 };
 
 // 监听视图模式切换，自动重置分页到第一页并刷新

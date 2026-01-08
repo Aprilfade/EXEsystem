@@ -29,6 +29,8 @@ import com.itextpdf.layout.element.Image;
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.VerticalAlignment;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -51,6 +53,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class PdfServiceImpl implements PdfService {
+
+    private static final Logger logger = LoggerFactory.getLogger(PdfServiceImpl.class);
 
     @Autowired
     private BizPaperService paperService;
@@ -127,7 +131,7 @@ public class PdfServiceImpl implements PdfService {
                                 document.add(new Paragraph("[图片文件丢失: " + fileName + "]").setFontColor(ColorConstants.RED));
                             }
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            logger.error("PDF试卷图片加载失败: {}", imgObj.getImageUrl(), e);
                             document.add(new Paragraph("[图片加载失败]").setFontColor(ColorConstants.RED));
                         }
                     }
@@ -188,7 +192,7 @@ public class PdfServiceImpl implements PdfService {
 
             document.close();
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("生成PDF试卷失败, paperId: {}", paperId, e);
             throw new RuntimeException("PDF 生成失败: " + e.getMessage());
         }
 
@@ -307,7 +311,7 @@ public class PdfServiceImpl implements PdfService {
 
             document.close();
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("生成答题卡PDF失败, paperId: {}", paperId, e);
             throw new RuntimeException("答题卡生成失败: " + e.getMessage());
         }
         return out;
@@ -393,11 +397,12 @@ public class PdfServiceImpl implements PdfService {
             // 注意：这里仍可能遇到 NPE，但作为兜底方案
             return PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H", PdfFontFactory.EmbeddingStrategy.PREFER_NOT_EMBEDDED);
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("字体加载失败，尝试使用默认字体", e);
             try {
                 // 最后的最后，回退到默认
                 return PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H", PdfFontFactory.EmbeddingStrategy.PREFER_NOT_EMBEDDED);
             } catch (Exception ex) {
+                logger.error("字体加载失败", ex);
                 throw new RuntimeException("字体加载失败", ex);
             }
         }

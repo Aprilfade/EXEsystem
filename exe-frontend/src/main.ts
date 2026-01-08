@@ -8,6 +8,8 @@ import router from './router'
 import { useAuthStore } from './stores/auth' // 1. 导入 auth store
 
 import './style.css'
+import './styles/responsive.css'
+import './styles/theme.css'
 
 // 2. 使用异步函数来初始化应用
 const initializeApp = async () => {
@@ -44,6 +46,30 @@ const initializeApp = async () => {
     app.use(ElementPlus)
 
     app.mount('#app')
+
+    // 注册 Service Worker（仅在生产环境）
+    if ('serviceWorker' in navigator && import.meta.env.PROD) {
+        navigator.serviceWorker
+            .register('/sw.js')
+            .then((registration) => {
+                console.log('[ServiceWorker] Registered successfully:', registration.scope);
+
+                // 监听更新
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    if (newWorker) {
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                console.log('[ServiceWorker] New version available, please refresh');
+                            }
+                        });
+                    }
+                });
+            })
+            .catch((error) => {
+                console.error('[ServiceWorker] Registration failed:', error);
+            });
+    }
 }
 
 // 4. 执行初始化

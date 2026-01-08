@@ -2,6 +2,8 @@ package com.ice.exebackend.controller;
 
 import com.ice.exebackend.common.Result;
 import org.apache.tika.Tika; // 需要引入 Tika
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -22,6 +24,8 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/files")
 public class FileUploadController {
+
+    private static final Logger logger = LoggerFactory.getLogger(FileUploadController.class);
 
     @Value("${file.upload-dir}")
     private String uploadDir;
@@ -80,7 +84,7 @@ public class FileUploadController {
             return Result.suc(fileUrl);
 
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("文件上传失败", e);
             return Result.fail("上传失败：" + e.getMessage());
         }
     }

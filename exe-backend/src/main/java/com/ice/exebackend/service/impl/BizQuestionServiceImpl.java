@@ -16,6 +16,8 @@ import com.ice.exebackend.entity.BizQuestionKnowledgePoint;
 import com.ice.exebackend.mapper.BizQuestionKnowledgePointMapper;
 import com.ice.exebackend.mapper.BizQuestionMapper;
 import com.ice.exebackend.service.BizQuestionService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -26,11 +28,15 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException; // 【新增】 导入
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 public class BizQuestionServiceImpl extends ServiceImpl<BizQuestionMapper, BizQuestion> implements BizQuestionService {
+
+    private static final Logger log = LoggerFactory.getLogger(BizQuestionServiceImpl.class);
 
     @Autowired
     private BizQuestionKnowledgePointMapper questionKnowledgePointMapper;
@@ -177,7 +183,6 @@ public class BizQuestionServiceImpl extends ServiceImpl<BizQuestionMapper, BizQu
                 questionDTO.setKnowledgePointIds(kpIds);
             } catch (NumberFormatException e) {
                 // 【修改点】这里改成了 dto.getContent()
-                // 如果没有 log 对象，可以使用 System.err.println 代替，或者在类上加 @Slf4j
                 System.err.println("试题导入格式错误，跳过该条，Question: " + dto.getContent());
                 // log.error("试题导入格式错误，跳过该条，Question: {}", dto.getContent(), e);
                 return;
@@ -189,21 +194,58 @@ public class BizQuestionServiceImpl extends ServiceImpl<BizQuestionMapper, BizQu
     @Override
     public List<QuestionExcelDTO> getQuestionsForExport(QuestionPageParams params) {
         QueryWrapper<BizQuestion> queryWrapper = new QueryWrapper<>();
-        // ... (此处省略与 Controller 中相同的查询条件构造逻辑) ...
+
+        // ✅ 添加查询条件过滤
+        if (params.getSubjectId() != null) {
+            queryWrapper.eq("subject_id", params.getSubjectId());
+        }
+        if (params.getQuestionType() != null) {
+            queryWrapper.eq("question_type", params.getQuestionType());
+        }
+        if (StringUtils.hasText(params.getGrade())) {
+            queryWrapper.eq("grade", params.getGrade());
+        }
+        if (StringUtils.hasText(params.getContent())) {
+            queryWrapper.like("content", params.getContent());
+        }
+        queryWrapper.orderByDesc("id");
 
         List<BizQuestion> questions = this.list(queryWrapper);
 
-        // 将 BizQuestion 转换为 QuestionExcelDTO
-        return questions.stream().map(q -> {
-            QuestionDTO fullQuestion = this.getQuestionWithKnowledgePointsById(q.getId());
-            QuestionExcelDTO dto = new QuestionExcelDTO();
-            BeanUtils.copyProperties(fullQuestion, dto);
+        // ✅ 优化：批量加载知识点关联，避免 N+1 查询
+        if (questions.isEmpty()) {
+            return Collections.emptyList();
+        }
 
-            if (!CollectionUtils.isEmpty(fullQuestion.getKnowledgePointIds())) {
-                String kpIds = fullQuestion.getKnowledgePointIds().stream()
+        // 1. 收集所有试题 ID
+        List<Long> questionIds = questions.stream()
+                .map(BizQuestion::getId)
+                .collect(Collectors.toList());
+
+        // 2. 批量查询所有试题的知识点关联关系
+        List<BizQuestionKnowledgePoint> allRelations = questionKnowledgePointMapper.selectList(
+                new QueryWrapper<BizQuestionKnowledgePoint>().in("question_id", questionIds)
+        );
+
+        // 3. 构建 questionId -> List<KnowledgePointId> 的映射
+        Map<Long, List<Long>> questionKpMap = allRelations.stream()
+                .collect(Collectors.groupingBy(
+                        BizQuestionKnowledgePoint::getQuestionId,
+                        Collectors.mapping(BizQuestionKnowledgePoint::getKnowledgePointId, Collectors.toList())
+                ));
+
+        // 4. 转换为 QuestionExcelDTO
+        return questions.stream().map(q -> {
+            QuestionExcelDTO dto = new QuestionExcelDTO();
+            BeanUtils.copyProperties(q, dto);
+
+            // 从映射中获取知识点 ID 列表
+            List<Long> kpIds = questionKpMap.getOrDefault(q.getId(), Collections.emptyList());
+            if (!kpIds.isEmpty()) {
+                String kpIdsStr = kpIds.stream()
                         .map(String::valueOf)
                         .collect(Collectors.joining(","));
-                dto.setKnowledgePointIds(kpIds);
+                dto.setKnowledgePointIds(kpIdsStr);
             }
             return dto;
         }).collect(Collectors.toList());

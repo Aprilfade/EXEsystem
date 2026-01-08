@@ -1,8 +1,10 @@
 package com.ice.exebackend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ice.exebackend.dto.KnowledgePointBatchUpdateDTO;
 import com.ice.exebackend.dto.KnowledgePointStatsDTO;
 import com.ice.exebackend.entity.BizKnowledgePoint;
 import com.ice.exebackend.entity.BizKnowledgePointRelation; // 新增导入
@@ -15,6 +17,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import java.util.Collections;
 import java.util.HashMap; // 新增导入
@@ -146,5 +149,78 @@ public class BizKnowledgePointServiceImpl extends ServiceImpl<BizKnowledgePointM
 
         List<Long> parentIds = parents.stream().map(BizKnowledgePointRelation::getParentId).collect(Collectors.toList());
         return this.listByIds(parentIds);
+    }
+
+    @Override
+    public Map<String, Object> getGlobalStats() {
+        Map<String, Object> stats = new HashMap<>();
+
+        // 1. 获取知识点总数
+        long totalKpCount = this.count();
+        stats.put("totalKpCount", totalKpCount);
+
+        // 2. 获取所有知识点的题目关联数据
+        List<BizQuestionKnowledgePoint> allQkps = questionKnowledgePointMapper.selectList(null);
+
+        // 3. 统计有题目的知识点数量
+        long kpWithQuestionsCount = allQkps.stream()
+                .map(BizQuestionKnowledgePoint::getKnowledgePointId)
+                .distinct()
+                .count();
+        stats.put("kpWithQuestionsCount", kpWithQuestionsCount);
+
+        // 4. 统计总题目数量（去重）
+        long totalQuestionCount = allQkps.stream()
+                .map(BizQuestionKnowledgePoint::getQuestionId)
+                .distinct()
+                .count();
+        stats.put("totalQuestionCount", totalQuestionCount);
+
+        // 5. 计算平均每个知识点的题目数
+        double avgQuestionsPerKp = kpWithQuestionsCount > 0
+            ? (double) allQkps.size() / kpWithQuestionsCount
+            : 0;
+        stats.put("avgQuestionsPerKp", Math.round(avgQuestionsPerKp * 100.0) / 100.0);
+
+        // 6. 统计知识点覆盖率（有题目的知识点占比）
+        double coverageRate = totalKpCount > 0
+            ? (kpWithQuestionsCount * 100.0 / totalKpCount)
+            : 0;
+        stats.put("coverageRate", Math.round(coverageRate * 100.0) / 100.0);
+
+        return stats;
+    }
+
+    @Override
+    public boolean batchUpdateKnowledgePoints(KnowledgePointBatchUpdateDTO dto) {
+        if (dto == null || CollectionUtils.isEmpty(dto.getKnowledgePointIds())) {
+            return false;
+        }
+
+        // 至少需要提供一个更新字段
+        if (dto.getSubjectId() == null &&
+            !StringUtils.hasText(dto.getGrade()) &&
+            !StringUtils.hasText(dto.getTags())) {
+            return false;
+        }
+
+        LambdaUpdateWrapper<BizKnowledgePoint> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.in(BizKnowledgePoint::getId, dto.getKnowledgePointIds());
+
+        boolean hasUpdate = false;
+        if (dto.getSubjectId() != null) {
+            updateWrapper.set(BizKnowledgePoint::getSubjectId, dto.getSubjectId());
+            hasUpdate = true;
+        }
+        if (StringUtils.hasText(dto.getGrade())) {
+            updateWrapper.set(BizKnowledgePoint::getGrade, dto.getGrade());
+            hasUpdate = true;
+        }
+        if (StringUtils.hasText(dto.getTags())) {
+            updateWrapper.set(BizKnowledgePoint::getTags, dto.getTags());
+            hasUpdate = true;
+        }
+
+        return hasUpdate ? this.update(updateWrapper) : false;
     }
 }

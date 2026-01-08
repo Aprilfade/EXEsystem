@@ -50,6 +50,17 @@ export function deleteStudent(id: number): Promise<ApiResult<null>> {
 }
 
 /**
+ * 【新增】批量删除学生
+ */
+export function batchDeleteStudents(ids: number[]): Promise<ApiResult<string>> {
+    return request({
+        url: '/api/v1/students/batch',
+        method: 'delete',
+        data: ids
+    });
+}
+
+/**
  * 上传Excel文件导入学生
  * @param data FormData 对象, 包含 file 和 subjectId
  */
@@ -73,6 +84,17 @@ export function exportStudentsExcel(params: { subjectId?: number; name?: string 
         method: 'get',
         params: params,
         responseType: 'blob' // 关键: 告诉axios期望接收一个二进制对象(文件)
+    });
+}
+
+/**
+ * 【新增】下载学生导入模板
+ */
+export function downloadStudentTemplate(): Promise<any> {
+    return request({
+        url: '/api/v1/students/template',
+        method: 'get',
+        responseType: 'blob'
     });
 }
 /**
@@ -109,6 +131,22 @@ export function fetchBattleLeaderboard(): Promise<ApiResult<any[]>> {
 export function fetchMyBattleRecords(): Promise<ApiResult<any[]>> {
     return request({
         url: '/api/v1/student/battle/records',
+        method: 'get'
+    });
+}
+
+/**
+ * 【新增】获取学生管理统计数据
+ */
+export interface StudentStats {
+    totalCount: number;
+    completenessRate: string; // 如 "60%"
+    activationRate: string;    // 如 "80%"
+}
+
+export function fetchStudentStats(): Promise<ApiResult<StudentStats>> {
+    return request({
+        url: '/api/v1/students/stats',
         method: 'get'
     });
 }

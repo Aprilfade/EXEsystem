@@ -22,8 +22,22 @@
   --backdrop-filter: blur(10px);
 }
 
-/* 定义暗色主题变量 (暂未启用，但已预留) */
-/* .dark { ... } */
+/* 定义暗色主题变量 */
+.dark {
+  --bg-color: #1a1a1a;
+  --bg-color-container: #2d2d2d;
+  --text-color-primary: #e5e5e5;
+  --text-color-regular: #c0c0c0;
+  --border-color: #404040;
+  --sidebar-bg: #2d2d2d;
+  --header-bg: #2d2d2d;
+  --brand-color: #409eff;
+  --card-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -2px rgb(0 0 0 / 0.4);
+  --glass-bg: rgba(45, 45, 45, 0.5);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  --backdrop-filter: blur(10px);
+}
 
 html, body, #app {
   height: 100%;
@@ -37,6 +51,21 @@ html, body, #app {
   background-image: url('../public/1.png'); /* 你可以换成任何你喜欢的图片 */
   background-size: cover;
   background-attachment: fixed;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 深色模式下降低背景图片亮度 */
+.dark html,
+.dark body,
+.dark #app {
+  filter: brightness(0.8);
+}
+
+.dark .el-card,
+.dark .el-dialog,
+.dark .el-menu,
+.dark .el-table {
+  filter: brightness(1); /* 恢复组件亮度 */
 }
 /* 对 Element Plus 的 el-card 组件进行样式覆盖 */
 .el-card {
@@ -55,4 +84,226 @@ html, body, #app {
   box-shadow: var(--glass-shadow) !important;
   backdrop-filter: var(--backdrop-filter) !important;
   -webkit-backdrop-filter: var(--backdrop-filter) !important;
+}
+/* ==========================================
+   移动端全局优化
+   ========================================== */
+
+@media (max-width: 768px) {
+  /* 移动端字体大小调整 */
+  body {
+    font-size: 14px;
+    overflow-x: hidden;
+    /* 移动端背景图优化 */
+    background-attachment: scroll;
+  }
+
+  /* Element Plus 组件移动端调整 */
+  .el-dialog {
+    width: 95% !important;
+    max-width: 95% !important;
+    margin: 5vh auto !important;
+    border-radius: 8px !important;
+  }
+
+  .el-dialog__header {
+    padding: 16px !important;
+  }
+
+  .el-dialog__body {
+    padding: 16px !important;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  .el-dialog__footer {
+    padding: 12px 16px !important;
+  }
+
+  /* 消息框优化 */
+  .el-message-box {
+    width: 90% !important;
+    max-width: 90% !important;
+  }
+
+  /* 表格移动端优化 */
+  .el-table {
+    font-size: 12px;
+  }
+
+  .el-table th,
+  .el-table td {
+    padding: 8px 4px;
+  }
+
+  .el-table .cell {
+    padding: 0 4px;
+  }
+
+  /* 表单移动端优化 */
+  .el-form-item {
+    margin-bottom: 16px;
+  }
+
+  .el-form-item__label {
+    font-size: 13px;
+    margin-bottom: 8px;
+    text-align: left !important;
+  }
+
+  .el-form-item__content {
+    margin-left: 0 !important;
+  }
+
+  /* 输入框优化 */
+  .el-input__inner,
+  .el-textarea__inner {
+    font-size: 16px !important; /* 防止 iOS 自动缩放 */
+  }
+
+  /* 页面内容区域 */
+  .page-container {
+    padding: 12px;
+  }
+
+  /* 卡片间距 */
+  .el-card {
+    margin-bottom: 12px;
+    border-radius: 8px !important;
+  }
+
+  .el-card__header {
+    padding: 12px;
+  }
+
+  .el-card__body {
+    padding: 12px;
+  }
+
+  /* 按钮优化 */
+  .el-button {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+
+  .el-button--small {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .el-button--large {
+    padding: 12px 20px;
+    font-size: 16px;
+  }
+
+  /* 分页器优化 */
+  .el-pagination {
+    padding: 12px 0;
+    justify-content: center;
+  }
+
+  .el-pagination .el-pagination__total,
+  .el-pagination .el-pagination__sizes {
+    display: none;
+  }
+
+  .el-pagination .el-pagination__jump {
+    display: none;
+  }
+
+  /* 标签页优化 */
+  .el-tabs__header {
+    margin-bottom: 12px;
+  }
+
+  .el-tabs__item {
+    padding: 0 12px;
+    font-size: 14px;
+  }
+
+  /* 下拉菜单优化 */
+  .el-dropdown-menu {
+    max-width: 90vw;
+  }
+
+  /* 日期选择器优化 */
+  .el-picker-panel {
+    max-width: 95vw;
+  }
+
+  /* 抽屉优化 */
+  .el-drawer {
+    width: 90% !important;
+  }
+
+  .el-drawer.rtl {
+    width: 90% !important;
+  }
+
+  .el-drawer__header {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .el-drawer__body {
+    padding: 16px;
+  }
+
+  /* 面包屑隐藏（移动端空间有限） */
+  .el-breadcrumb {
+    display: none;
+  }
+
+  /* 消息提示优化 */
+  .el-message {
+    min-width: auto;
+    max-width: 90vw;
+  }
+
+  /* 通知优化 */
+  .el-notification {
+    width: 90vw;
+    max-width: 330px;
+  }
+
+  /* 加载动画优化 */
+  .el-loading-mask {
+    background-color: rgba(255, 255, 255, 0.9);
+  }
+
+  /* 步骤条优化 */
+  .el-steps {
+    flex-direction: column !important;
+  }
+
+  /* 时间线优化 */
+  .el-timeline {
+    padding-left: 12px;
+  }
+
+  /* 折叠面板优化 */
+  .el-collapse-item__header {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  .el-collapse-item__content {
+    padding: 12px;
+  }
+}
+
+/* 平板端优化 (769px - 1199px) */
+@media (min-width: 769px) and (max-width: 1199px) {
+  body {
+    font-size: 15px;
+  }
+
+  .el-dialog {
+    width: 80% !important;
+    max-width: 800px !important;
+  }
+
+  .page-container {
+    padding: 16px;
+  }
 }

@@ -4,20 +4,29 @@ import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ice.exebackend.dto.PaperDTO;
+import com.ice.exebackend.dto.PaperKnowledgePointDTO;
 import com.ice.exebackend.entity.BizPaper;
 import com.ice.exebackend.entity.BizPaperGroup; // 导入BizPaperGroup
 import com.ice.exebackend.entity.BizPaperImage;
 import com.ice.exebackend.entity.BizPaperQuestion;
 import com.ice.exebackend.entity.BizQuestion;
+import com.ice.exebackend.entity.BizPaperKnowledgePoint;
+import com.ice.exebackend.entity.BizQuestionKnowledgePoint;
+import com.ice.exebackend.entity.BizKnowledgePoint;
 import com.ice.exebackend.mapper.BizPaperGroupMapper; // 导入BizPaperGroupMapper
 import com.ice.exebackend.mapper.BizPaperImageMapper;
 import com.ice.exebackend.mapper.BizPaperMapper;
 import com.ice.exebackend.mapper.BizPaperQuestionMapper;
+import com.ice.exebackend.mapper.BizPaperKnowledgePointMapper;
+import com.ice.exebackend.mapper.BizQuestionKnowledgePointMapper;
 import com.ice.exebackend.service.BizPaperService;
 import com.ice.exebackend.service.BizQuestionService;
+import com.ice.exebackend.service.BizKnowledgePointService;
 import com.ice.exebackend.utils.GeneticPaperUtil;
 import org.apache.poi.util.Units;
 import org.apache.poi.xwpf.usermodel.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,6 +56,8 @@ import java.util.stream.Collectors;
 @Service
 public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> implements BizPaperService {
 
+    private static final Logger logger = LoggerFactory.getLogger(BizPaperServiceImpl.class);
+
     @Autowired
     private BizPaperQuestionMapper paperQuestionMapper;
 
@@ -62,6 +73,16 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
     // 【新增注入】注入 Service 以使用 saveBatch
     @Autowired
     private BizPaperQuestionService paperQuestionService;
+
+    // 【知识点功能增强】添加知识点相关Mapper和Service
+    @Autowired
+    private BizPaperKnowledgePointMapper paperKnowledgePointMapper;
+
+    @Autowired
+    private BizQuestionKnowledgePointMapper questionKnowledgePointMapper;
+
+    @Autowired
+    private BizKnowledgePointService knowledgePointService;
 
     @Value("${file.upload-dir}")
     private String uploadDir;
@@ -93,10 +114,30 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
             if (StringUtils.hasText(req.getGrade())) {
                 query.eq("grade", req.getGrade());
             }
-            // 这里还是用 rand 随机取一部分作为候选池，避免把整个库加载进内存
-            query.last("ORDER BY RAND() LIMIT " + fetchSize);
 
-            List<BizQuestion> pool = questionService.list(query);
+            // ✅ 先查询总数，验证题库充足性
+            int totalCount = (int) questionService.count(query);
+            if (totalCount < entry.getValue()) {
+                throw new RuntimeException(String.format(
+                    "题库不足：%s需要%d道，但只有%d道",
+                    getQuestionTypeName(entry.getKey()),
+                    entry.getValue(),
+                    totalCount
+                ));
+            }
+
+            // ✅ 优化：使用随机偏移代替 ORDER BY RAND()
+            List<BizQuestion> pool;
+            if (totalCount <= fetchSize) {
+                // 题库数量不足3倍，全部查出
+                pool = questionService.list(query);
+            } else {
+                // 随机选择起始位置，避免 ORDER BY RAND() 的全表扫描
+                int offset = new Random().nextInt(totalCount - fetchSize + 1);
+                query.last("LIMIT " + fetchSize + " OFFSET " + offset);
+                pool = questionService.list(query);
+            }
+
             candidatePool.put(entry.getKey(), pool);
         }
 
@@ -162,6 +203,8 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
         this.save(paperDTO);
         if (paperDTO.getPaperType() == null || paperDTO.getPaperType() == 1) {
             updatePaperGroupsAndQuestions(paperDTO.getId(), paperDTO.getGroups()); // 【修复】调用新方法
+            // 【知识点功能增强】同步试卷知识点
+            syncPaperKnowledgePoints(paperDTO.getId());
         } else {
             updatePaperImages(paperDTO.getId(), paperDTO.getPaperImages());
         }
@@ -174,6 +217,8 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
         this.updateById(paperDTO);
         if (paperDTO.getPaperType() == null || paperDTO.getPaperType() == 1) {
             updatePaperGroupsAndQuestions(paperDTO.getId(), paperDTO.getGroups()); // 【修复】调用新方法
+            // 【知识点功能增强】同步试卷知识点
+            syncPaperKnowledgePoints(paperDTO.getId());
             paperImageMapper.delete(new QueryWrapper<BizPaperImage>().eq("paper_id", paperDTO.getId()));
         } else {
             updatePaperImages(paperDTO.getId(), paperDTO.getPaperImages());
@@ -226,6 +271,71 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
         }
     }
 
+    /**
+     * 【知识点功能增强】同步试卷的知识点关联
+     * 在试卷保存或更新后调用，自动计算并保存试卷包含的知识点
+     *
+     * @param paperId 试卷ID
+     */
+    @Transactional
+    public void syncPaperKnowledgePoints(Long paperId) {
+        // 1. 删除旧的知识点关联
+        paperKnowledgePointMapper.delete(
+                new QueryWrapper<BizPaperKnowledgePoint>().eq("paper_id", paperId)
+        );
+
+        // 2. 获取试卷的所有题目
+        List<BizPaperQuestion> paperQuestions = paperQuestionMapper.selectList(
+                new QueryWrapper<BizPaperQuestion>().eq("paper_id", paperId)
+        );
+
+        if (paperQuestions.isEmpty()) {
+            return;
+        }
+
+        // 3. 统计每个知识点的题目数量和分值
+        Map<Long, int[]> kpStats = new HashMap<>(); // key: 知识点ID, value: [questionCount, totalScore]
+
+        for (BizPaperQuestion pq : paperQuestions) {
+            Long questionId = pq.getQuestionId();
+            Integer score = pq.getScore();
+
+            // 获取该题关联的知识点
+            List<Long> kpIds = questionKnowledgePointMapper.selectList(
+                    new QueryWrapper<BizQuestionKnowledgePoint>()
+                            .eq("question_id", questionId)
+            ).stream()
+                    .map(BizQuestionKnowledgePoint::getKnowledgePointId)
+                    .collect(Collectors.toList());
+
+            // 更新每个知识点的统计
+            for (Long kpId : kpIds) {
+                kpStats.putIfAbsent(kpId, new int[]{0, 0});
+                int[] counts = kpStats.get(kpId);
+                counts[0]++; // 题目数+1
+                counts[1] += (score != null ? score : 0); // 分值累加
+            }
+        }
+
+        // 4. 批量插入新的知识点关联
+        if (!kpStats.isEmpty()) {
+            List<BizPaperKnowledgePoint> pkpList = new ArrayList<>();
+            for (Map.Entry<Long, int[]> entry : kpStats.entrySet()) {
+                BizPaperKnowledgePoint pkp = new BizPaperKnowledgePoint();
+                pkp.setPaperId(paperId);
+                pkp.setKnowledgePointId(entry.getKey());
+                pkp.setQuestionCount(entry.getValue()[0]);
+                pkp.setTotalScore(entry.getValue()[1]);
+                pkpList.add(pkp);
+            }
+
+            // 批量插入
+            for (BizPaperKnowledgePoint pkp : pkpList) {
+                paperKnowledgePointMapper.insert(pkp);
+            }
+        }
+    }
+
 
     private void updatePaperImages(Long paperId, List<BizPaperImage> images) {
         paperImageMapper.delete(new QueryWrapper<BizPaperImage>().eq("paper_id", paperId));
@@ -254,6 +364,19 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
             List<BizPaperQuestion> allQuestions = paperQuestionMapper.selectList(
                     new QueryWrapper<BizPaperQuestion>().eq("paper_id", id).orderByAsc("sort_order")
             );
+
+            // ✅ 批量查询题目详情（避免前端N+1查询）
+            if (!allQuestions.isEmpty()) {
+                List<Long> questionIds = allQuestions.stream()
+                        .map(BizPaperQuestion::getQuestionId)
+                        .collect(Collectors.toList());
+
+                Map<Long, BizQuestion> questionMap = questionService.listByIds(questionIds).stream()
+                        .collect(Collectors.toMap(BizQuestion::getId, q -> q));
+
+                // 填充题目详情
+                allQuestions.forEach(pq -> pq.setQuestionDetail(questionMap.get(pq.getQuestionId())));
+            }
 
             List<PaperDTO.PaperGroupDTO> groupDTOs = new ArrayList<>();
             for (BizPaperGroup group : groups) {
@@ -304,9 +427,10 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
         }
 
         for (BizPaperImage paperImage : paperDTO.getPaperImages()) {
+            String fileName = null;
             try {
                 // 1. 获取本地文件路径
-                String fileName = paperImage.getImageUrl().substring(paperImage.getImageUrl().lastIndexOf("/") + 1);
+                fileName = paperImage.getImageUrl().substring(paperImage.getImageUrl().lastIndexOf("/") + 1);
                 Path imagePath = Paths.get(uploadDir, fileName);
 
                 if (Files.exists(imagePath)) {
@@ -349,7 +473,7 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
                     }
                 }
             } catch (Exception e) {
-                e.printStackTrace(); // 建议记录 logger.error
+                logger.error("Word试卷图片加载失败: {}", fileName, e);
             }
         }
         return document;
@@ -444,5 +568,66 @@ public class BizPaperServiceImpl extends ServiceImpl<BizPaperMapper, BizPaper> i
             }
         }
         return document;
+    }
+
+    /**
+     * 获取题型名称（用于错误提示）
+     */
+    private String getQuestionTypeName(int type) {
+        switch (type) {
+            case 1: return "单选题";
+            case 2: return "多选题";
+            case 3: return "填空题";
+            case 4: return "判断题";
+            case 5: return "主观题";
+            default: return "未知题型";
+        }
+    }
+
+    /**
+     * 【知识点功能增强】获取试卷的知识点分布
+     */
+    @Override
+    public List<PaperKnowledgePointDTO> getPaperKnowledgePoints(Long paperId) {
+        // 1. 查询试卷的知识点关联
+        List<BizPaperKnowledgePoint> paperKps = paperKnowledgePointMapper.selectList(
+                new QueryWrapper<BizPaperKnowledgePoint>().eq("paper_id", paperId)
+        );
+
+        if (paperKps.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 2. 批量获取知识点名称
+        List<Long> kpIds = paperKps.stream()
+                .map(BizPaperKnowledgePoint::getKnowledgePointId)
+                .collect(Collectors.toList());
+
+        Map<Long, String> kpNameMap = knowledgePointService.listByIds(kpIds).stream()
+                .collect(Collectors.toMap(BizKnowledgePoint::getId, BizKnowledgePoint::getName));
+
+        // 3. 计算总分
+        int totalScore = paperKps.stream()
+                .mapToInt(pkp -> pkp.getTotalScore() != null ? pkp.getTotalScore() : 0)
+                .sum();
+
+        // 4. 转换为DTO并计算占比
+        return paperKps.stream().map(pkp -> {
+            PaperKnowledgePointDTO dto = new PaperKnowledgePointDTO();
+            dto.setKnowledgePointId(pkp.getKnowledgePointId());
+            dto.setKnowledgePointName(kpNameMap.get(pkp.getKnowledgePointId()));
+            dto.setQuestionCount(pkp.getQuestionCount());
+            dto.setTotalScore(pkp.getTotalScore());
+
+            // 计算占比
+            if (totalScore > 0 && pkp.getTotalScore() != null) {
+                double percentage = (pkp.getTotalScore() * 100.0) / totalScore;
+                dto.setPercentage(Math.round(percentage * 100.0) / 100.0); // 保留两位小数
+            } else {
+                dto.setPercentage(0.0);
+            }
+
+            return dto;
+        }).collect(Collectors.toList());
     }
 }

@@ -65,10 +65,11 @@ const fetchDetails = async (sId: number) => {
   activeTab.value = 'knowledgePoints';
 
   try {
+    // 【优化】使用合理的分页大小，避免一次性加载过多数据
     const [kpRes, qRes] = await Promise.all([
-      fetchKnowledgePointList({ current: 1, size: 9999, subjectId: sId }),
-      // **【最终修复点 3】** 调用我们全新的、专用的API函数
-      fetchQuestionsForSubject(sId)
+      fetchKnowledgePointList({ current: 1, size: 100, subjectId: sId }),
+      // 【优化】添加分页参数
+      fetchQuestionsForSubject(sId, 1, 100)
     ]);
 
     if (kpRes.code === 200) knowledgePoints.value = kpRes.data;

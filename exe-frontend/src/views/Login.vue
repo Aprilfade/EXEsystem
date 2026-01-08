@@ -65,8 +65,8 @@ const authStore = useAuthStore();
 const route = useRoute();
 
 const signInForm = reactive({
-  username: 'admin',
-  password: 'password',
+  username: 'superadmin',  // ✅ 预填充超级管理员账号
+  password: 'password',    // ✅ 预填充超级管理员密码
 });
 
 const signUpForm = reactive({

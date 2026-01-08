@@ -130,7 +130,7 @@ public class StudentDataController {
             String fileUrl = "/api/v1/files/" + newFileName;
             return Result.suc(fileUrl);
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("学生端文件上传失败", e);
             return Result.fail("上传失败：" + e.getMessage());
         }
     }
@@ -495,6 +495,27 @@ public class StudentDataController {
                             }
 
                             studentScore += awardedScore;
+
+                            // 【新增】自动记录错题到错题本
+                            if (!isCorrect) {
+                                // 检查该错题是否已存在（避免重复记录）
+                                long existingCount = wrongRecordService.lambdaQuery()
+                                        .eq(BizWrongRecord::getStudentId, student.getId())
+                                        .eq(BizWrongRecord::getQuestionId, pq.getQuestionId())
+                                        .eq(BizWrongRecord::getIsMastered, 0)
+                                        .count();
+
+                                if (existingCount == 0) {
+                                    BizWrongRecord wrongRecord = new BizWrongRecord();
+                                    wrongRecord.setStudentId(student.getId());
+                                    wrongRecord.setQuestionId(pq.getQuestionId());
+                                    wrongRecord.setWrongAnswer(userAns);
+                                    wrongRecord.setWrongReason("模拟考试《" + paper.getName() + "》中答错");
+                                    wrongRecord.setCreateTime(LocalDateTime.now());
+                                    wrongRecordService.save(wrongRecord);
+                                }
+                            }
+
                             PracticeResultDTO.AnswerResult res = new PracticeResultDTO.AnswerResult();
                             res.setQuestion(q);
                             res.setUserAnswer(userAns);

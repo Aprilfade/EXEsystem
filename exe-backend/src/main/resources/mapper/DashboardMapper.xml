@@ -72,4 +72,144 @@
         ORDER BY
             s.id
     </select>
+
+    <!-- 待办事项相关查询 -->
+    <select id="getPendingPapersCount" resultType="java.util.Map">
+        SELECT
+            COUNT(*) AS count,
+            MAX(submit_time) AS latestTime
+        FROM biz_student_paper
+        WHERE status = 1  <!-- 已提交待批改 -->
+    </select>
+
+    <select id="getPendingQuestionsCount" resultType="java.util.Map">
+        SELECT
+            COUNT(*) AS count,
+            MAX(create_time) AS latestTime
+        FROM biz_question
+        WHERE audit_status = 0  <!-- 待审核 -->
+    </select>
+
+    <!-- 最近活动查询 -->
+    <select id="getRecentActivities" resultType="java.util.Map" parameterType="int">
+        SELECT * FROM (
+            -- 学生提交试卷
+            SELECT
+                'submit_paper' AS type,
+                CONCAT(s.name, ' 提交了试卷《', p.name, '》') AS content,
+                sp.submit_time AS createTime,
+                sp.student_id AS userId,
+                s.name AS userName
+            FROM biz_student_paper sp
+            JOIN biz_student s ON sp.student_id = s.id
+            JOIN biz_paper p ON sp.paper_id = p.id
+            WHERE sp.submit_time IS NOT NULL
+
+            UNION ALL
+
+            -- 题目创建
+            SELECT
+                'create_question' AS type,
+                CONCAT('创建了题目「', SUBSTRING(content, 1, 20), '...」') AS content,
+                create_time AS createTime,
+                created_by AS userId,
+                '' AS userName
+            FROM biz_question
+            WHERE create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+
+            UNION ALL
+
+            -- 学生导入
+            SELECT
+                'import_student' AS type,
+                CONCAT('导入了学生 ', name) AS content,
+                create_time AS createTime,
+                NULL AS userId,
+                '' AS userName
+            FROM biz_student
+            WHERE create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        ) activities
+        ORDER BY createTime DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 数据趋势查询 -->
+    <select id="getDataTrends" resultType="java.util.Map">
+        SELECT
+            -- 学生数趋势（周同比）
+            IFNULL(
+                ROUND(
+                    (COUNT(CASE WHEN s.create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 END) * 100.0 /
+                    NULLIF(COUNT(CASE WHEN s.create_time >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+                        AND s.create_time &lt; DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 END), 0)) - 100,
+                    1
+                ),
+                0
+            ) AS studentCountTrend,
+
+            -- 题目数趋势（周同比）
+            IFNULL(
+                ROUND(
+                    (COUNT(CASE WHEN q.create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 END) * 100.0 /
+                    NULLIF(COUNT(CASE WHEN q.create_time >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+                        AND q.create_time &lt; DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 END), 0)) - 100,
+                    1
+                ),
+                0
+            ) AS questionCountTrend,
+
+            -- 试卷数趋势（周同比）
+            IFNULL(
+                ROUND(
+                    (COUNT(CASE WHEN p.create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 END) * 100.0 /
+                    NULLIF(COUNT(CASE WHEN p.create_time >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+                        AND p.create_time &lt; DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 END), 0)) - 100,
+                    1
+                ),
+                0
+            ) AS paperCountTrend
+
+        FROM biz_student s, biz_question q, biz_paper p
+        LIMIT 1
+    </select>
+
+    <!-- 【知识点功能增强】知识点覆盖率统计 -->
+    <select id="getKnowledgePointCoverage" resultType="java.util.Map">
+        SELECT
+            subject_id,
+            subject_name,
+            total_kp_count,
+            covered_kp_count,
+            ROUND(covered_kp_count * 100.0 / NULLIF(total_kp_count, 0), 2) AS coverage_rate
+        FROM (
+            SELECT
+                s.id AS subject_id,
+                s.name AS subject_name,
+                COUNT(DISTINCT kp.id) AS total_kp_count,
+                COUNT(DISTINCT CASE WHEN qkp.knowledge_point_id IS NOT NULL THEN kp.id END) AS covered_kp_count
+            FROM biz_subject s
+            LEFT JOIN biz_knowledge_point kp ON s.id = kp.subject_id
+            LEFT JOIN biz_question_knowledge_point qkp ON kp.id = qkp.knowledge_point_id
+            GROUP BY s.id, s.name
+        ) t
+        ORDER BY coverage_rate DESC
+    </select>
+
+    <!-- 【知识点功能增强】薄弱知识点Top10 -->
+    <select id="getWeakKnowledgePointsTop10" resultType="java.util.Map">
+        SELECT
+            kp.id AS knowledge_point_id,
+            kp.name AS knowledge_point_name,
+            s.name AS subject_name,
+            ROUND(AVG(skm.mastery_rate), 2) AS avg_mastery_rate,
+            COUNT(DISTINCT skm.student_id) AS student_count
+        FROM biz_knowledge_point kp
+        JOIN biz_subject s ON kp.subject_id = s.id
+        LEFT JOIN biz_student_knowledge_mastery skm ON kp.id = skm.knowledge_point_id
+        WHERE skm.total_count >= 5  <!-- 至少答过5道题 -->
+        GROUP BY kp.id, kp.name, s.name
+        HAVING avg_mastery_rate &lt; 60  <!-- 掌握度低于60% -->
+        ORDER BY avg_mastery_rate ASC
+        LIMIT 10
+    </select>
 </mapper>

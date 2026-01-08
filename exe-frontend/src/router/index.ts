@@ -46,6 +46,7 @@ const routes: Array<RouteRecordRaw> = [
             { path: 'wrong-records', name: 'WrongRecordManagement', component: () => import('@/views/WrongRecordManage.vue'), meta: { permission: 'sys:wrong:list', title: '错题管理' } },
             { path: 'wrong-record-stats', name: 'WrongRecordStats', component: () => import('@/views/WrongRecordStats.vue'), meta: { permission: 'sys:wrong:list', title: '错题统计' } },
             { path: 'statistics', name: 'StatisticsDashboard', component: () => import('@/views/StatisticsDashboard.vue'), meta: { permission: 'sys:stats:list', title: '教学统计' } },
+            { path: 'ai-monitor', name: 'AiMonitor', component: () => import('@/views/AiMonitor.vue'), meta: { permission: 'sys:stats:list', title: 'AI监控' } },
             { path: 'notifications', name: 'NotificationManagement', component: () => import('@/views/NotificationManage.vue'), meta: { permission: 'sys:notify:list', title: '通知管理' } },
             { path: 'logs/login', name: 'LoginLog', component: () => import('@/views/LoginLog.vue'), meta: { permission: 'sys:log:login', title: '登录日志' } },
 // 在 children 数组中添加：
@@ -53,7 +54,7 @@ const routes: Array<RouteRecordRaw> = [
                 path: 'courses',
                 name: 'CourseManage',
                 component: () => import('@/views/CourseManage.vue'),
-                meta: { permission: 'sys:course:edit', title: '课程管理' } // 记得去数据库加权限
+                meta: { permission: 'sys:course:list', title: '课程管理' } // ✅ 统一为 list
             },
             {
                 path: 'text-to-quiz',
@@ -71,7 +72,7 @@ const routes: Array<RouteRecordRaw> = [
                 path: 'classes',
                 name: 'ClassManage',
                 component: () => import('@/views/ClassManage.vue'),
-                meta: { permission: 'sys:user:list', title: '班级管理' } // 暂时复用用户管理权限
+                meta: { permission: 'sys:class:list', title: '班级管理' } // ✅ 使用独立权限
             },
             // 在 children 数组中添加 (仅限管理员/教师访问)
             {
@@ -79,6 +80,13 @@ const routes: Array<RouteRecordRaw> = [
                 name: 'KnowledgeGraph',
                 component: () => import('@/views/KnowledgeGraphEditor.vue'), // 确保您创建了这个文件
                 meta: { permission: 'sys:kp:list', title: '知识图谱' }
+            },
+            // 个人中心
+            {
+                path: 'profile',
+                name: 'UserProfile',
+                component: () => import('@/views/UserProfile.vue'),
+                meta: { title: '个人中心' }
             }
         ]
     },
@@ -168,7 +176,13 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('@/views/student/Battle.vue'),
                 meta: { title: '知识对战' }
             },
-
+            // 学生个人中心
+            {
+                path: 'profile',
+                name: 'StudentProfile',
+                component: () => import('@/views/StudentProfile.vue'),
+                meta: { title: '个人中心' }
+            }
         ]
     }
 ];

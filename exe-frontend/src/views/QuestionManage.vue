@@ -107,7 +107,7 @@
         </div>
       </div>
 
-      <div v-if="viewMode === 'grid'" class="card-grid">
+      <div v-if="viewMode === 'grid'" class="card-grid" v-loading="loading" element-loading-text="加载中...">
         <div v-for="q in questionList" :key="q.id" class="question-card" @click="handlePreview(q.id)">
           <div class="card-header">
             <div>
@@ -280,11 +280,12 @@ const getList = async () => {
 };
 
 
-// 监听视图模式变化，自动刷新列表
-watch(viewMode, () => {
-  queryParams.current = 1; // 切换视图时重置到第一页
-  getList();
-});
+// ✅ 优化：移除视图切换时的自动刷新逻辑
+// 视图切换（grid/list）只是展示方式的改变，不需要重新请求数据
+// watch(viewMode, () => {
+//   queryParams.current = 1;
+//   getList();
+// });
 
 
 const getExtraStats = async () => {

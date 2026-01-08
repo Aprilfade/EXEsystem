@@ -61,8 +61,17 @@ watch(() => props.visible, (isVisible) => {
 }, { immediate: true });
 
 const rules = reactive<FormRules>({
-  name: [{ required: true, message: '请输入科目名称', trigger: 'blur' }],
-  grade: [{ required: true, message: '请选择年级', trigger: 'change' }],
+  name: [
+    { required: true, message: '请输入科目名称', trigger: 'blur' },
+    { min: 2, max: 50, message: '科目名称长度需在2-50个字符之间', trigger: 'blur' },
+    { pattern: /^[\u4e00-\u9fa5a-zA-Z\s]+$/, message: '科目名称只能包含中文、英文和空格', trigger: 'blur' }
+  ],
+  grade: [
+    { required: true, message: '请选择年级', trigger: 'change' }
+  ],
+  description: [
+    { max: 500, message: '科目简介不能超过500个字符', trigger: 'blur' }
+  ]
 });
 
 const handleClose = () => {
