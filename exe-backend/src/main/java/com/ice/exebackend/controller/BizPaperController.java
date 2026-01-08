@@ -6,6 +6,7 @@ import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.PaperDTO;
 import com.ice.exebackend.dto.PaperKnowledgePointDTO;
+import com.ice.exebackend.dto.PaperPageParams; // 【新增导入】
 import com.ice.exebackend.dto.SmartPaperReq;
 import com.ice.exebackend.entity.BizPaper;
 import com.ice.exebackend.enums.BusinessType;
@@ -61,31 +62,45 @@ public class BizPaperController {
         return success ? Result.suc() : Result.fail();
     }
 
-    // ... [此处省略所有 GET 查询和导出方法，它们不需要修改] ...
+    /**
+     * 【核心修改】分页查询试卷列表
+     * 使用 PaperPageParams 接收参数，支持后端模糊搜索
+     */
     @GetMapping
-    public Result getPaperList(@RequestParam(defaultValue = "1") int current,
-                               @RequestParam(defaultValue = "10") int size,
-                               @RequestParam(required = false) Long subjectId,
-                               @RequestParam(required = false) String grade,
-                               @RequestParam(required = false) String keyword) {  // ✅ 新增keyword参数
-        Page<BizPaper> page = new Page<>(current, size);
+    public Result getPaperList(PaperPageParams params) {
+        // 1. 构建分页对象
+        Page<BizPaper> page = new Page<>(params.getCurrent(), params.getSize());
+
+        // 2. 构建查询条件
         QueryWrapper<BizPaper> queryWrapper = new QueryWrapper<>();
-        if (subjectId != null) {
-            queryWrapper.eq("subject_id", subjectId);
+
+        // 科目筛选
+        if (params.getSubjectId() != null) {
+            queryWrapper.eq("subject_id", params.getSubjectId());
         }
-        if (StringUtils.hasText(grade)) {
-            queryWrapper.eq("grade", grade);
+        // 年级筛选
+        if (StringUtils.hasText(params.getGrade())) {
+            queryWrapper.eq("grade", params.getGrade());
         }
-        // ✅ 新增：支持按试卷名称或编码搜索
-        if (StringUtils.hasText(keyword)) {
+        // 状态筛选
+        if (params.getStatus() != null) {
+            queryWrapper.eq("status", params.getStatus());
+        }
+
+        // 【核心】名称模糊搜索 (同时匹配 name 和 code)
+        if (StringUtils.hasText(params.getName())) {
             queryWrapper.and(wrapper -> wrapper
-                .like("name", keyword)
-                .or()
-                .like("code", keyword)
+                    .like("name", params.getName())
+                    .or()
+                    .like("code", params.getName())
             );
         }
+
         queryWrapper.orderByDesc("create_time");
+
+        // 3. 执行查询
         paperService.page(page, queryWrapper);
+
         return Result.suc(page.getRecords(), page.getTotal());
     }
 
