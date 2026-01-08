@@ -207,39 +207,35 @@ const queryParams = reactive<PaperPageParams>({
   current: 1,
   size: 10,
   subjectId: undefined,
-  grade: undefined
+  grade: undefined,
+  name: undefined // 对应后端查询参数
 });
 
+// 4. 修改 filteredList
+// 由于数据已经是后端过滤好的，前端不需要再过滤了
 const filteredList = computed(() => {
-  return allPaperList.value.filter(item => {
-    const searchMatch = searchQuery.value
-        ? item.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || (item.code && item.code.toLowerCase().includes(searchQuery.value.toLowerCase()))
-        : true;
-    const subjectMatch = queryParams.subjectId ? item.subjectId === queryParams.subjectId : true;
-    const gradeMatch = queryParams.grade ? item.grade === queryParams.grade : true;
-    return searchMatch && subjectMatch && gradeMatch;
-  });
+  return paperListForTable.value;
 });
-
+// 3. 修改 getList 方法，只发一次分页请求
 const getList = async () => {
   loading.value = true;
   try {
-    const [allRes, pageRes] = await Promise.all([
-      fetchPaperList({ current: 1, size: 9999 }),
-      fetchPaperList(queryParams)
-    ]);
-    if (allRes.code === 200) {
-      allPaperList.value = allRes.data;
-    }
-    if (pageRes.code === 200) {
-      paperListForTable.value = pageRes.data;
-      total.value = pageRes.total;
+    // 只调用分页接口，不再拉取 9999 条
+    const res = await fetchPaperList(queryParams);
+    if (res.code === 200) {
+      // 统一使用 table 的数据源，不再区分 allPaperList 和 paperListForTable
+      // 注意：如果你的 Grid 视图和 List 视图都需要分页，这种方式最合适。
+      // 如果 Grid 视图原本设计为"无限滚动"或"加载全部"，则需要改为后端分页+“加载更多”按钮。
+      paperListForTable.value = res.data;
+      total.value = res.total;
+
+      // 为了兼容现有代码，让 filteredList 直接返回分页数据
+      allPaperList.value = res.data;
     }
   } finally {
     loading.value = false;
   }
 };
-
 const getAllSubjects = async () => {
   const res = await fetchAllSubjects();
   if (res.code === 200) allSubjects.value = res.data;
@@ -257,10 +253,12 @@ const handleQuery = () => {
   }
 };
 
-watch(() => [queryParams.subjectId, queryParams.grade], () => {
-  if (viewMode.value === 'list') {
-    handleQuery();
-  }
+// 2. 监听搜索框输入，更新 queryParams 并重新请求
+// 注意：el-input v-model 需要改为 queryParams.name，或者监听 searchQuery 赋值给 queryParams.name
+watch(() => searchQuery.value, (newVal) => {
+  queryParams.name = newVal;
+  queryParams.current = 1; // 搜索时重置回第一页
+  getList();
 });
 
 const handleCreate = () => {

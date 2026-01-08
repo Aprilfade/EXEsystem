@@ -34,6 +34,7 @@ export interface PaperPageParams {
     size: number;
     subjectId?: number;
     grade?: string; // 【新增此行】
+    name?: string; // 新增搜索字段
 }
 
 export interface PaperImage { // 【新增】
