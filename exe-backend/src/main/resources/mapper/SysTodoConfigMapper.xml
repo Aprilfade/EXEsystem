@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ice.exebackend.mapper.SysTodoConfigMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.ice.exebackend.entity.SysTodoConfig">
+        <id column="id" property="id"/>
+        <result column="type" property="type"/>
+        <result column="title" property="title"/>
+        <result column="icon" property="icon"/>
+        <result column="color" property="color"/>
+        <result column="action" property="action"/>
+        <result column="mapper_method" property="mapperMethod"/>
+        <result column="enabled" property="enabled"/>
+        <result column="sort_order" property="sortOrder"/>
+        <result column="description" property="description"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <!-- 查询所有启用的待办事项配置 -->
+    <select id="selectEnabledConfigs" resultMap="BaseResultMap">
+        SELECT
+            id,
+            type,
+            title,
+            icon,
+            color,
+            action,
+            mapper_method,
+            enabled,
+            sort_order,
+            description,
+            create_time,
+            update_time
+        FROM sys_todo_config
+        WHERE enabled = 1
+        ORDER BY sort_order ASC
+    </select>
+
+</mapper>

@@ -3,7 +3,9 @@ package com.ice.exebackend.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.ice.exebackend.dto.*;
 import com.ice.exebackend.entity.SysNotification;
+import com.ice.exebackend.entity.SysTodoConfig;
 import com.ice.exebackend.mapper.DashboardMapper;
+import com.ice.exebackend.mapper.SysTodoConfigMapper;
 import com.ice.exebackend.service.DashboardService;
 import com.ice.exebackend.service.SysNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +27,9 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Autowired
     private DashboardMapper dashboardMapper;
+
+    @Autowired
+    private SysTodoConfigMapper todoConfigMapper;
 
     @Autowired
     private SysNotificationService notificationService;
@@ -171,46 +176,52 @@ public class DashboardServiceImpl implements DashboardService {
         TodoListDTO dto = new TodoListDTO();
         List<TodoItemDTO> items = new ArrayList<>();
 
-        // 1. 待批改试卷
-        Map<String, Object> pendingPapers = dashboardMapper.getPendingPapersCount();
-        if (pendingPapers != null) {
-            Long count = ((Number) pendingPapers.get("count")).longValue();
-            if (count > 0) {
-                TodoItemDTO item = new TodoItemDTO();
-                item.setType("pending_papers");
-                item.setTitle("待批改试卷");
-                item.setCount(count.intValue());
-                item.setIcon("Document");
-                item.setColor("linear-gradient(135deg, #667eea 0%, #764ba2 100%)");
-                item.setAction("/paper-manage");
-                // 计算时间差
-                Object latestTime = pendingPapers.get("latestTime");
-                if (latestTime != null) {
-                    item.setTime(formatTimeAgo((LocalDateTime) latestTime));
+        // 从数据库读取待办事项配置
+        List<SysTodoConfig> configs = todoConfigMapper.selectEnabledConfigs();
+
+        // 遍历配置，动态调用对应的Mapper方法
+        for (SysTodoConfig config : configs) {
+            try {
+                // 通过反射调用DashboardMapper的方法
+                String methodName = config.getMapperMethod();
+                Map<String, Object> result = (Map<String, Object>)
+                    dashboardMapper.getClass().getMethod(methodName).invoke(dashboardMapper);
+
+                if (result != null) {
+                    Long count = ((Number) result.get("count")).longValue();
+                    if (count > 0) {
+                        TodoItemDTO item = new TodoItemDTO();
+                        item.setType(config.getType());
+                        item.setTitle(config.getTitle());
+                        item.setCount(count.intValue());
+                        item.setIcon(config.getIcon());
+                        item.setColor(config.getColor());
+                        item.setAction(config.getAction());
+
+                        // 计算时间差
+                        Object latestTime = result.get("latestTime");
+                        if (latestTime != null) {
+                            item.setTime(formatTimeAgo((LocalDateTime) latestTime));
+                        }
+
+                        items.add(item);
+                    }
                 }
-                items.add(item);
+            } catch (Exception e) {
+                // 记录日志但不影响其他待办项的加载
+                System.err.println("加载待办事项配置失败: " + config.getType() + ", 错误: " + e.getMessage());
             }
         }
 
-        // 2. 待审核题目
-        Map<String, Object> pendingQuestions = dashboardMapper.getPendingQuestionsCount();
-        if (pendingQuestions != null) {
-            Long count = ((Number) pendingQuestions.get("count")).longValue();
-            if (count > 0) {
-                TodoItemDTO item = new TodoItemDTO();
-                item.setType("pending_questions");
-                item.setTitle("待审核题目");
-                item.setCount(count.intValue());
-                item.setIcon("Files");
-                item.setColor("linear-gradient(135deg, #f093fb 0%, #f5576c 100%)");
-                item.setAction("/question-manage");
-                Object latestTime = pendingQuestions.get("latestTime");
-                if (latestTime != null) {
-                    item.setTime(formatTimeAgo((LocalDateTime) latestTime));
-                }
-                items.add(item);
+        // 智能排序：按数量降序
+        items.sort((a, b) -> {
+            // 首先按数量降序
+            if (!a.getCount().equals(b.getCount())) {
+                return b.getCount() - a.getCount();
             }
-        }
+            // 数量相同时保持原有顺序
+            return 0;
+        });
 
         dto.setItems(items);
         dto.setTotalCount(items.stream().mapToInt(TodoItemDTO::getCount).sum());
@@ -282,10 +293,19 @@ public class DashboardServiceImpl implements DashboardService {
             return (seconds / 60) + "分钟前";
         } else if (seconds < 86400) {
             return (seconds / 3600) + "小时前";
-        } else if (seconds < 2592000) {
+        } else if (seconds < 604800) {  // 小于7天
             return (seconds / 86400) + "天前";
+        } else if (seconds < 2592000) {  // 小于30天
+            return (seconds / 604800) + "周前";
         } else {
-            return time.format(DateTimeFormatter.ofPattern("MM-dd"));
+            // 超过30天，显示具体日期
+            if (time.getYear() == LocalDateTime.now().getYear()) {
+                // 同年显示月-日
+                return time.format(DateTimeFormatter.ofPattern("MM-dd"));
+            } else {
+                // 不同年显示年-月-日
+                return time.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            }
         }
     }
 

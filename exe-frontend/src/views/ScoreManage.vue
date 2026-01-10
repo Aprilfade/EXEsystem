@@ -113,6 +113,17 @@
               />
             </el-select>
           </el-form-item>
+          <el-form-item label="批改状态">
+            <el-select
+              v-model="queryParams.status"
+              placeholder="全部状态"
+              clearable
+              style="width: 180px;"
+            >
+              <el-option label="待批改" :value="1" />
+              <el-option label="已批改" :value="2" />
+            </el-select>
+          </el-form-item>
 
           <!-- 展开更多筛选 -->
           <el-collapse-transition>
@@ -353,6 +364,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import {
   Search, RefreshRight, Download, Delete, Edit, View,
   Document, Hide, DataAnalysis, User, TrendCharts,
@@ -416,6 +428,7 @@ const queryParams = reactive<ScoreQueryParams>({
   startTime: '',
   endTime: '',
   published: undefined,
+  status: undefined,
   sortBy: 'createTime',
   sortOrder: 'desc'
 });
@@ -515,6 +528,9 @@ const handleSearch = () => {
  * 重置
  */
 const handleReset = () => {
+  // 保留从待办事项跳转来的status筛选条件
+  const statusFromRoute = route.query.status ? Number(route.query.status) : undefined;
+
   Object.assign(queryParams, {
     current: 1,
     size: 10,
@@ -527,6 +543,7 @@ const handleReset = () => {
     startTime: '',
     endTime: '',
     published: undefined,
+    status: statusFromRoute,  // 保留原有的status参数
     sortBy: 'createTime',
     sortOrder: 'desc'
   });
@@ -704,7 +721,13 @@ const getScoreColor = (score: number) => {
   return '#F56C6C';
 };
 
+const route = useRoute();
+
 onMounted(() => {
+  // 读取URL参数，自动筛选待批改试卷
+  if (route.query.status) {
+    queryParams.status = Number(route.query.status);
+  }
   fetchData();
   fetchStats();
   fetchClassList();

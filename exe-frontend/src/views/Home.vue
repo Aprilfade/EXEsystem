@@ -179,7 +179,7 @@
           </div>
 
           <!-- 待办事项 -->
-          <SkeletonCard v-if="loading" :rows="4" show-header custom-class="todo-card" />
+          <SkeletonCard v-if="loading || todoLoading" :rows="4" show-header custom-class="todo-card" />
           <el-card v-else shadow="never" class="section-card todo-card">
             <template #header>
               <div class="card-header-enhanced">
@@ -489,6 +489,7 @@ const showLayoutSettings = ref(false);
 const loading = ref(true);
 const refreshing = ref(false);
 const chartLoading = ref(true);
+const todoLoading = ref(false); // 待办事项加载状态
 const onlineCount = computed(() => socketStore.onlineStudentCount);
 const userName = computed(() => authStore.user?.name || '管理员');
 
@@ -1088,6 +1089,7 @@ const fetchData = async () => {
 
 // 【新增】加载待办事项
 const loadTodoList = async () => {
+  todoLoading.value = true;
   try {
     const res = await getTodoList();
     if (res.code === 200) {
@@ -1099,6 +1101,8 @@ const loadTodoList = async () => {
   } catch (error: any) {
     console.error("获取待办事项失败:", error);
     ElMessage.error(error.message || '获取待办事项失败');
+  } finally {
+    todoLoading.value = false;
   }
 };
 

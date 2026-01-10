@@ -268,6 +268,14 @@ public class BizExamResultServiceImpl extends ServiceImpl<BizExamResultMapper, B
             BizExamResult result = new BizExamResult();
             result.setId(id);
             result.setPublished(published);
+            // 修复：发布时同步更新状态
+            // published=true时，状态设为2（已批改）
+            // published=false时，状态设为1（待批改）
+            if (Boolean.TRUE.equals(published)) {
+                result.setStatus(2);  // 已批改
+            } else if (Boolean.FALSE.equals(published)) {
+                result.setStatus(1);  // 待批改
+            }
             return result;
         }).collect(Collectors.toList());
 
@@ -367,6 +375,11 @@ public class BizExamResultServiceImpl extends ServiceImpl<BizExamResultMapper, B
         // 发布状态筛选
         if (params.containsKey("published") && params.get("published") != null) {
             query.eq("published", params.get("published"));
+        }
+
+        // 批改状态筛选（0=未提交，1=已提交待批改，2=已批改）
+        if (params.containsKey("status") && params.get("status") != null) {
+            query.eq("status", params.get("status"));
         }
 
         // 排序
