@@ -232,7 +232,22 @@ public class StudentDataController {
             if (question == null) continue;
 
             PracticeResultDTO.AnswerResult answerResult = new PracticeResultDTO.AnswerResult();
-            boolean isCorrect = userAnswer != null && userAnswer.equalsIgnoreCase(question.getAnswer());
+            boolean isCorrect;
+
+            // 【修复】判断题需要格式转换
+            if (question.getQuestionType() == 4) {
+                String normalizedUserAns = normalizeJudgmentAnswer(userAnswer);
+                String normalizedDbAns = normalizeJudgmentAnswer(question.getAnswer());
+                isCorrect = normalizedUserAns.equalsIgnoreCase(normalizedDbAns);
+            } else if (question.getQuestionType() == 2) {
+                // 多选题需要排序比较
+                String sortedUser = sortString(userAnswer != null ? userAnswer : "");
+                String sortedDb = sortString(question.getAnswer());
+                isCorrect = sortedUser.equalsIgnoreCase(sortedDb);
+            } else {
+                // 其他题型：单选、填空、主观题
+                isCorrect = userAnswer != null && userAnswer.equalsIgnoreCase(question.getAnswer());
+            }
 
             if (isCorrect) {
                 correctCount++;
@@ -488,6 +503,12 @@ public class StudentDataController {
                                     String sortedDb = sortString(q.getAnswer());
                                     isCorrect = sortedUser.equalsIgnoreCase(sortedDb);
                                     if(isCorrect) awardedScore = pq.getScore();
+                                } else if (q.getQuestionType() == 4) {
+                                    // 【修复】判断题：前端发送T/F，数据库存储"正确"/"错误"，需要转换
+                                    String normalizedUserAns = normalizeJudgmentAnswer(userAns);
+                                    String normalizedDbAns = normalizeJudgmentAnswer(q.getAnswer());
+                                    isCorrect = normalizedUserAns.equalsIgnoreCase(normalizedDbAns);
+                                    if(isCorrect) awardedScore = pq.getScore();
                                 } else {
                                     isCorrect = userAns.trim().equalsIgnoreCase(q.getAnswer().trim());
                                     if(isCorrect) awardedScore = pq.getScore();
@@ -549,6 +570,10 @@ public class StudentDataController {
         }
 
         examResult.setCreateTime(LocalDateTime.now());
+        // 【优化】状态管理规范化：学生提交后设为"待批改"状态
+        examResult.setStatus(1);  // 1=待批改（学生已提交，教师未批阅）
+        // 【优化】保存AI自动评分作为原始分数
+        examResult.setOriginalScore(studentScore);
         examResultService.save(examResult);
 
         // 【修改】删除灵根经验结算逻辑
@@ -689,6 +714,28 @@ public class StudentDataController {
                 .map(String::trim)
                 .sorted()
                 .collect(Collectors.joining(","));
+    }
+
+    /**
+     * 标准化判断题答案格式
+     * 支持多种格式：T/F、true/false、正确/错误、对/错
+     * 统一转换为 T 或 F 进行比较
+     */
+    private String normalizeJudgmentAnswer(String answer) {
+        if (!StringUtils.hasText(answer)) return "";
+
+        String trimmed = answer.trim().toLowerCase();
+
+        // T/F 格式
+        if ("t".equals(trimmed) || "true".equals(trimmed) || "正确".equals(answer.trim()) || "对".equals(answer.trim())) {
+            return "T";
+        }
+
+        if ("f".equals(trimmed) || "false".equals(trimmed) || "错误".equals(answer.trim()) || "错".equals(answer.trim())) {
+            return "F";
+        }
+
+        return trimmed.toUpperCase();
     }
 
     @GetMapping("/dashboard/activity-heatmap")

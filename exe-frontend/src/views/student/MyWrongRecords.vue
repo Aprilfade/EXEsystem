@@ -11,10 +11,11 @@
         <el-table-column prop="paperName" label="来源试卷" width="150" />
         <el-table-column prop="wrongReason" label="错误原因" width="120" />
         <el-table-column prop="createTime" label="记录时间" width="180" />
-        <el-table-column label="操作" width="220">
+        <el-table-column label="操作" width="300">
           <template #default="scope">
             <el-button link type="primary" @click="handleReview(scope.row)">详情</el-button>
             <el-button link type="warning" :icon="MagicStick" @click="handleAiAnalysis(scope.row)">AI 解析</el-button>
+            <el-button link type="success" :icon="TrendCharts" @click="handleDeepAnalysis(scope.row)">深度分析</el-button>
           </template>
         </el-table-column>
 
@@ -54,6 +55,9 @@
               <el-button type="warning" size="small" :icon="MagicStick" @click="handleAiAnalysis(row)">
                 AI 解析
               </el-button>
+              <el-button type="success" size="small" :icon="TrendCharts" @click="handleDeepAnalysis(row)">
+                深度分析
+              </el-button>
             </div>
           </div>
         </template>
@@ -72,6 +76,15 @@
     </el-card>
 
     <el-dialog v-model="aiResultVisible" title="🤖 AI 智能助教" width="600px">
+      <template #header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span>🤖 AI 智能助教</span>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 14px; color: #606266;">流式模式</span>
+            <el-switch v-model="useStreamMode" />
+          </div>
+        </div>
+      </template>
       <div v-loading="aiLoading" class="ai-content">
         <div v-if="aiResponse" class="markdown-body">
           <pre style="white-space: pre-wrap; font-family: sans-serif; line-height: 1.6;">{{ aiResponse }}</pre>
@@ -102,7 +115,11 @@
         @saved="onKeySaved"
     />
 
-
+    <!-- 深度分析面板 -->
+    <deep-analysis-panel
+        v-model="deepAnalysisVisible"
+        :question-data="deepAnalysisData"
+    />
 
 
     <el-dialog v-model="isReviewDialogVisible" title="错题解析" width="700px">
@@ -110,7 +127,25 @@
         <el-descriptions :column="1" border>
           <el-descriptions-item label="题干">
             <div v-html="reviewQuestion.content"></div>
-            <el-image v-if="reviewQuestion.imageUrl" :src="reviewQuestion.imageUrl" style="max-width: 200px;"/>
+            <el-image
+                v-if="reviewQuestion.imageUrl"
+                :src="reviewQuestion.imageUrl"
+                fit="contain"
+                lazy
+                loading="lazy"
+                style="max-width: 200px; margin-top: 10px;"
+            >
+              <template #placeholder>
+                <div class="image-slot">
+                  <el-icon class="is-loading"><Loading /></el-icon>
+                </div>
+              </template>
+              <template #error>
+                <div class="image-slot">
+                  <el-icon><Picture /></el-icon>
+                </div>
+              </template>
+            </el-image>
           </el-descriptions-item>
           <el-descriptions-item v-if="reviewQuestion.options" label="选项">
             <p v-for="option in JSON.parse(reviewQuestion.options as string)" :key="option.key">
@@ -125,7 +160,25 @@
           </el-descriptions-item>
           <el-descriptions-item label="解析">
             <div v-html="reviewQuestion.description"></div>
-            <el-image v-if="reviewQuestion.answerImageUrl" :src="reviewQuestion.answerImageUrl" style="max-width: 200px;"/>
+            <el-image
+                v-if="reviewQuestion.answerImageUrl"
+                :src="reviewQuestion.answerImageUrl"
+                fit="contain"
+                lazy
+                loading="lazy"
+                style="max-width: 200px; margin-top: 10px;"
+            >
+              <template #placeholder>
+                <div class="image-slot">
+                  <el-icon class="is-loading"><Loading /></el-icon>
+                </div>
+              </template>
+              <template #error>
+                <div class="image-slot">
+                  <el-icon><Picture /></el-icon>
+                </div>
+              </template>
+            </el-image>
           </el-descriptions-item>
           <el-descriptions-item label="错误原因分析">
             {{ currentWrongRecord?.wrongReason }}
@@ -143,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { Clock, View } from '@element-plus/icons-vue';
+import { Clock, View, Loading, Picture, TrendCharts } from '@element-plus/icons-vue';
 import ResponsiveTable from '@/components/common/ResponsiveTable.vue';
 import { ref, onMounted, reactive } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -156,7 +209,8 @@ import { MagicStick } from '@element-plus/icons-vue'; // 记得引入图标
 // 新增引入
 import { useStudentAuthStore } from '@/stores/studentAuth';
 import AiKeyDialog from '@/components/student/AiKeyDialog.vue';
-import { analyzeQuestion } from '@/api/ai';
+import DeepAnalysisPanel from '@/components/ai/DeepAnalysisPanel.vue';
+import { analyzeQuestion, analyzeQuestionStream } from '@/api/ai';
 import MarkdownIt from 'markdown-it';
 import { fetchPrerequisites } from '@/api/knowledgePoint';
 
@@ -265,6 +319,7 @@ const aiResultVisible = ref(false);
 const aiLoading = ref(false);
 const aiResponse = ref('');
 const currentRecordForAi = ref<WrongRecordVO | null>(null); // 暂存当前操作的记录
+const useStreamMode = ref(true); // 是否使用流式模式
 
 // 点击 AI 解析按钮
 const handleAiAnalysis = async (record: WrongRecordVO) => {
@@ -287,7 +342,7 @@ const onKeySaved = () => {
   }
 };
 
-// 执行 AI 分析的核心逻辑
+// 执行 AI 分析的核心逻辑（支持流式和非流式）
 const performAiAnalysis = async (record: WrongRecordVO) => {
   aiResultVisible.value = true;
   aiLoading.value = true;
@@ -300,24 +355,97 @@ const performAiAnalysis = async (record: WrongRecordVO) => {
 
     const question = detailRes.data;
 
-    // 2. 调用 AI 接口
-    const res = await analyzeQuestion({
+    const analysisReq = {
       questionContent: question.content,
-      studentAnswer: record.wrongAnswer || '未作答', // 这里需要后端 WrongRecordVO 返回 wrongAnswer
+      studentAnswer: record.wrongAnswer || '未作答',
       correctAnswer: question.answer,
       analysis: question.description
-    });
+    };
 
-    if (res.code === 200) {
-      aiResponse.value = res.data;
+    // 根据模式选择使用流式或非流式API
+    if (useStreamMode.value) {
+      // 使用流式响应
+      analyzeQuestionStream(
+        analysisReq,
+        // onChunk: 接收到数据块时实时更新显示
+        (chunk: string) => {
+          aiResponse.value += chunk;
+          aiLoading.value = false; // 开始接收数据后取消加载状态
+        },
+        // onComplete: 完成时
+        () => {
+          aiLoading.value = false;
+          ElMessage.success('AI分析完成');
+        },
+        // onError: 错误时
+        (error: Error) => {
+          ElMessage.error(error.message || 'AI 分析请求失败，请检查 API Key 是否正确');
+          aiResultVisible.value = false;
+          aiLoading.value = false;
+        }
+      );
+    } else {
+      // 使用传统非流式API
+      const res = await analyzeQuestion(analysisReq);
+
+      if (res.code === 200) {
+        aiResponse.value = res.data;
+      }
     }
   } catch (error: any) {
     ElMessage.error(error.message || 'AI 分析请求失败，请检查 API Key 是否正确');
     aiResultVisible.value = false;
   } finally {
-    aiLoading.value = false;
+    if (!useStreamMode.value) {
+      aiLoading.value = false;
+    }
   }
 };
+
+// --- 深度分析相关 ---
+const deepAnalysisVisible = ref(false);
+const deepAnalysisData = ref<any>(null);
+
+/**
+ * 处理深度分析
+ */
+const handleDeepAnalysis = async (record: WrongRecordVO) => {
+  // 1. 检查是否有 Key
+  if (!store.aiKey) {
+    ElMessage.warning('请先配置AI Key');
+    keyDialogVisible.value = true;
+    currentRecordForAi.value = record;
+    return;
+  }
+
+  try {
+    // 2. 获取题目详情
+    const detailRes = await fetchWrongRecordDetail(record.id);
+    if (detailRes.code !== 200) {
+      ElMessage.error('获取题目详情失败');
+      return;
+    }
+
+    const question = detailRes.data;
+
+    // 3. 准备深度分析数据
+    deepAnalysisData.value = {
+      questionId: question.id,
+      questionContent: question.content,
+      studentAnswer: record.wrongAnswer || '未作答',
+      correctAnswer: question.answer,
+      analysis: question.description,
+      knowledgePointId: question.knowledgePointIds?.[0] || null
+    };
+
+    // 4. 打开深度分析面板
+    deepAnalysisVisible.value = true;
+
+  } catch (error: any) {
+    ElMessage.error(error.message || '获取题目详情失败');
+  }
+};
+
 onMounted(getMyRecords);
 </script>
 
@@ -422,5 +550,16 @@ onMounted(getMyRecords);
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.image-slot {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 120px;
+  background: #f5f7fa;
+  color: #909399;
 }
 </style>

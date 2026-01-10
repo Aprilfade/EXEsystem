@@ -64,6 +64,46 @@
       </el-col>
     </el-row>
 
+    <!-- 学习分析组件 -->
+    <LearningAnalytics style="margin-bottom: 20px;" />
+
+    <!-- AI智能推荐面板 -->
+    <RecommendationPanel />
+
+    <!-- AI学习助手 - 右侧悬浮 -->
+    <div class="floating-ai-assistant">
+      <!-- 收起/展开按钮 -->
+      <transition name="slide-fade">
+        <div
+          v-show="!showAiChat"
+          class="ai-toggle-btn"
+          @click="showAiChat = true"
+          title="打开小艾助手"
+        >
+          <el-icon :size="24"><ChatDotRound /></el-icon>
+          <span class="btn-text">小艾</span>
+        </div>
+      </transition>
+
+      <!-- AI聊天面板 -->
+      <transition name="slide">
+        <div v-show="showAiChat" class="ai-chat-container">
+          <div class="ai-chat-header">
+            <span>🤖 小艾学习助手</span>
+            <el-button
+              circle
+              size="small"
+              @click="showAiChat = false"
+              title="收起"
+            >
+              <el-icon><Close /></el-icon>
+            </el-button>
+          </div>
+          <AiChatPanel />
+        </div>
+      </transition>
+    </div>
+
     <el-row :gutter="20" style="margin-bottom: 20px;">
       <el-col :span="16">
         <el-card shadow="never" style="height: 100%;">
@@ -217,7 +257,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStudentAuthStore } from '@/stores/studentAuth';
 // 【修复】添加 Star 图标导入
-import { Tickets, Select, CloseBold, Clock, EditPen, Memo, DataLine, Finished, Star, AlarmClock, Lightning } from '@element-plus/icons-vue';
+import { Tickets, Select, CloseBold, Clock, EditPen, Memo, DataLine, Finished, Star, AlarmClock, Lightning, ChatDotRound, Close } from '@element-plus/icons-vue';
 import { fetchStudentDashboardStats, type StudentDashboardStats } from '@/api/studentAuth';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
@@ -229,13 +269,20 @@ import { Present } from '@element-plus/icons-vue'; // 引入礼品图标
 import UserAvatar from '@/components/UserAvatar.vue';
 import SignInCalendar from '@/components/student/SignInCalendar.vue';
 import AchievementList from '@/components/student/AchievementList.vue'; // 引入组件
+import LearningAnalytics from '@/components/student/LearningAnalytics.vue'; // 引入学习分析组件
 import { fetchMyAchievements } from '@/api/student'; // 引入API
+import RecommendationPanel from '@/components/ai/RecommendationPanel.vue'; // AI智能推荐
+import AiChatPanel from '@/components/ai/AiChatPanel.vue'; // AI学习助手
 
 
 
 const achievements = ref([]);
 const studentAuth = useStudentAuthStore();
 const router = useRouter();
+
+// AI助手显示状态
+const showAiChat = ref(false);
+
 const isMallVisible = ref(false);
 
 const heatmapChartRef = ref<HTMLElement | null>(null);
@@ -465,4 +512,154 @@ onMounted(async () => {
 
 .item-gold .icon-wrapper { background: #fffbf0; color: #faad14; }
 .item-gold:hover .icon-wrapper { background: #faad14; color: #fff; }
+
+/* === 悬浮AI助手样式 === */
+.floating-ai-assistant {
+  position: fixed;
+  right: 20px;
+  bottom: 80px;
+  z-index: 1000;
+}
+
+/* 展开/收起按钮 */
+.ai-toggle-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: white;
+}
+
+.ai-toggle-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.ai-toggle-btn .btn-text {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* AI聊天容器 */
+.ai-chat-container {
+  width: 380px;
+  height: 600px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-chat-header {
+  padding: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.ai-chat-header .el-button {
+  color: white;
+}
+
+/* 修复AI聊天面板内部样式 */
+.ai-chat-container :deep(.ai-chat-panel) {
+  border: none;
+  box-shadow: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-chat-container :deep(.el-card) {
+  border: none;
+  box-shadow: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-chat-container :deep(.el-card__header) {
+  display: none;
+}
+
+.ai-chat-container :deep(.el-card__body) {
+  flex: 1;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-chat-container :deep(.chat-content) {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.ai-chat-container :deep(.chat-input-wrapper) {
+  flex-shrink: 0;
+}
+
+/* 过渡动画 */
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-enter-from {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.slide-leave-to {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .ai-chat-container {
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    border-radius: 0;
+  }
+
+  .floating-ai-assistant {
+    right: 16px;
+    bottom: 70px;
+  }
+
+  .ai-toggle-btn {
+    width: 56px;
+    height: 56px;
+  }
+}
 </style>

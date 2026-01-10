@@ -112,7 +112,7 @@
                 'create_question' AS type,
                 CONCAT('创建了题目「', SUBSTRING(content, 1, 20), '...」') AS content,
                 create_time AS createTime,
-                created_by AS userId,
+                NULL AS userId,
                 '' AS userName
             FROM biz_question
             WHERE create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)

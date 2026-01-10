@@ -56,12 +56,12 @@
               <div class="analysis-row">
                 <span class="label">你的答案：</span>
                 <span class="user-ans" :class="{ error: !isCorrect(pq.questionId) }">
-                  {{ getUserAnswer(pq.questionId) || '未作答' }}
+                  {{ formatAnswer(pq.questionId, getUserAnswer(pq.questionId)) || '未作答' }}
                 </span>
               </div>
               <div class="analysis-row">
                 <span class="label">正确答案：</span>
-                <span class="correct-ans">{{ questionsMap[pq.questionId]?.answer }}</span>
+                <span class="correct-ans">{{ formatAnswer(pq.questionId, questionsMap[pq.questionId]?.answer) }}</span>
               </div>
               <div class="analysis-row">
                 <span class="label">解析：</span>
@@ -168,6 +168,22 @@ const isUserSelected = (qId: number, key: string) => {
 const isCorrectOption = (qId: number, key: string) => {
   const ans = questionsMap.value[qId]?.answer;
   return ans ? ans.split(',').includes(key) : false;
+};
+
+/**
+ * 格式化答案显示（将判断题的T/F转换为中文）
+ */
+const formatAnswer = (qId: number, answer: string | undefined) => {
+  if (!answer) return '';
+
+  const question = questionsMap.value[qId];
+  // 如果是判断题（questionType === 4）
+  if (question && question.questionType === 4) {
+    if (answer === 'T') return '正确';
+    if (answer === 'F') return '错误';
+  }
+
+  return answer;
 };
 
 onMounted(loadData);

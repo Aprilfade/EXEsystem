@@ -34,6 +34,20 @@
           <el-form-item label="总分修改为">
             <el-input-number v-model="newScore" :min="0" :max="paper?.totalScore || 100" />
           </el-form-item>
+          <el-form-item label="修改原因" v-if="showReasonInput">
+            <el-input
+              v-model="reason"
+              type="textarea"
+              :rows="3"
+              placeholder="分数变化较大，请填写修改原因（用于审批）"
+              maxlength="500"
+              show-word-limit
+            />
+            <div style="color: #E6A23C; font-size: 12px; margin-top: 4px;">
+              <el-icon><InfoFilled /></el-icon>
+              提示：分数变化超过审批阈值，需要提交审批
+            </div>
+          </el-form-item>
         </el-form>
       </div>
     </div>
@@ -45,10 +59,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { fetchExamHistoryDetail } from '@/api/studentAuth'; // 复用这个API即可，虽然是student包下的，但逻辑通用
 import request from '@/utils/request';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { InfoFilled } from '@element-plus/icons-vue';
 
 const props = defineProps<{ visible: boolean; resultId: number }>();
 const emit = defineEmits(['update:visible', 'success']);
@@ -57,6 +72,21 @@ const loading = ref(true);
 const paper = ref<any>(null);
 const userAnswers = ref<Record<string, string>>({});
 const newScore = ref(0);
+const originalScore = ref(0); // 保存原始分数
+const reason = ref(''); // 修改原因
+
+// 计算是否需要显示原因输入框（分数变化超过10分或20%）
+const showReasonInput = computed(() => {
+  const scoreChange = Math.abs(newScore.value - originalScore.value);
+  if (scoreChange >= 10) return true;
+
+  if (originalScore.value !== 0) {
+    const changePercentage = (scoreChange / Math.abs(originalScore.value)) * 100;
+    if (changePercentage >= 20) return true;
+  }
+
+  return false;
+});
 
 const loadDetail = async () => {
   loading.value = true;
@@ -74,7 +104,8 @@ const loadDetail = async () => {
 
     if (res.code === 200) {
       paper.value = res.data.paper;
-      newScore.value = res.data.examResult.score;
+      newScore.value = res.data.examResult.score || 0;
+      originalScore.value = res.data.examResult.score || 0; // 保存原始分数
       if (res.data.examResult.userAnswers) {
         userAnswers.value = JSON.parse(res.data.examResult.userAnswers);
       }
@@ -88,12 +119,41 @@ const loadDetail = async () => {
 
 const submitGrade = async () => {
   try {
-    await request.put(`/api/v1/exam-results/${props.resultId}/score`, { score: newScore.value });
-    ElMessage.success('批阅完成');
-    emit('success');
-    emit('update:visible', false);
-  } catch (e) {
-    ElMessage.error('提交失败');
+    // 检查是否需要审批但没有填写原因
+    if (showReasonInput.value && !reason.value.trim()) {
+      ElMessage.warning('分数变化较大，请填写修改原因');
+      return;
+    }
+
+    const payload: any = { score: newScore.value };
+    if (showReasonInput.value) {
+      payload.reason = reason.value;
+    }
+
+    const res = await request.put(`/api/v1/exam-results/${props.resultId}/score`, payload);
+
+    // 检查是否需要审批
+    if (res.data && res.data.needsApproval) {
+      await ElMessageBox.alert(
+        res.data.message || '分数变化超过审批阈值，已提交审批，请等待审核',
+        '审批提示',
+        {
+          confirmButtonText: '我知道了',
+          type: 'warning',
+          callback: () => {
+            emit('success');
+            emit('update:visible', false);
+          }
+        }
+      );
+    } else {
+      ElMessage.success('批阅完成');
+      emit('success');
+      emit('update:visible', false);
+    }
+  } catch (e: any) {
+    console.error('保存失败', e);
+    ElMessage.error(e.response?.data?.msg || e.message || '提交失败');
   }
 };
 

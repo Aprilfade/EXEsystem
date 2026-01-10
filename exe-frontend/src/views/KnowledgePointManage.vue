@@ -53,27 +53,98 @@
 
         <el-dialog
             v-model="aiDialogVisible"
-            title="AI 智能提取知识点"
             width="600px"
             :close-on-click-modal="false"
             append-to-body
         >
+          <template #header>
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <span style="font-size: 16px; font-weight: 600;">AI 智能提取知识点</span>
+              <el-switch
+                v-model="useStreamMode"
+                active-text="流式模式"
+                inactive-text="标准模式"
+                style="--el-switch-on-color: #13ce66;"
+              />
+            </div>
+          </template>
+
           <div v-if="step === 1">
-            <el-alert title="粘贴课文、教案或笔记，AI将自动提取核心知识点" type="info" :closable="false" style="margin-bottom: 15px;" />
+            <el-alert type="info" :closable="false" style="margin-bottom: 15px;">
+              <template #title>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span>📚 粘贴课文、教案或笔记，或上传文件，AI将自动提取核心知识点</span>
+                  <el-tag v-if="textLength > 0" :type="getTextLengthType()" size="small">
+                    {{ textLength }} 字符 {{ textLength > 8000 ? '(将分块处理)' : '' }}
+                  </el-tag>
+                </div>
+              </template>
+            </el-alert>
+
+            <!-- 【新增】文件上传区域 -->
+            <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+              <el-upload
+                  ref="uploadRef"
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  :on-change="handleFileChange"
+                  accept=".txt,.md,.pdf,.doc,.docx"
+              >
+                <el-button type="primary" :icon="Upload">
+                  上传文件
+                </el-button>
+              </el-upload>
+              <span style="color: #909399; font-size: 12px;">
+                支持格式: .txt, .md, .pdf, .doc, .docx
+              </span>
+              <el-tag v-if="uploadedFileName" type="success" closable @close="clearUploadedFile">
+                {{ uploadedFileName }}
+              </el-tag>
+            </div>
+
             <el-input
                 v-model="aiForm.text"
                 type="textarea"
-                :rows="10"
-                placeholder="请输入文本内容..."
+                :rows="12"
+                placeholder="请输入文本内容，或上传文件自动填充...（支持大文本，无字数限制）"
+                @input="updateTextLength"
             />
-            <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
-              <span>提取数量：</span>
-              <el-input-number v-model="aiForm.count" :min="1" :max="20" />
+
+            <div style="margin-top: 15px; display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span>提取数量：</span>
+                <el-input-number v-model="aiForm.count" :min="1" :max="50" />
+                <el-tooltip content="建议：短文本5-10个，长文本20-50个" placement="top">
+                  <el-icon style="cursor: help;"><QuestionFilled /></el-icon>
+                </el-tooltip>
+              </div>
+              <div v-if="textLength > 8000" style="color: #409eff; font-size: 12px;">
+                <el-icon><Loading /></el-icon>
+                预计处理时间：{{ estimatedTime }}秒
+              </div>
             </div>
           </div>
 
-          <div v-else-if="step === 2" v-loading="generating">
-            <el-form label-position="top">
+          <div v-else-if="step === 2">
+            <!-- 流式输出显示区域 -->
+            <div v-if="useStreamMode && generating && streamContent" style="margin-bottom: 20px;">
+              <el-alert type="info" :closable="false" style="margin-bottom: 10px;">
+                <template #title>
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <el-icon class="is-loading"><Loading /></el-icon>
+                    <span>AI 正在思考中，实时输出...</span>
+                  </div>
+                </template>
+              </el-alert>
+
+              <el-card shadow="never" style="max-height: 300px; overflow-y: auto; background: #f5f7fa;">
+                <pre style="white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.6; margin: 0;">{{ streamContent }}</pre>
+              </el-card>
+            </div>
+
+            <!-- 原有的加载状态 -->
+            <div v-loading="generating && !streamContent" :element-loading-text="loadingText">
+              <el-form label-position="top">
               <el-form-item label="选择所属科目">
                 <el-select v-model="aiSaveConfig.subjectId" placeholder="请选择" style="width: 100%">
                   <el-option v-for="s in allSubjects" :key="s.id" :label="s.name" :value="s.id" />
@@ -86,25 +157,47 @@
               </el-form-item>
             </el-form>
 
-            <div class="generated-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 4px;">
-              <div v-for="(kp, index) in generatedPoints" :key="index" style="margin-bottom: 15px; border-bottom: 1px dashed #eee; padding-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                  <el-input v-model="kp.name" placeholder="知识点名称" style="width: 70%; font-weight: bold;" />
-                  <el-button type="danger" icon="Delete" circle size="small" @click="removeGenerated(index)" />
+            <div v-if="generatedPoints.length > 0">
+              <el-divider>
+                <el-tag type="success">已提取 {{ generatedPoints.length }} 个知识点</el-tag>
+              </el-divider>
+              <div class="generated-list" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 4px;">
+                <div v-for="(kp, index) in generatedPoints" :key="index" style="margin-bottom: 15px; border-bottom: 1px dashed #eee; padding-bottom: 10px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 5px; align-items: center;">
+                    <el-tag size="small" type="info" style="margin-right: 10px;">{{ index + 1 }}</el-tag>
+                    <el-input v-model="kp.name" placeholder="知识点名称" style="flex: 1; font-weight: bold;" />
+                    <el-button type="danger" icon="Delete" circle size="small" @click="removeGenerated(index)" style="margin-left: 10px;" />
+                  </div>
+                  <el-input v-model="kp.description" type="textarea" :rows="2" placeholder="描述" />
                 </div>
-                <el-input v-model="kp.description" type="textarea" :rows="2" placeholder="描述" />
               </div>
+            </div>
+            <el-empty v-else description="正在提取知识点，请稍候..." />
             </div>
           </div>
 
           <template #footer>
             <div v-if="step === 1">
               <el-button @click="aiDialogVisible = false">取消</el-button>
-              <el-button type="primary" @click="handleAiGenerate" :loading="generating">开始提取</el-button>
+              <el-button
+                type="primary"
+                @click="handleAiGenerate"
+                :loading="generating"
+                :disabled="textLength === 0"
+              >
+                开始提取
+              </el-button>
             </div>
             <div v-else>
-              <el-button @click="step = 1">返回修改</el-button>
-              <el-button type="success" @click="batchSaveAiPoints" :loading="saving">确认入库</el-button>
+              <el-button @click="step = 1" :disabled="generating">返回修改</el-button>
+              <el-button
+                type="success"
+                @click="batchSaveAiPoints"
+                :loading="saving"
+                :disabled="generatedPoints.length === 0"
+              >
+                确认入库 ({{ generatedPoints.length }}个)
+              </el-button>
             </div>
           </template>
         </el-dialog>
@@ -247,10 +340,10 @@ import { fetchKnowledgePointList, deleteKnowledgePoint, fetchKnowledgePointGloba
 import type { KnowledgePoint, KnowledgePointPageParams, KnowledgePointGlobalStats } from '@/api/knowledgePoint';
 import { fetchAllSubjects } from '@/api/subject';
 import type { Subject } from '@/api/subject';
-import { Plus, Edit, Delete, Search, Refresh, Grid, Menu, MoreFilled, MagicStick } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, Grid, Menu, MoreFilled, MagicStick, QuestionFilled, Loading, Upload } from '@element-plus/icons-vue';
 import KnowledgePointEditDialog from '@/components/knowledge-point/KnowledgePointEditDialog.vue';
 import KnowledgePointDetailDialog from '@/components/knowledge-point/KnowledgePointDetailDialog.vue';
-import { generateKnowledgePointsFromText, createKnowledgePoint } from '@/api/knowledgePoint';
+import { generateKnowledgePointsFromText, generateKnowledgePointsFromTextStream, createKnowledgePoint } from '@/api/knowledgePoint';
 import AiKeyDialog from '@/components/student/AiKeyDialog.vue';
 
 // AI 相关变量
@@ -262,6 +355,21 @@ const saving = ref(false);
 const aiForm = reactive({ text: '', count: 5 });
 const aiSaveConfig = reactive({ subjectId: undefined as number | undefined, grade: '' });
 const generatedPoints = ref<any[]>([]);
+const textLength = ref(0);
+const loadingText = ref('正在提取知识点...');
+
+// 【流式响应】新增变量
+const useStreamMode = ref(true); // 默认启用流式模式
+const streamContent = ref(''); // 流式输出内容
+
+// 【文件上传】新增变量
+const uploadedFileName = ref('');
+const uploadRef = ref();
+
+// 计算预估处理时间（大文本分块处理）
+const estimatedTime = computed(() => {
+  return Math.ceil(textLength.value / 6000) * 10;
+});
 
 const knowledgePointList = ref<KnowledgePoint[]>([]);
 const allSubjects = ref<Subject[]>([]);
@@ -312,21 +420,126 @@ const openAiDialog = () => {
   step.value = 1;
   aiForm.text = '';
   generatedPoints.value = [];
+  uploadedFileName.value = '';
   aiDialogVisible.value = true;
+};
+
+// 【新增】文件上传处理
+const handleFileChange = async (file: any) => {
+  const rawFile = file.raw;
+  if (!rawFile) return;
+
+  uploadedFileName.value = rawFile.name;
+  const fileExtension = rawFile.name.split('.').pop()?.toLowerCase();
+
+  try {
+    // .txt 和 .md 文件可以直接在前端读取
+    if (fileExtension === 'txt' || fileExtension === 'md') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        aiForm.text = e.target?.result as string;
+        updateTextLength();
+        ElMessage.success('文件读取成功');
+      };
+      reader.onerror = () => {
+        ElMessage.error('文件读取失败');
+      };
+      reader.readAsText(rawFile, 'UTF-8');
+    }
+    // PDF、Word等需要后端解析
+    else if (['pdf', 'doc', 'docx'].includes(fileExtension || '')) {
+      const formData = new FormData();
+      formData.append('file', rawFile);
+
+      ElMessage.info('正在解析文件，请稍候...');
+
+      // 调用后端文件解析API
+      const response = await fetch('/api/v1/ai/parse-file', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('文件解析失败');
+      }
+
+      const result = await response.json();
+      if (result.code === 200) {
+        aiForm.text = result.data.text;
+        updateTextLength();
+        ElMessage.success(`文件解析成功，提取了 ${result.data.text.length} 字符`);
+      } else {
+        throw new Error(result.msg || '文件解析失败');
+      }
+    } else {
+      ElMessage.warning('不支持的文件格式');
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '文件处理失败');
+    uploadedFileName.value = '';
+  }
+};
+
+// 【新增】清除上传的文件
+const clearUploadedFile = () => {
+  uploadedFileName.value = '';
+  aiForm.text = '';
+  updateTextLength();
+};
+
+// 更新文本长度
+const updateTextLength = () => {
+  textLength.value = aiForm.text.length;
+};
+
+// 获取文本长度标签类型
+const getTextLengthType = () => {
+  if (textLength.value > 8000) return 'warning';
+  if (textLength.value > 3000) return 'success';
+  return 'info';
 };
 
 const handleAiGenerate = async () => {
   if (!aiForm.text) return ElMessage.warning('请输入文本');
+
   generating.value = true;
+  streamContent.value = '';
+  generatedPoints.value = [];
+  step.value = 2;
+
   try {
-    const res = await generateKnowledgePointsFromText(aiForm);
-    if (res.code === 200) {
-      generatedPoints.value = res.data;
-      step.value = 2;
+    if (useStreamMode.value) {
+      // 使用流式API
+      generateKnowledgePointsFromTextStream(
+        aiForm,
+        // onChunk: 接收流式数据
+        (chunk: string) => {
+          streamContent.value += chunk;
+        },
+        // onComplete: 完成时接收完整结果
+        (points: any[]) => {
+          generatedPoints.value = points;
+          generating.value = false;
+          ElMessage.success(`成功提取 ${points.length} 个知识点`);
+        },
+        // onError: 错误处理
+        (error: Error) => {
+          generating.value = false;
+          ElMessage.error('生成失败: ' + error.message);
+        }
+      );
+    } else {
+      // 使用标准API（原有代码）
+      const res = await generateKnowledgePointsFromText(aiForm);
+      if (res.code === 200) {
+        generatedPoints.value = res.data;
+      }
+      generating.value = false;
     }
   } catch(e) {
-    // error handled by request
-  } finally {
     generating.value = false;
   }
 };

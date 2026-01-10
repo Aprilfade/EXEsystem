@@ -39,7 +39,24 @@
       <div v-if="currentQuestion">
         <div v-html="currentQuestion.content" class="q-content"></div>
         <div v-if="currentQuestion.imageUrl">
-          <el-image :src="currentQuestion.imageUrl" style="max-width: 200px;" />
+          <el-image
+              :src="currentQuestion.imageUrl"
+              fit="contain"
+              lazy
+              loading="lazy"
+              style="max-width: 200px; margin: 10px 0;"
+          >
+            <template #placeholder>
+              <div class="image-slot">
+                <el-icon class="is-loading"><Loading /></el-icon>
+              </div>
+            </template>
+            <template #error>
+              <div class="image-slot">
+                <el-icon><Picture /></el-icon>
+              </div>
+            </template>
+          </el-image>
         </div>
         <el-divider>答案与解析</el-divider>
         <p><strong>答案：</strong> {{ currentQuestion.answer }}</p>
@@ -53,6 +70,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { fetchMyFavorites, toggleFavorite } from '@/api/favorite';
 import { ElMessage } from 'element-plus';
+import { Loading, Picture } from '@element-plus/icons-vue';
 
 const loading = ref(false);
 const favoritesList = ref([]);
@@ -105,4 +123,15 @@ onMounted(getList);
 .page-container { padding: 24px; }
 .pagination { margin-top: 20px; display: flex; justify-content: flex-end; }
 .q-content { font-size: 16px; margin-bottom: 10px; line-height: 1.6; }
+
+.image-slot {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 120px;
+  background: #f5f7fa;
+  color: #909399;
+}
 </style>

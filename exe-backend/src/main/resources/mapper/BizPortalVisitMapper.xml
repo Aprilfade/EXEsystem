@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ice.exebackend.mapper.BizPortalVisitMapper">
+
+    <!-- 获取系统访问统计 -->
+    <select id="getSystemVisitStats" resultType="com.ice.exebackend.dto.SystemVisitStatsDTO">
+        SELECT
+            system_id AS systemId,
+            system_name AS systemName,
+            COUNT(*) AS visitCount,
+            MAX(visit_time) AS lastVisitTime
+        FROM biz_portal_visit
+        WHERE visit_time >= #{startTime}
+        <if test="userId != null">
+            AND user_id = #{userId}
+        </if>
+        GROUP BY system_id, system_name
+        ORDER BY visitCount DESC
+    </select>
+
+    <!-- 获取访问趋势数据 -->
+    <select id="getVisitTrendData" resultType="map">
+        SELECT
+            DATE(visit_time) AS date,
+            system_id AS systemId,
+            COUNT(*) AS count
+        FROM biz_portal_visit
+        WHERE visit_time >= #{startTime}
+        <if test="userId != null">
+            AND user_id = #{userId}
+        </if>
+        GROUP BY DATE(visit_time), system_id
+        ORDER BY date ASC
+    </select>
+
+    <!-- 获取热力图数据 -->
+    <select id="getHeatmapData" resultType="map">
+        SELECT
+            DATE(visit_time) AS date,
+            (DAYOFWEEK(DATE(visit_time)) - 1) AS day,
+            COUNT(*) AS count
+        FROM biz_portal_visit
+        WHERE visit_time BETWEEN #{startTime} AND #{endTime}
+        <if test="userId != null">
+            AND user_id = #{userId}
+        </if>
+        GROUP BY DATE(visit_time), (DAYOFWEEK(DATE(visit_time)) - 1)
+        ORDER BY date ASC
+    </select>
+
+    <!-- 获取最近访问记录 -->
+    <select id="getRecentAccess" resultType="map">
+        SELECT
+            system_id AS systemId,
+            system_name AS systemName,
+            MAX(visit_time) AS visitTime
+        FROM biz_portal_visit
+        WHERE user_id = #{userId}
+        GROUP BY system_id, system_name
+        ORDER BY MAX(visit_time) DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 获取访问统计汇总 -->
+    <select id="getVisitSummary" resultType="map">
+        SELECT
+            COUNT(*) AS totalVisits,
+            SUM(CASE WHEN DATE(visit_time) = CURDATE() THEN 1 ELSE 0 END) AS todayVisits,
+            SUM(CASE WHEN YEARWEEK(visit_time, 1) = YEARWEEK(CURDATE(), 1) THEN 1 ELSE 0 END) AS weekVisits,
+            SUM(CASE WHEN YEAR(visit_time) = YEAR(CURDATE()) AND MONTH(visit_time) = MONTH(CURDATE()) THEN 1 ELSE 0 END) AS monthVisits
+        FROM biz_portal_visit
+        <if test="userId != null">
+            WHERE user_id = #{userId}
+        </if>
+    </select>
+
+</mapper>

@@ -19,6 +19,17 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * AI 服务（基础版 V1）
+ *
+ * @deprecated 此版本已废弃，请使用 {@link AiServiceV3}
+ * V3版本提供更完整的功能：
+ * - 流式响应支持
+ * - 优雅降级机制
+ * - 断路器保护
+ * - 完善的监控和告警
+ */
+@Deprecated(since = "3.02", forRemoval = true)
 @Service
 public class AiService {
 

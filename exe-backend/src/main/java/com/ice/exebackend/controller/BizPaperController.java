@@ -12,6 +12,8 @@ import com.ice.exebackend.entity.BizPaper;
 import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.BizPaperService;
 import com.ice.exebackend.service.PdfService; // 【1. 新增导入】
+import com.ice.exebackend.service.AiServiceV3; // AI服务
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.slf4j.Logger;
@@ -46,6 +48,10 @@ public class BizPaperController {
     // 2. 注入 RedisTemplate
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
+    // 注入 AiServiceV3
+    @Autowired
+    private AiServiceV3 aiServiceV3;
 
     // 3. 定义缓存键常量
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
@@ -249,6 +255,55 @@ public class BizPaperController {
             logger.error("导出答题卡PDF失败, paperId: {}", id, e);
             return ResponseEntity.status(500).build();
         }
+    }
+
+    /**
+     * 【新增】AI 智能生成试卷（流式响应）
+     */
+    @PostMapping("/ai-generate-stream")
+    @PreAuthorize("hasAnyAuthority('sys:paper:create', 'sys:paper:list')")
+    @Log(title = "试卷管理", businessType = BusinessType.OTHER)
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter generatePaperStream(
+            @RequestBody java.util.Map<String, Object> params,
+            HttpServletRequest request) {
+
+        // 获取当前用户ID
+        Long userId = getCurrentUserId();
+
+        // 从请求头获取 AI 配置
+        String apiKey = request.getHeader("X-Ai-Api-Key");
+        String provider = request.getHeader("X-Ai-Provider");
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new RuntimeException("未配置 AI API Key");
+        }
+        if (provider == null || provider.isEmpty()) {
+            provider = "DEEPSEEK"; // 默认使用 DeepSeek
+        }
+
+        // 解析参数
+        String paperTitle = (String) params.get("paperTitle");
+        String subjectName = (String) params.get("subjectName");
+        String knowledgePoints = (String) params.get("knowledgePoints");
+        String difficultyDistribution = (String) params.get("difficultyDistribution");
+        String questionTypes = (String) params.get("questionTypes");
+        Integer totalScore = (Integer) params.getOrDefault("totalScore", 100);
+
+        // 调用 AI 服务生成试卷
+        return aiServiceV3.generatePaperStream(
+                apiKey, provider, paperTitle, subjectName,
+                knowledgePoints, difficultyDistribution,
+                questionTypes, totalScore, userId
+        );
+    }
+
+    /**
+     * 获取当前登录用户ID
+     */
+    private Long getCurrentUserId() {
+        // TODO: 从 SecurityContext 中获取当前用户ID
+        // 临时返回1，实际应从认证信息中获取
+        return 1L;
     }
 
 }

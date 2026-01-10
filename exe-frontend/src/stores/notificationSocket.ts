@@ -12,6 +12,8 @@ export const useNotificationSocketStore = defineStore('notificationSocket', {
         heartbeatTimer: null as number | null,
         // 【新增】存储在线学生人数
         onlineStudentCount: 0,
+        // 【新增】存储最后一条通知（用于触发UI更新）
+        lastNotification: null as any,
     }),
     actions: {
         connect() {
@@ -93,6 +95,9 @@ export const useNotificationSocketStore = defineStore('notificationSocket', {
         },
 
         handleMessage(data: any) {
+            // 【新增】存储最后一条通知，用于触发UI更新
+            this.lastNotification = data;
+
             if (data.type === 'SYSTEM_NOTICE') {
                 ElNotification({
                     title: `📢 新通知：${data.title}`,
@@ -107,6 +112,16 @@ export const useNotificationSocketStore = defineStore('notificationSocket', {
             // 【新增】处理在线人数更新消息
             else if (data.type === 'ONLINE_COUNT') {
                 this.onlineStudentCount = data.count;
+            }
+            // 处理成绩更新、评语更新通知
+            else if (data.type === 'SCORE_UPDATE' || data.type === 'COMMENT_UPDATE') {
+                ElNotification({
+                    title: data.title || '新通知',
+                    message: data.message || data.content,
+                    type: 'success',
+                    duration: 5000,
+                    position: 'top-right',
+                });
             }
         }
     }

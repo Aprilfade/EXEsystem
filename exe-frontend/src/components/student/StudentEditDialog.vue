@@ -70,7 +70,7 @@ import { ElMessage } from 'element-plus';
 import { createStudent, updateStudent } from '@/api/student';
 import type { Student } from '@/api/student';
 import type { Subject } from '@/api/subject';
-import { getSubjectList } from '@/api/subject';
+import { fetchAllSubjects } from '@/api/subject';
 import { GRADE_OPTIONS } from '@/utils/constants'; // 引入年级常量
 import KnowledgeMasteryRadar from './KnowledgeMasteryRadar.vue';
 
@@ -162,7 +162,7 @@ const submitForm = async () => {
 // 加载科目列表
 const loadSubjects = async () => {
   try {
-    const res = await getSubjectList();
+    const res = await fetchAllSubjects();
     if (res.code === 200 && res.data) {
       availableSubjects.value = res.data.map((subject: Subject) => ({
         id: subject.id,

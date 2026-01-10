@@ -73,6 +73,20 @@
             />
             <span class="hint-text">如需调整分数，请输入新分数</span>
           </el-form-item>
+          <el-form-item label="修改原因" v-if="showReasonInput">
+            <el-input
+              v-model="formData.reason"
+              type="textarea"
+              :rows="3"
+              placeholder="分数变化较大，请填写修改原因（用于审批）"
+              maxlength="500"
+              show-word-limit
+            />
+            <div style="color: #E6A23C; font-size: 12px; margin-top: 4px;">
+              <el-icon><InfoFilled /></el-icon>
+              提示：分数变化超过审批阈值（10分或20%），需要提交审批
+            </div>
+          </el-form-item>
           <el-form-item label="教师评语">
             <el-input
               v-model="formData.comment"
@@ -99,8 +113,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ref, reactive, watch, computed } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { InfoFilled } from '@element-plus/icons-vue';
 import { getScoreDetail, updateScore, updateComment } from '@/api/score';
 import type { ExamResultDetail } from '@/api/score';
 
@@ -117,6 +132,7 @@ const emit = defineEmits<{
 const dialogVisible = ref(false);
 const loading = ref(false);
 const submitting = ref(false);
+const originalScore = ref(0);
 
 const resultData = ref<ExamResultDetail>({
   id: 0,
@@ -140,7 +156,23 @@ const resultData = ref<ExamResultDetail>({
 
 const formData = reactive({
   score: 0,
-  comment: ''
+  comment: '',
+  reason: ''
+});
+
+/**
+ * 计算是否需要显示原因输入框（分数变化超过10分或20%）
+ */
+const showReasonInput = computed(() => {
+  const scoreChange = Math.abs(formData.score - originalScore.value);
+  if (scoreChange >= 10) return true;
+
+  if (originalScore.value !== 0) {
+    const changePercentage = (scoreChange / Math.abs(originalScore.value)) * 100;
+    if (changePercentage >= 20) return true;
+  }
+
+  return false;
 });
 
 /**
@@ -155,6 +187,7 @@ const fetchDetail = async () => {
     if (res.code === 200) {
       resultData.value = res.data;
       formData.score = res.data.score;
+      originalScore.value = res.data.score; // 保存原始分数
       formData.comment = res.data.comment || '';
     } else {
       ElMessage.error(res.message || '获取成绩详情失败');
@@ -173,6 +206,13 @@ const fetchDetail = async () => {
  * 提交保存
  */
 const handleSubmit = async () => {
+  // 检查是否需要审批但没有填写原因
+  if (showReasonInput.value && !formData.reason.trim()) {
+    ElMessage.warning('分数变化较大，请填写修改原因');
+    submitting.value = false;
+    return;
+  }
+
   submitting.value = true;
   try {
     // 判断是否修改了分数
@@ -190,7 +230,11 @@ const handleSubmit = async () => {
 
     // 更新分数
     if (scoreChanged) {
-      promises.push(updateScore(props.resultId, formData.score));
+      const payload: any = { score: formData.score };
+      if (showReasonInput.value) {
+        payload.reason = formData.reason;
+      }
+      promises.push(updateScore(props.resultId, payload));
     }
 
     // 更新评语
@@ -199,6 +243,25 @@ const handleSubmit = async () => {
     }
 
     const results = await Promise.all(promises);
+
+    // 检查是否有审批响应
+    const scoreResult = results.find(r => r.data?.needsApproval);
+    if (scoreResult?.data?.needsApproval) {
+      await ElMessageBox.alert(
+        scoreResult.data.message || '分数变化超过审批阈值，已提交审批，请等待审核',
+        '审批提示',
+        {
+          confirmButtonText: '我知道了',
+          type: 'warning',
+          callback: () => {
+            emit('success');
+            handleClose();
+          }
+        }
+      );
+      submitting.value = false;
+      return;
+    }
 
     // 检查所有请求是否成功
     const allSuccess = results.every(res => res.code === 200);
@@ -210,9 +273,9 @@ const handleSubmit = async () => {
     } else {
       ElMessage.error('保存失败');
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('保存失败', error);
-    ElMessage.error('保存失败');
+    ElMessage.error(error.response?.data?.msg || error.message || '保存失败');
   } finally {
     submitting.value = false;
   }

@@ -52,7 +52,24 @@
 
       <div v-if="currentCourse" class="course-detail-content">
         <div class="detail-cover" v-if="currentCourse.coverUrl">
-          <el-image :src="currentCourse.coverUrl" fit="cover" style="width: 100%; height: 200px; border-radius: 8px;" />
+          <el-image
+            :src="currentCourse.coverUrl"
+            fit="cover"
+            lazy
+            loading="lazy"
+            style="width: 100%; height: 200px; border-radius: 8px;"
+          >
+            <template #placeholder>
+              <div class="image-slot">
+                <el-icon class="is-loading"><Loading /></el-icon>
+              </div>
+            </template>
+            <template #error>
+              <div class="image-slot">
+                <el-icon><Picture /></el-icon>
+              </div>
+            </template>
+          </el-image>
         </div>
         <p class="detail-desc">{{ currentCourse.description }}</p>
 
@@ -139,7 +156,7 @@ import type { Course, CourseResource } from '@/api/course';
 // 【新增】导入评论API和组件
 import { fetchComments, addComment, deleteComment, type CourseComment } from '@/api/courseComment';
 import UserAvatar from '@/components/UserAvatar.vue';
-import { Search, VideoPlay, Document, DataBoard, Link, ArrowRight } from '@element-plus/icons-vue';
+import { Search, VideoPlay, Document, DataBoard, Link, ArrowRight, Loading, Picture } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
 const loading = ref(false);

@@ -53,9 +53,9 @@ ai:
   providers:
     deepseek:
       url: https://api.deepseek.com/chat/completions
-      model: deepseek-chat
-      temperature: 0.7
-      max-tokens: 2000
+      model: deepseek-reasoner  # 【修改】使用思考模式，支持最大64K tokens输出
+      temperature: 1.0  # 【修改】数据抽取/分析场景推荐值
+      max-tokens: 16000  # 【修改】增加到16K，reasoner模式支持最大64K
       enabled: true
       priority: 1
     qwen:
@@ -83,7 +83,7 @@ ai:
   timeout:
     connect: 10
     analyze: 30
-    generate: 60
+    generate: 300  # 【修改】增加到5分钟（300秒），支持大型试卷生成
     grading: 30
     extract: 30
 

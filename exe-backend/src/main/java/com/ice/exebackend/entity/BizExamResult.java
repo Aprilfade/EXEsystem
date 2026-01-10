@@ -3,6 +3,7 @@ package com.ice.exebackend.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import lombok.Data;
 import java.time.LocalDateTime;
 
@@ -25,6 +26,17 @@ public class BizExamResult {
     private String comment;
     // 是否发布给学生查看
     private Boolean published;
+    // 批改状态：0-未提交，1-待批改（已提交未批阅），2-已批改（已批阅未发布），3-已发布
+    private Integer status;
+    // 批阅教师ID
+    private Long gradedBy;
+    // 批阅时间
+    private LocalDateTime gradedTime;
+    // AI自动评分（原始分数，不可修改）
+    private Integer originalScore;
+    // 乐观锁版本号
+    @Version
+    private Integer version;
 
     // === 手动添加 Getter 和 Setter ===
     public String getResultDetails() { return resultDetails; }
@@ -38,6 +50,9 @@ public class BizExamResult {
 
     public Boolean getPublished() { return published; }
     public void setPublished(Boolean published) { this.published = published; }
+
+    public Integer getStatus() { return status; }
+    public void setStatus(Integer status) { this.status = status; }
 
     // 其他手动添加 Getter/Setter
     public Long getId() { return id; }

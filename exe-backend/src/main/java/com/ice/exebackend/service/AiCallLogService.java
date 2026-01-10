@@ -164,4 +164,60 @@ public class AiCallLogService {
 
         return stats;
     }
+
+    /**
+     * 获取统计数据（别名方法，用于告警服务）
+     *
+     * @param days 统计天数
+     * @return 统计结果
+     */
+    public Map<String, Object> getStatistics(int days) {
+        return getStats(days);
+    }
+
+    /**
+     * 获取最近N分钟的统计数据（用于实时监控）
+     *
+     * @param minutes 分钟数
+     * @return 统计结果
+     */
+    public Map<String, Object> getRecentStats(int minutes) {
+        if (aiCallLogMapper == null) {
+            return new HashMap<>();
+        }
+
+        LocalDateTime startTime = LocalDateTime.now().minusMinutes(minutes);
+        Map<String, Object> stats = new HashMap<>();
+
+        try {
+            // 总调用次数和成功率
+            Map<String, Object> successRate = aiCallLogMapper.getSuccessRate(startTime);
+            if (successRate != null) {
+                long total = ((Number) successRate.getOrDefault("total", 0)).longValue();
+                long successCount = ((Number) successRate.getOrDefault("success_count", 0)).longValue();
+                stats.put("totalCalls", total);
+                stats.put("successCount", successCount);
+                stats.put("errorCount", total - successCount);
+                stats.put("successRate", total > 0 ? (double) successCount / total : 1.0);
+            } else {
+                stats.put("totalCalls", 0);
+                stats.put("successCount", 0);
+                stats.put("errorCount", 0);
+                stats.put("successRate", 1.0);
+            }
+
+            // 总成本
+            Double totalCost = aiCallLogMapper.getTotalCost(startTime);
+            stats.put("totalCost", totalCost != null ? totalCost : 0.0);
+
+            // 平均响应时间
+            Double avgResponseTime = aiCallLogMapper.getAvgResponseTime(startTime);
+            stats.put("avgResponseTime", avgResponseTime != null ? avgResponseTime.longValue() : 0L);
+
+        } catch (Exception e) {
+            log.error("获取最近统计数据失败", e);
+        }
+
+        return stats;
+    }
 }

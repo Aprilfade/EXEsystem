@@ -114,6 +114,18 @@
             />
           </el-tooltip>
 
+          <!-- 通知中心按钮 -->
+          <el-tooltip content="通知中心" placement="bottom">
+            <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notification-badge">
+              <el-button
+                :icon="Bell"
+                circle
+                @click="navigateToNotificationCenter"
+                class="notification-btn"
+              />
+            </el-badge>
+          </el-tooltip>
+
           <el-dropdown @command="handleCommand">
             <span class="avatar-dropdown">
               <el-avatar v-if="authStore.user?.avatar" :src="authStore.user.avatar" />
@@ -144,18 +156,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import ProfileEditDialog from '@/components/user/ProfileEditDialog.vue';
 import { useResponsive } from '@/composables/useResponsive';
 import { useDarkMode } from '@/composables/useDarkMode';
+import { getUnreadCount } from '@/api/notification';
 
 // 2. 引入图标和 WebSocket Store
 import {
   Management, House, Collection, Reading, Tickets, DocumentCopy, Avatar, CircleClose, DataLine,
   User, Search, Bell, ArrowRight, ArrowDown, Lock as LockIcon, Setting, Fold, Expand, Document, Medal,
-  VideoPlay, DataBoard, Share, Menu, Moon, Sunny  // 添加 Menu, Moon, Sunny
+  VideoPlay, DataBoard, Share, Menu, Moon, Sunny, CircleCheck  // 添加 Menu, Moon, Sunny, CircleCheck
 } from '@element-plus/icons-vue';
 import { useNotificationSocketStore } from '@/stores/notificationSocket';
 const drawerVisible = ref(false);
@@ -168,6 +181,31 @@ const router = useRouter();
 const isProfileDialogVisible = ref(false);
 const socketStore = useNotificationSocketStore();
 const { isDark, toggleDarkMode } = useDarkMode();
+
+// 通知中心相关
+const unreadCount = ref(0);
+let unreadCountTimer: number | null = null;
+
+/**
+ * 获取未读通知数量
+ */
+const fetchUnreadCount = async () => {
+  try {
+    const res = await getUnreadCount();
+    if (res.code === 200) {
+      unreadCount.value = res.data.count || 0;
+    }
+  } catch (error) {
+    console.error('获取未读通知数量失败:', error);
+  }
+};
+
+/**
+ * 导航到通知中心
+ */
+const navigateToNotificationCenter = () => {
+  router.push('/notification-center');
+};
 
 // 移动端菜单点击处理
 const handleMobileMenuSelect = (path: string) => {
@@ -186,6 +224,7 @@ const allMenus = [
   { path: '/students', name: '学生管理', permission: 'sys:student:list', icon: Avatar },
   { path: '/classes', name: '班级管理', permission: 'sys:user:list', icon: DataBoard },
   { path: '/score-manage', name: '成绩管理', permission: 'sys:stats:list', icon: Medal }, // 【修改】新增成绩管理菜单
+  { path: '/grading-approval', name: '批阅审批', permission: 'sys:stats:list', icon: CircleCheck }, // 【新增】批阅审批管理菜单
   {
     path: '/error-management', name: '错题管理', permission: 'sys:wrong:list', icon: CircleClose,
     children: [
@@ -229,11 +268,33 @@ onMounted(() => {
   // 管理员登录后，Token 存在于 authStore 中，
   // socketStore.connect() 会自动读取 Token 并建立连接
   socketStore.connect();
+
+  // 获取未读通知数量
+  fetchUnreadCount();
+
+  // 每30秒刷新一次未读数量
+  unreadCountTimer = window.setInterval(() => {
+    fetchUnreadCount();
+  }, 30000);
 });
 
 // 5. 【核心逻辑】组件卸载时断开连接
 onUnmounted(() => {
   socketStore.disconnect();
+
+  // 清除定时器
+  if (unreadCountTimer) {
+    clearInterval(unreadCountTimer);
+    unreadCountTimer = null;
+  }
+});
+
+// 监听 WebSocket 通知，实时刷新未读数量
+watch(() => socketStore.lastNotification, (newNotification) => {
+  if (newNotification) {
+    // 收到新通知时立即刷新未读数量
+    fetchUnreadCount();
+  }
 });
 </script>
 
@@ -367,5 +428,23 @@ onUnmounted(() => {
 .theme-toggle-btn:hover {
   background-color: var(--bg-tertiary);
   border-color: var(--border-light);
+}
+
+/* 通知中心按钮样式 */
+.notification-badge :deep(.el-badge__content) {
+  border: 2px solid var(--header-bg);
+}
+
+.notification-btn {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  position: relative;
+}
+
+.notification-btn:hover {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-light);
+  color: var(--brand-color);
 }
 </style>

@@ -1,6 +1,12 @@
 <template>
   <div class="user-avatar-container" :style="{ width: size + 'px', height: size + 'px' }">
-    <el-avatar :size="size" :src="src" :icon="!src && !name ? 'UserFilled' : undefined" class="real-avatar">
+    <el-avatar
+      :size="size"
+      :src="src"
+      :icon="!src && !name ? 'UserFilled' : undefined"
+      class="real-avatar"
+      fit="cover"
+    >
       {{ name ? name.charAt(0) : '' }}
     </el-avatar>
 

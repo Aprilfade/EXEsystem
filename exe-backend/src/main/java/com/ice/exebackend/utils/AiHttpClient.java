@@ -7,13 +7,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * AI HTTP 客户端工具类
@@ -194,5 +199,120 @@ public class AiHttpClient {
         }
 
         return content;
+    }
+
+    /**
+     * 发送流式 AI 请求（SSE）
+     *
+     * @param apiKey       API Key
+     * @param providerKey  提供商标识
+     * @param messages     消息列表
+     * @param temperature  温度参数
+     * @param timeoutSec   超时时间（秒）
+     * @param onChunk      接收到数据块时的回调函数
+     * @param onComplete   完成时的回调函数
+     * @param onError      错误时的回调函数
+     */
+    public void sendStreamRequest(String apiKey, String providerKey, List<Map<String, String>> messages,
+                                   Double temperature, int timeoutSec,
+                                   Consumer<String> onChunk,
+                                   Runnable onComplete,
+                                   Consumer<Exception> onError) {
+        try {
+            // 获取提供商配置
+            AiConfig.ProviderConfig providerConfig = aiConfig.getProviderConfig(providerKey);
+            if (providerConfig == null || !providerConfig.isEnabled()) {
+                throw new RuntimeException("AI 提供商未配置或已禁用: " + providerKey);
+            }
+
+            // 构建请求体（启用流式）
+            Map<String, Object> requestBody = new java.util.HashMap<>();
+            requestBody.put("model", providerConfig.getModel());
+            requestBody.put("messages", messages);
+            requestBody.put("temperature", temperature != null ? temperature : providerConfig.getTemperature());
+            requestBody.put("stream", true);  // 启用流式传输
+            requestBody.put("max_tokens", 16384);  // 增加到16K，reasoner模式支持最大64K
+
+            String jsonBody = objectMapper.writeValueAsString(requestBody);
+
+            // 构建 HTTP 请求
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(providerConfig.getUrl()))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .timeout(Duration.ofSeconds(timeoutSec))
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                    .build();
+
+            log.info("开始流式AI请求 [{}]", providerKey);
+
+            // 发送请求并处理流式响应
+            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+            // 检查状态码
+            if (response.statusCode() != 200) {
+                String errorBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                throw new RuntimeException("AI 请求失败: " + response.statusCode() + " - " + errorBody);
+            }
+
+            // 读取流式数据
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(response.body(), StandardCharsets.UTF_8), 65536)) {  // 增大缓冲区到64KB
+
+                String line;
+                boolean hasReceivedDone = false;
+                while ((line = reader.readLine()) != null) {
+                    // SSE 格式: data: {...}
+                    if (line.startsWith("data: ")) {
+                        String data = line.substring(6).trim();
+
+                        // 结束标记
+                        if ("[DONE]".equals(data)) {
+                            log.info("流式响应完成 [{}]", providerKey);
+                            hasReceivedDone = true;
+                            if (onComplete != null) {
+                                onComplete.run();
+                            }
+                            break;
+                        }
+
+                        // 解析 JSON 数据
+                        try {
+                            Map<String, Object> chunk = objectMapper.readValue(data, Map.class);
+                            List<Map<String, Object>> choices = (List<Map<String, Object>>) chunk.get("choices");
+
+                            if (choices != null && !choices.isEmpty()) {
+                                Map<String, Object> delta = (Map<String, Object>) choices.get(0).get("delta");
+                                if (delta != null) {
+                                    String content = (String) delta.get("content");
+                                    if (content != null && !content.isEmpty()) {
+                                        // 发送内容块
+                                        if (onChunk != null) {
+                                            onChunk.accept(content);
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.warn("解析流式数据块失败: {}", data.substring(0, Math.min(100, data.length())), e);
+                        }
+                    }
+                }
+
+                // 如果流结束但没有收到[DONE]标记，也调用onComplete
+                if (!hasReceivedDone) {
+                    log.warn("⚠️ 流结束但未收到[DONE]标记，可能数据不完整");
+                    if (onComplete != null) {
+                        onComplete.run();
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("流式AI请求异常 [{}]: {}", providerKey, e.getMessage(), e);
+            if (onError != null) {
+                onError.accept(e);
+            }
+        }
     }
 }

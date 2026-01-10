@@ -6,6 +6,10 @@ import { ElMessage } from 'element-plus';
 export const useBattleStore = defineStore('battle', () => {
     const studentStore = useStudentAuthStore();
     const socket = ref<WebSocket | null>(null);
+    let reconnectTimer: any = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const RECONNECT_DELAY = 3000; // 3秒后重连
 
     // 游戏状态: IDLE, MATCHING, PLAYING, ROUND_RESULT, GAME_OVER
     const gameState = ref('IDLE');
@@ -43,6 +47,11 @@ export const useBattleStore = defineStore('battle', () => {
 
         socket.value.onopen = () => {
             console.log('⚔️ Battle WS Connected');
+            reconnectAttempts = 0; // 重置重连次数
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
         };
 
         socket.value.onmessage = (event) => {
@@ -56,11 +65,33 @@ export const useBattleStore = defineStore('battle', () => {
 
         socket.value.onclose = () => {
             console.log('Battle WS Closed');
-            if (gameState.value !== 'IDLE' && gameState.value !== 'GAME_OVER') {
+            // 只在游戏进行中才尝试重连
+            if (['MATCHING', 'PLAYING', 'ROUND_RESULT'].includes(gameState.value)) {
+                attemptReconnect();
+            } else {
                 gameState.value = 'IDLE';
-                ElMessage.warning('连接已断开');
             }
         };
+
+        socket.value.onerror = (error) => {
+            console.error('Battle WS Error:', error);
+        };
+    };
+
+    // 尝试重连
+    const attemptReconnect = () => {
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            ElMessage.error('连接失败，请刷新页面重试');
+            gameState.value = 'IDLE';
+            return;
+        }
+
+        reconnectAttempts++;
+        ElMessage.warning(`连接断开，正在尝试重连... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+
+        reconnectTimer = setTimeout(() => {
+            connect();
+        }, RECONNECT_DELAY);
     };
 
     // 消息处理中心
@@ -174,6 +205,11 @@ export const useBattleStore = defineStore('battle', () => {
 
     // 动作：离开
     const leave = () => {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+        reconnectAttempts = 0;
         socket.value?.close();
         gameState.value = 'IDLE';
     };

@@ -18,6 +18,7 @@ export interface ScoreQueryParams {
   startTime?: string;
   endTime?: string;
   published?: boolean;
+  status?: number; // 【优化】状态: 0=未提交, 1=待批改（已提交未批阅）, 2=已批改（已批阅未发布）, 3=已发布
   sortBy?: 'score' | 'createTime' | 'violationCount';
   sortOrder?: 'asc' | 'desc';
 }
@@ -41,6 +42,12 @@ export interface ExamResultDetail {
   createTime: string;
   comment: string;
   published: boolean;
+  status: number; // 状态: 0=未提交, 1=待批改, 2=已批改, 3=已发布
+  // 【优化】新增批阅相关字段
+  gradedBy: number | null; // 批阅教师ID
+  gradedTime: string | null; // 批阅时间
+  originalScore: number | null; // AI自动评分（原始分数）
+  version: number; // 乐观锁版本号
 }
 
 // 成绩统计接口
@@ -117,15 +124,21 @@ export const getScoreDetail = (id: number) => {
 /**
  * 更新成绩分数
  */
-export const updateScore = (id: number, score: number) => {
-  return request.put(`/api/v1/exam-results/${id}/score`, { score });
+export const updateScore = (id: number, payload: { score: number; reason?: string } | number, legacyReason?: string) => {
+  // 支持两种调用方式：新的 payload 对象方式和旧的参数方式
+  if (typeof payload === 'object') {
+    return request.put(`/api/v1/exam-results/${id}/score`, payload);
+  } else {
+    // 兼容旧的调用方式
+    return request.put(`/api/v1/exam-results/${id}/score`, { score: payload, reason: legacyReason });
+  }
 };
 
 /**
  * 更新成绩评语
  */
-export const updateComment = (id: number, comment: string) => {
-  return request.put(`/api/v1/exam-results/${id}/comment`, { comment });
+export const updateComment = (id: number, comment: string, reason?: string) => {
+  return request.put(`/api/v1/exam-results/${id}/comment`, { comment, reason });
 };
 
 /**
@@ -159,5 +172,60 @@ export interface KnowledgePointScoreAnalysisDTO {
  */
 export const getKnowledgePointAnalysis = (examResultId: number) => {
   return request.get(`/api/v1/exam-results/${examResultId}/knowledge-analysis`);
+};
+
+/**
+ * 【批阅历史记录】批阅历史接口
+ */
+export interface GradingHistory {
+  id: number;
+  examResultId: number;
+  graderId: number;
+  graderName: string;
+  actionType: 'UPDATE_SCORE' | 'UPDATE_COMMENT' | 'BATCH_UPDATE';
+  oldScore: number | null;
+  newScore: number | null;
+  oldComment: string | null;
+  newComment: string | null;
+  reason: string | null;
+  createTime: string;
+}
+
+/**
+ * 【批阅历史记录】批阅人统计接口
+ */
+export interface GraderStats {
+  graderId: number;
+  totalOperations: number;
+}
+
+/**
+ * 【批阅历史记录】获取某条成绩的批阅历史
+ */
+export const getGradingHistory = (examResultId: number) => {
+  return request.get(`/api/v1/exam-results/${examResultId}/grading-history`);
+};
+
+/**
+ * 【批阅历史记录】获取批阅人的操作历史
+ */
+export const getGraderHistory = (graderId: number, limit?: number) => {
+  return request.get(`/api/v1/exam-results/grader/${graderId}/history`, {
+    params: { limit }
+  });
+};
+
+/**
+ * 【批阅历史记录】统计批阅人的操作次数
+ */
+export const getGraderStats = (graderId: number) => {
+  return request.get(`/api/v1/exam-results/grader/${graderId}/stats`);
+};
+
+/**
+ * 【批阅历史记录】导出批阅历史Excel
+ */
+export const exportGradingHistory = (examResultId: number) => {
+  window.open(`/api/v1/exam-results/${examResultId}/grading-history/export`);
 };
 

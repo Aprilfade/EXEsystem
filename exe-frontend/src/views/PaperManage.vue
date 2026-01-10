@@ -5,7 +5,10 @@
         <h2>试卷管理</h2>
         <p>灵活组合各类题型与知识点，高效创建与分发试卷</p>
       </div>
-      <el-button type="primary" :icon="Plus" size="large" @click="handleCreate">新增试卷</el-button>
+      <div style="display: flex; gap: 10px;">
+        <el-button type="success" :icon="MagicStick" size="large" @click="showAiDialog = true">AI生成试卷</el-button>
+        <el-button type="primary" :icon="Plus" size="large" @click="handleCreate">新增试卷</el-button>
+      </div>
     </div>
 
     <el-row :gutter="20" class="stats-cards">
@@ -154,9 +157,7 @@
           </template>
         </el-table-column>
       </el-table>
-
       <el-pagination
-          v-if="viewMode === 'list'"
           class="pagination"
           background
           layout="total, sizes, prev, pager, next, jumper"
@@ -175,19 +176,164 @@
         :subjects="allSubjects"
         @success="getList"
     />
+
+    <!-- AI生成试卷对话框 -->
+    <el-dialog
+        v-model="showAiDialog"
+        title="AI 智能生成试卷"
+        width="800px"
+        :close-on-click-modal="false"
+    >
+      <el-form :model="aiForm" label-width="120px" v-if="!aiGenerating && !aiGenerated">
+        <el-form-item label="试卷标题" required>
+          <el-input v-model="aiForm.paperTitle" placeholder="例如：高中数学期末测试卷" />
+        </el-form-item>
+
+        <el-form-item label="科目" required>
+          <el-select v-model="aiForm.subjectId" placeholder="请选择科目" @change="onAiSubjectChange" style="width: 100%">
+            <el-option v-for="subject in allSubjects" :key="subject.id" :label="subject.name" :value="subject.id" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="知识点" required>
+          <el-select v-model="aiForm.knowledgePointIds" multiple placeholder="请选择知识点（可多选）" style="width: 100%">
+            <el-option v-for="kp in aiKnowledgePoints" :key="kp.id" :label="kp.name" :value="kp.id" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="难度分布">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <span style="width: 60px;">简单</span>
+            <el-slider v-model="aiForm.easy" :max="100" style="flex: 1;" />
+            <span style="width: 50px;">{{ aiForm.easy }}%</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <span style="width: 60px;">中等</span>
+            <el-slider v-model="aiForm.medium" :max="100" style="flex: 1;" />
+            <span style="width: 50px;">{{ aiForm.medium }}%</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <span style="width: 60px;">困难</span>
+            <el-slider v-model="aiForm.hard" :max="100" style="flex: 1;" />
+            <span style="width: 50px;">{{ aiForm.hard }}%</span>
+          </div>
+          <div style="margin-top: 10px; color: #409eff; font-weight: 500;">
+            总计：{{ aiForm.easy + aiForm.medium + aiForm.hard }}%
+          </div>
+        </el-form-item>
+
+        <el-form-item label="题型配置">
+          <div v-for="(type, index) in aiForm.questionTypes" :key="index" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <el-select v-model="type.type" placeholder="题型" style="width: 150px">
+              <el-option label="单选题" value="单选" />
+              <el-option label="多选题" value="多选" />
+              <el-option label="判断题" value="判断" />
+              <el-option label="填空题" value="填空" />
+              <el-option label="主观题" value="主观" />
+            </el-select>
+            <el-input-number v-model="type.count" :min="1" :max="50" />
+            <span>道</span>
+            <el-button type="danger" link @click="removeAiQuestionType(index)" v-if="aiForm.questionTypes.length > 1">
+              删除
+            </el-button>
+          </div>
+          <el-button type="primary" link @click="addAiQuestionType">
+            + 添加题型
+          </el-button>
+        </el-form-item>
+
+        <el-form-item label="试卷总分">
+          <el-input-number v-model="aiForm.totalScore" :min="10" :max="500" />
+        </el-form-item>
+      </el-form>
+
+      <!-- 生成过程 -->
+      <div v-if="aiGenerating" style="margin: 20px 0;">
+        <el-alert type="info" :closable="false">
+          <template #title>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              <span>AI 正在生成试卷，请稍候...</span>
+            </div>
+          </template>
+        </el-alert>
+        <el-card shadow="never" style="margin-top: 15px; max-height: 400px; overflow-y: auto;">
+          <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 14px;">{{ aiStreamContent }}</pre>
+        </el-card>
+      </div>
+
+      <!-- 生成结果 -->
+      <div v-if="aiGenerated" style="max-height: 500px; overflow-y: auto;">
+        <!-- 醒目提示 -->
+        <el-alert
+            type="success"
+            :closable="false"
+            style="margin-bottom: 20px;"
+        >
+          <template #title>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <el-icon style="font-size: 20px;"><SuccessFilled /></el-icon>
+              <span style="font-size: 16px; font-weight: 600;">生成完成！请点击下方"保存试卷"按钮将试卷保存到数据库</span>
+            </div>
+          </template>
+        </el-alert>
+
+        <div style="margin-bottom: 20px;">
+          <h3>{{ aiGeneratedPaper.paperName }}</h3>
+          <div style="display: flex; gap: 20px; color: #606266;">
+            <span>总分：{{ aiGeneratedPaper.totalScore }}分</span>
+            <span>题目数：{{ aiGeneratedPaper.questions?.length || 0 }}道</span>
+          </div>
+        </div>
+
+        <div v-for="(q, index) in aiGeneratedPaper.questions" :key="index" style="background: #f5f7fa; padding: 15px; margin-bottom: 15px; border-radius: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <span style="font-weight: 600;">{{ index + 1 }}.</span>
+            <el-tag size="small">{{ q.type }}</el-tag>
+            <el-tag size="small" type="info">{{ q.difficulty }}</el-tag>
+            <span style="margin-left: auto; color: #f56c6c; font-weight: 500;">{{ q.score }}分</span>
+          </div>
+          <div style="margin: 10px 0;">{{ q.content }}</div>
+          <div v-if="q.options && q.options.length" style="margin: 10px 0; padding-left: 20px;">
+            <div v-for="opt in q.options" :key="opt.key" style="margin: 5px 0;">
+              {{ opt.key }}. {{ opt.value }}
+            </div>
+          </div>
+          <div style="margin-top: 10px; padding: 8px; background: white; border-radius: 4px;">
+            <strong>答案：</strong>{{ q.answer }}
+          </div>
+          <div style="margin-top: 10px; padding: 8px; background: white; border-radius: 4px;">
+            <strong>解析：</strong>{{ q.analysis }}
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div v-if="!aiGenerating && !aiGenerated">
+          <el-button @click="showAiDialog = false">取消</el-button>
+          <el-button type="primary" @click="handleAiGenerate" :loading="aiGenerating">开始生成</el-button>
+        </div>
+        <div v-if="aiGenerated">
+          <el-button @click="resetAiForm">重新生成</el-button>
+          <el-button type="primary" @click="saveAiPaper" :loading="saving">保存试卷</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { fetchPaperList, deletePaper, downloadPaper, updatePaperStatus, downloadPaperPdf } from '@/api/paper';
+import { fetchPaperList, deletePaper, downloadPaper, updatePaperStatus, downloadPaperPdf, createPaper } from '@/api/paper';
 import type { Paper, PaperPageParams } from '@/api/paper';
 import { fetchAllSubjects, type Subject } from '@/api/subject';
-import { Plus, Edit, Delete, Grid, Menu, MoreFilled, Download, VideoPlay, VideoPause, Printer } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Grid, Menu, MoreFilled, Download, VideoPlay, VideoPause, Printer, MagicStick, Loading, SuccessFilled } from '@element-plus/icons-vue';
 import PaperEditDialog from '@/components/paper/PaperEditDialog.vue';
 // 导入新API
 import { downloadAnswerSheet } from '@/api/paper';
+import { fetchAllKnowledgePoints } from '@/api/knowledgePoint';
+import { createQuestion } from '@/api/question';
 
 
 
@@ -382,6 +528,463 @@ const handleStatusChange = async (row: Paper, newStatus: number) => {
 onMounted(() => {
   getAllSubjects().then(getList);
 });
+
+// ===== AI 生成试卷相关 =====
+const showAiDialog = ref(false);
+const aiGenerating = ref(false);
+const aiGenerated = ref(false);
+const aiStreamContent = ref('');
+const aiGeneratedPaper = ref<any>({});
+const aiKnowledgePoints = ref<any[]>([]);
+const saving = ref(false);
+
+const aiForm = reactive({
+  paperTitle: '',
+  subjectId: undefined as number | undefined,
+  subjectName: '',
+  knowledgePointIds: [] as number[],
+  easy: 30,
+  medium: 50,
+  hard: 20,
+  questionTypes: [
+    { type: '单选', count: 10 },
+    { type: '多选', count: 5 }
+  ],
+  totalScore: 100
+});
+
+const onAiSubjectChange = async () => {
+  const subject = allSubjects.value.find((s: Subject) => s.id === aiForm.subjectId);
+  aiForm.subjectName = subject?.name || '';
+
+  try {
+    const kpRes = await fetchAllKnowledgePoints({ subjectId: aiForm.subjectId });
+    if (kpRes.code === 200) {
+      aiKnowledgePoints.value = kpRes.data;
+    }
+  } catch (error) {
+    console.error('加载知识点失败:', error);
+  }
+};
+
+const addAiQuestionType = () => {
+  aiForm.questionTypes.push({ type: '单选', count: 5 });
+};
+
+const removeAiQuestionType = (index: number) => {
+  aiForm.questionTypes.splice(index, 1);
+};
+
+const handleAiGenerate = async () => {
+  // 验证表单
+  if (!aiForm.paperTitle) {
+    ElMessage.warning('请输入试卷标题');
+    return;
+  }
+  if (!aiForm.subjectId) {
+    ElMessage.warning('请选择科目');
+    return;
+  }
+  if (aiForm.knowledgePointIds.length === 0) {
+    ElMessage.warning('请选择至少一个知识点');
+    return;
+  }
+  const totalPercent = aiForm.easy + aiForm.medium + aiForm.hard;
+  if (totalPercent !== 100) {
+    ElMessage.warning('难度分布总和必须为100%');
+    return;
+  }
+
+  aiGenerating.value = true;
+  aiStreamContent.value = '';
+
+  // 准备请求数据
+  const knowledgePointNames = aiForm.knowledgePointIds
+    .map(id => aiKnowledgePoints.value.find(kp => kp.id === id)?.name)
+    .filter(Boolean)
+    .join('、');
+
+  const apiKey = localStorage.getItem('student_ai_key') || '';
+  const provider = localStorage.getItem('student_ai_provider') || 'DEEPSEEK';
+
+  const url = `${import.meta.env.VITE_API_BASE_URL || ''}/api/v1/papers/ai-generate-stream`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Ai-Api-Key': apiKey,
+        'X-Ai-Provider': provider,
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        paperTitle: aiForm.paperTitle,
+        subjectName: aiForm.subjectName,
+        knowledgePoints: knowledgePointNames,
+        difficultyDistribution: `简单:${aiForm.easy}%,中等:${aiForm.medium}%,困难:${aiForm.hard}%`,
+        questionTypes: JSON.stringify(aiForm.questionTypes),
+        totalScore: aiForm.totalScore
+      })
+    });
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentEvent = '';
+    let currentData = ''; // 【修复】累积当前事件的所有 data 行
+
+    // 【新增】数据监控和保护
+    let totalDataSize = 0;
+    const MAX_DATA_SIZE = 5 * 1024 * 1024; // 5MB 上限
+    const startTime = Date.now();
+    const TIMEOUT = 10 * 60 * 1000; // 10分钟超时
+
+    // 【新增】JSON完整性检查函数
+    function isJsonComplete(str: string): boolean {
+      if (!str || str.trim().length === 0) return false;
+
+      let braces = 0; // {} 括号
+      let brackets = 0; // [] 括号
+      let inString = false;
+      let escape = false;
+
+      for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+
+        if (escape) {
+          escape = false;
+          continue;
+        }
+
+        if (char === '\\') {
+          escape = true;
+          continue;
+        }
+
+        if (char === '"' && !escape) {
+          inString = !inString;
+          continue;
+        }
+
+        if (!inString) {
+          if (char === '{') braces++;
+          if (char === '}') braces--;
+          if (char === '[') brackets++;
+          if (char === ']') brackets--;
+        }
+      }
+
+      // JSON完整的条件：括号都匹配，且不在字符串中
+      return braces === 0 && brackets === 0 && !inString;
+    }
+
+    function processText(text: string) {
+      buffer += text;
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (let line of lines) {
+        line = line.trim();
+        if (!line) {
+          // 空行表示一个SSE事件块结束
+          // 【关键修改】对于done事件，不要在这里解析，继续累积直到流结束
+          if (currentEvent === 'message' && currentData) {
+            // message事件可以立即处理
+            aiStreamContent.value += currentData;
+            currentEvent = '';
+            currentData = '';
+          }
+          // 对于done事件，不重置，继续累积
+          continue;
+        }
+
+        if (line.startsWith('event:')) {
+          const newEvent = line.substring(6).trim();
+
+          // 【修改】遇到新事件时的处理
+          if (currentEvent === 'message' && currentData) {
+            // 处理之前的message事件
+            aiStreamContent.value += currentData;
+            currentData = '';
+          }
+
+          // 【关键修复】如果新事件也是done，不重置数据，继续累积
+          if (newEvent === 'done' && currentEvent === 'done') {
+            console.log(`📥 发现另一个done事件，继续累积，当前大小: ${(currentData.length / 1024).toFixed(2)} KB`);
+            // 不重置currentData，继续累积
+          } else if (newEvent !== currentEvent) {
+            // 不同事件类型，重置数据
+            currentData = '';
+          }
+
+          currentEvent = newEvent;
+        } else if (line.startsWith('data:')) {
+          // 【修复】累积 data 内容（可能有多行）
+          const dataContent = line.substring(5).trim();
+
+          // 【简化日志】只在done事件且数据变大时输出
+          if (currentEvent === 'done' && currentData.length % 1000 < dataContent.length) {
+            console.log(`📥 done事件累积中: ${(currentData.length / 1024).toFixed(2)} KB`);
+          }
+
+          currentData += dataContent;
+
+          // 【新增】数据大小监控
+          totalDataSize += dataContent.length;
+          if (totalDataSize > MAX_DATA_SIZE) {
+            throw new Error(`数据超过${MAX_DATA_SIZE / 1024 / 1024}MB上限，请减少生成题目数量`);
+          }
+        }
+      }
+    }
+
+    while (true) {
+      // 【新增】超时检查
+      const elapsedTime = Date.now() - startTime;
+      if (elapsedTime > TIMEOUT) {
+        throw new Error('生成超时（10分钟），请减少题目数量或稍后重试');
+      }
+
+      const { done, value } = await reader.read();
+      if (done) {
+        console.log(`✅ 流接收完成，总耗时: ${((Date.now() - startTime) / 1000).toFixed(2)}秒`);
+        console.log(`📦 总数据大小: ${(totalDataSize / 1024).toFixed(2)} KB`);
+
+        // 【修复】流结束时，处理剩余的缓存数据
+        if (buffer) {
+          processText('\n'); // 添加换行触发最后的处理
+        }
+        // 如果有未完成的事件数据，强制处理
+        if (currentEvent && currentData) {
+          console.log(`🔧 处理流结束时的剩余数据，事件类型: ${currentEvent}, 数据大小: ${currentData.length} 字节`);
+          try {
+            if (currentEvent === 'done') {
+              console.log(`📊 最终解析JSON数据，大小: ${(currentData.length / 1024).toFixed(2)} KB`);
+
+              // 【修复】清理智能引号，替换为标准ASCII引号
+              // AI可能在中文内容中使用智能引号，这会导致JSON解析失败
+              currentData = currentData
+                .replace(/"/g, '"')  // 左智能引号 "
+                .replace(/"/g, '"')  // 右智能引号 "
+                .replace(/'/g, "'")  // 左单引号 '
+                .replace(/'/g, "'"); // 右单引号 '
+
+              console.log('🔧 已清理智能引号');
+
+              // 【修复】先尝试解析JSON，如果成功就认为是完整的
+              let isComplete = false;
+              let paperData = null;
+
+              try {
+                paperData = JSON.parse(currentData);
+                isComplete = true;
+                console.log(`✅ JSON解析成功，数据完整`);
+              } catch (parseError: any) {
+                console.log(`⚠️ JSON解析失败: ${parseError.message}`);
+                isComplete = isJsonComplete(currentData);
+                console.log(`🔍 JSON完整性检查: ${isComplete}`);
+              }
+
+              // 【调试】统计括号数量
+              let braces = 0, brackets = 0;
+              for (let char of currentData) {
+                if (char === '{') braces++;
+                if (char === '}') braces--;
+                if (char === '[') brackets++;
+                if (char === ']') brackets--;
+              }
+              console.log(`📊 括号统计: {} 差值=${-braces}, [] 差值=${-brackets}`);
+
+              if (!isComplete) {
+                console.error('❌ JSON不完整，括号不匹配');
+                console.error('数据长度:', currentData.length, '字节');
+                console.error('数据前500字符:', currentData.substring(0, 500));
+                console.error('数据后500字符:', currentData.substring(Math.max(0, currentData.length - 500)));
+
+                // 【尝试修复】如果只是缺少闭合括号，尝试补全
+                let fixedData = currentData;
+                while (braces < 0) { fixedData += '}'; braces++; }
+                while (brackets < 0) { fixedData += ']'; brackets++; }
+
+                if (isJsonComplete(fixedData)) {
+                  console.warn('⚠️ 尝试自动修复JSON成功，已补全闭合括号');
+                  currentData = fixedData;
+                } else {
+                  ElMessage.error('试卷数据不完整，请重新生成或减少题目数量');
+                  return;
+                }
+              }
+
+              // 如果之前没有成功解析，现在尝试解析
+              if (!paperData) {
+                paperData = JSON.parse(currentData);
+              }
+
+              // 【修复】检测AI返回的数据结构
+              console.log('📊 AI返回的原始数据类型:', Array.isArray(paperData) ? '数组' : '对象');
+              console.log('📊 AI返回的原始数据:', paperData);
+
+              if (Array.isArray(paperData)) {
+                // 如果AI直接返回数组，需要包装成对象格式
+                console.log('⚠️ AI返回的是题目数组，自动包装成试卷格式');
+                aiGeneratedPaper.value = {
+                  paperName: aiForm.paperTitle || '未命名试卷',
+                  description: 'AI生成试卷',
+                  totalScore: aiForm.totalScore,
+                  questions: paperData
+                };
+              } else if (paperData.questions && Array.isArray(paperData.questions)) {
+                // 如果AI返回对象且包含questions字段，直接使用
+                console.log('✅ AI返回的是标准试卷格式');
+                aiGeneratedPaper.value = paperData;
+              } else {
+                // 其他情况，尝试查找题目数组
+                console.error('❌ 无法识别AI返回的数据格式');
+                console.error('paperData:', paperData);
+                throw new Error('AI返回的数据格式不正确');
+              }
+
+              console.log('📊 处理后的试卷数据:', aiGeneratedPaper.value);
+              console.log('📊 题目数量:', aiGeneratedPaper.value.questions?.length || 0);
+
+              aiGenerating.value = false;
+              aiGenerated.value = true;
+              ElMessage.success('试卷生成完成！');
+            }
+          } catch (e) {
+            console.error('❌ 最终处理事件数据失败:', e);
+            console.error('数据大小:', currentData.length, '字节');
+            console.error('数据前100字符:', currentData.substring(0, 100));
+            console.error('数据后100字符:', currentData.substring(currentData.length - 100));
+            ElMessage.error('试卷数据解析失败，请检查控制台详细日志');
+          }
+        }
+        break;
+      }
+      processText(decoder.decode(value, { stream: true }));
+    }
+  } catch (error: any) {
+    aiGenerating.value = false;
+    ElMessage.error('生成失败: ' + error.message);
+    console.error(error);
+  }
+};
+
+const saveAiPaper = async () => {
+  saving.value = true;
+  try {
+    ElMessage.info('正在保存试卷，请稍候...');
+
+    // 1. 将 AI 生成的题目转换为题库格式并创建题目
+    const questionTypeMap: Record<string, number> = {
+      '单选': 1,
+      '多选': 2,
+      '填空': 3,
+      '判断': 4,
+      '主观': 5
+    };
+
+    console.log('📊 AI生成的试卷数据:', aiGeneratedPaper.value);
+
+    const createdQuestionIds: number[] = [];
+    const questions = aiGeneratedPaper.value.questions || [];
+
+    console.log('📊 题目数组:', questions);
+    console.log('📊 题目数量:', questions.length);
+
+    for (const aiQuestion of questions) {
+      // 处理 options：转换为 JSON 字符串
+      let optionsStr = typeof aiQuestion.options === 'string'
+        ? aiQuestion.options
+        : JSON.stringify(aiQuestion.options);
+
+      // 处理 answer：确保是字符串格式
+      let answerStr = aiQuestion.answer;
+      if (Array.isArray(answerStr)) {
+        // 如果是数组（多选题），用逗号连接
+        answerStr = answerStr.join(',');
+      } else if (typeof answerStr !== 'string') {
+        // 如果不是字符串也不是数组，转为字符串
+        answerStr = String(answerStr);
+      }
+
+      const questionData = {
+        subjectId: aiForm.subjectId,
+        grade: allSubjects.value.find(s => s.id === aiForm.subjectId)?.grade || '',
+        questionType: questionTypeMap[aiQuestion.type] || 1,
+        content: aiQuestion.content,
+        options: optionsStr,
+        answer: answerStr,
+        description: aiQuestion.analysis || '',
+        knowledgePointIds: aiForm.knowledgePointIds
+      };
+
+      console.log('📝 正在创建题目:', questionData);
+      const result = await createQuestion(questionData);
+      console.log('📝 创建题目结果:', result);
+
+      if (result.code === 200 && result.data) {
+        createdQuestionIds.push(result.data as any);
+      } else {
+        console.error('❌ 题目创建失败:', result);
+      }
+    }
+
+    console.log('📊 成功创建题目数量:', createdQuestionIds.length);
+    if (createdQuestionIds.length === 0) {
+      throw new Error('题目创建失败，请查看控制台日志');
+    }
+
+    // 2. 创建试卷，将题目组织到一个分组中
+    const paperData = {
+      name: aiForm.paperTitle,
+      code: 'AI-' + Date.now(), // 自动生成试卷编码
+      subjectId: aiForm.subjectId,
+      grade: allSubjects.value.find(s => s.id === aiForm.subjectId)?.grade || '',
+      description: `AI生成试卷 - 共${questions.length}道题，总分${aiForm.totalScore}分`,
+      totalScore: aiGeneratedPaper.value.totalScore || aiForm.totalScore,
+      paperType: 1, // 手动选题
+      status: 0, // 草稿状态
+      groups: [
+        {
+          name: '试题',
+          sortOrder: 0,
+          questions: createdQuestionIds.map((qId, index) => ({
+            questionId: qId,
+            score: questions[index].score || 5,
+            sortOrder: index
+          }))
+        }
+      ]
+    };
+
+    await createPaper(paperData);
+    ElMessage.success('试卷保存成功！');
+    showAiDialog.value = false;
+    resetAiForm();
+    getList();
+  } catch (error: any) {
+    console.error('保存失败:', error);
+    ElMessage.error('保存失败: ' + (error.message || '未知错误'));
+  } finally {
+    saving.value = false;
+  }
+};
+
+const resetAiForm = () => {
+  aiGenerating.value = false;
+  aiGenerated.value = false;
+  aiStreamContent.value = '';
+  aiGeneratedPaper.value = {};
+  aiForm.paperTitle = '';
+  aiForm.subjectId = undefined;
+  aiForm.knowledgePointIds = [];
+  aiForm.questionTypes = [
+    { type: '单选', count: 10 },
+    { type: '多选', count: 5 }
+  ];
+};
 </script>
 
 <style scoped>

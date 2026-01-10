@@ -126,14 +126,11 @@ export function batchUpdateQuestions(data: { questionIds: number[]; subjectId?: 
         data
     });
 }
+
 /**
- * 【新增】AI 智能生成题目
+ * AI 智能生成题目（标准版本）
  */
 export function generateQuestionsFromText(data: { text: string; count: number; type: number }): Promise<ApiResult<any[]>> {
-    // 注意：这里需要获取管理员的 Key。
-    // 如果你在后台没有做管理员的 Key 配置界面，可以暂时借用 studentAuthStore 的逻辑，
-    // 或者在 localStorage 中单独存一个 'admin_ai_key'。
-    // 这里假设你用 localStorage 'student_ai_key' 或者你在页面上弹窗让老师输入。
     const apiKey = localStorage.getItem('student_ai_key') || '';
     const provider = localStorage.getItem('student_ai_provider') || 'DEEPSEEK';
 
@@ -146,6 +143,93 @@ export function generateQuestionsFromText(data: { text: string; count: number; t
             'X-Ai-Provider': provider
         }
     });
+}
+
+/**
+ * AI 智能生成题目（流式版本）
+ */
+export function generateQuestionsFromTextStream(
+    data: { text: string; count: number; type: number },
+    onChunk: (text: string) => void,
+    onComplete: (questions: any[]) => void,
+    onError: (error: Error) => void
+): void {
+    const apiKey = localStorage.getItem('student_ai_key') || '';
+    const provider = localStorage.getItem('student_ai_provider') || 'DEEPSEEK';
+
+    const url = `${import.meta.env.VITE_API_BASE_URL || ''}/api/v1/questions/ai-generate-stream`;
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Ai-Api-Key': apiKey,
+            'X-Ai-Provider': provider,
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(data)
+    }).then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentEvent = '';
+
+        function processText(text: string) {
+            buffer += text;
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // 保留最后的不完整行
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) {
+                    currentEvent = ''; // 空行表示事件结束
+                    continue;
+                }
+
+                // SSE格式: event: xxx 或 data: xxx
+                if (line.startsWith('event:')) {
+                    currentEvent = line.substring(6).trim();
+                } else if (line.startsWith('data:')) {
+                    const dataContent = line.substring(5).trim();
+
+                    if (currentEvent === 'done') {
+                        // 完成：解析JSON结果
+                        try {
+                            const questions = JSON.parse(dataContent);
+                            onComplete(questions);
+                        } catch (e) {
+                            console.error('解析结果失败:', e, dataContent);
+                            onError(new Error('解析结果失败'));
+                        }
+                    } else if (currentEvent === 'message' || !currentEvent) {
+                        // 流式数据块
+                        onChunk(dataContent);
+                    }
+                }
+            }
+        }
+
+        function readStream(): void {
+            reader.read().then(({ done, value }) => {
+                if (done) {
+                    if (buffer) {
+                        processText('\n'); // 处理剩余数据
+                    }
+                    return;
+                }
+
+                const text = decoder.decode(value, { stream: true });
+                processText(text);
+                readStream();
+            }).catch(onError);
+        }
+
+        readStream();
+    }).catch(onError);
 }
 /**
  * 【新增】批量删除试题

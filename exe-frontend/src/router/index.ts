@@ -43,6 +43,8 @@ const routes: Array<RouteRecordRaw> = [
             { path: 'papers', name: 'PaperManagement', component: () => import('@/views/PaperManage.vue'), meta: { permission: 'sys:paper:list', title: '试卷管理' } },
             { path: 'students', name: 'StudentManagement', component: () => import('@/views/StudentManage.vue'), meta: { permission: 'sys:student:list', title: '学生管理' } },
             { path: 'score-manage', name: 'ScoreManage', component: () => import('@/views/ScoreManage.vue'), meta: { permission: 'sys:stats:list', title: '成绩管理' } },// 暂时复用统计权限},
+            { path: 'grading-dashboard', name: 'GradingDashboard', component: () => import('@/views/GradingDashboard.vue'), meta: { permission: 'sys:stats:list', title: '批阅统计' } },
+            { path: 'grading-approval', name: 'GradingApprovalManage', component: () => import('@/views/GradingApprovalManage.vue'), meta: { permission: 'sys:stats:list', title: '批阅审批' } },
             { path: 'wrong-records', name: 'WrongRecordManagement', component: () => import('@/views/WrongRecordManage.vue'), meta: { permission: 'sys:wrong:list', title: '错题管理' } },
             { path: 'wrong-record-stats', name: 'WrongRecordStats', component: () => import('@/views/WrongRecordStats.vue'), meta: { permission: 'sys:wrong:list', title: '错题统计' } },
             { path: 'statistics', name: 'StatisticsDashboard', component: () => import('@/views/StatisticsDashboard.vue'), meta: { permission: 'sys:stats:list', title: '教学统计' } },
@@ -61,6 +63,12 @@ const routes: Array<RouteRecordRaw> = [
                 name: 'TextToQuiz',
                 component: () => import('@/views/TextToQuiz.vue'),
                 meta: { permission: 'sys:question:list', title: '智能出题' }
+            },
+            {
+                path: 'ai-paper-generator',
+                name: 'AiPaperGenerator',
+                component: () => import('@/views/AiPaperGenerator.vue'),
+                meta: { permission: 'sys:paper:create', title: 'AI生成试卷' }
             },
             {
                 path: 'logs/operation',
@@ -87,6 +95,13 @@ const routes: Array<RouteRecordRaw> = [
                 name: 'UserProfile',
                 component: () => import('@/views/UserProfile.vue'),
                 meta: { title: '个人中心' }
+            },
+            // 通知中心
+            {
+                path: 'notification-center',
+                name: 'NotificationCenter',
+                component: () => import('@/views/NotificationCenter.vue'),
+                meta: { title: '通知中心' }
             }
         ]
     },
@@ -182,6 +197,37 @@ const routes: Array<RouteRecordRaw> = [
                 name: 'StudentProfile',
                 component: () => import('@/views/StudentProfile.vue'),
                 meta: { title: '个人中心' }
+            },
+            // AI功能路由
+            {
+                path: 'ai-chat',
+                name: 'StudentAiChat',
+                component: () => import('@/views/student/AiChat.vue'),
+                meta: { title: 'AI对话助手' }
+            },
+            {
+                path: 'ai-tutor',
+                name: 'StudentAiTutor',
+                component: () => import('@/views/student/AiTutor.vue'),
+                meta: { title: 'AI家教' }
+            },
+            {
+                path: 'ai-practice',
+                name: 'StudentAiPractice',
+                component: () => import('@/views/student/AiPractice.vue'),
+                meta: { title: 'AI练习生成' }
+            },
+            {
+                path: 'learning-analysis',
+                name: 'StudentLearningAnalysis',
+                component: () => import('@/views/student/LearningAnalysis.vue'),
+                meta: { title: '学习数据分析' }
+            },
+            {
+                path: 'knowledge-graph',
+                name: 'StudentKnowledgeGraph',
+                component: () => import('@/views/student/KnowledgeGraph.vue'),
+                meta: { title: '知识图谱' }
             }
         ]
     }

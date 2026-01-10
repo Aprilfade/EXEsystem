@@ -17,12 +17,16 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 // 必须导入这两个，且不要导入 lombok.Log
 import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.enums.BusinessType;
-import com.ice.exebackend.service.AiService; // 导入 AiService
+import com.ice.exebackend.service.AiServiceV3; // 【修改】导入 AiServiceV3
 import com.ice.exebackend.dto.AiGeneratedQuestionDTO; // 导入 DTO
 import jakarta.servlet.http.HttpServletRequest; // 导入 HttpServletRequest
+import com.ice.exebackend.entity.SysUser;
+import com.ice.exebackend.service.SysUserService;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 
 
@@ -49,9 +53,14 @@ public class BizQuestionController {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-
+    // 【修改】注入 AiServiceV3
     @Autowired
-    private AiService aiService; // 注入 AI 服务
+    private AiServiceV3 aiServiceV3;
+
+    // 注入 SysUserService
+    @Autowired
+    private SysUserService sysUserService;
+
     // 3. 定义缓存键常量
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
@@ -63,8 +72,10 @@ public class BizQuestionController {
         if (success) {
             // 4. 操作成功后，清除缓存
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
+            // 返回创建的题目ID
+            return Result.suc(questionDTO.getId());
         }
-        return success ? Result.suc() : Result.fail();
+        return Result.fail();
     }
 
     // ... [此处省略所有 GET 查询和查重方法，它们不需要修改] ...
@@ -190,35 +201,95 @@ public class BizQuestionController {
         return success ? Result.suc("批量更新成功") : Result.fail("批量更新失败");
     }
     /**
-     * 【新增】AI 智能生成题目
+     * 【修改】AI 智能生成题目 - 使用AiServiceV3
      */
     @PostMapping("/ai-generate")
     @Log(title = "题库管理", businessType = BusinessType.OTHER)
     public Result generateQuestions(@RequestBody Map<String, Object> params, HttpServletRequest request) {
         String text = (String) params.get("text");
         Integer count = (Integer) params.get("count");
-        Integer type = (Integer) params.get("type"); // 1,2,3,4,0
+        Integer type = (Integer) params.get("type"); // 1,2,3,4,5,0
 
-        // 从 Header 获取 Key (因为管理员/教师也需要在前端配置 Key，或者你可以写死系统 Key)
+        // 从 Header 获取 Key
         String apiKey = request.getHeader("X-Ai-Api-Key");
         String provider = request.getHeader("X-Ai-Provider");
 
         if (!StringUtils.hasText(apiKey)) {
-            // 如果 Header 没传，可以尝试从配置文件或数据库读取系统默认 Key
-            // 这里为了演示，直接报错
             return Result.fail("请在设置中配置 AI API Key");
         }
 
+        // 获取当前登录用户ID
+        Long userId = null;
         try {
-            List<AiGeneratedQuestionDTO> questions = aiService.generateQuestionsFromText(
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            SysUser user = sysUserService.lambdaQuery().eq(SysUser::getUsername, username).one();
+            if (user != null) {
+                userId = user.getId();
+            }
+        } catch (Exception e) {
+            logger.warn("获取用户ID失败，将使用匿名模式", e);
+        }
+
+        try {
+            // 使用 AiServiceV3，支持缓存、限流和日志记录
+            List<AiGeneratedQuestionDTO> questions = aiServiceV3.generateQuestionsFromText(
                     apiKey, provider, text,
                     count == null ? 5 : count,
-                    type == null ? 1 : type
+                    type == null ? 1 : type,
+                    userId
             );
             return Result.suc(questions);
         } catch (Exception e) {
             logger.error("AI生成题目失败", e);
             return Result.fail("生成失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 【新增】AI 智能生成题目（流式版本）
+     */
+    @PostMapping("/ai-generate-stream")
+    @Log(title = "题库管理", businessType = BusinessType.OTHER)
+    public SseEmitter generateQuestionsStream(@RequestBody Map<String, Object> params, HttpServletRequest request) {
+        String text = (String) params.get("text");
+        Integer count = (Integer) params.get("count");
+        Integer type = (Integer) params.get("type"); // 1,2,3,4,5,0
+
+        // 从 Header 获取 Key
+        String apiKey = request.getHeader("X-Ai-Api-Key");
+        String provider = request.getHeader("X-Ai-Provider");
+
+        if (!StringUtils.hasText(apiKey)) {
+            SseEmitter emitter = new SseEmitter();
+            emitter.completeWithError(new RuntimeException("请在设置中配置 AI API Key"));
+            return emitter;
+        }
+
+        // 获取当前登录用户ID
+        Long userId = null;
+        try {
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            SysUser user = sysUserService.lambdaQuery().eq(SysUser::getUsername, username).one();
+            if (user != null) {
+                userId = user.getId();
+            }
+        } catch (Exception e) {
+            logger.warn("获取用户ID失败，将使用匿名模式", e);
+        }
+
+        try {
+            // 使用 AiServiceV3 的流式方法
+            return aiServiceV3.generateQuestionsFromTextStream(
+                    apiKey, provider, text,
+                    count == null ? 5 : count,
+                    type == null ? 1 : type,
+                    userId
+            );
+        } catch (Exception e) {
+            logger.error("AI生成题目（流式）失败", e);
+            SseEmitter emitter = new SseEmitter();
+            emitter.completeWithError(e);
+            return emitter;
         }
     }
 

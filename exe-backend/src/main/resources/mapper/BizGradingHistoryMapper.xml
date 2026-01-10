@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ice.exebackend.mapper.BizGradingHistoryMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.ice.exebackend.entity.BizGradingHistory">
+        <id column="id" property="id"/>
+        <result column="exam_result_id" property="examResultId"/>
+        <result column="grader_id" property="graderId"/>
+        <result column="grader_name" property="graderName"/>
+        <result column="action_type" property="actionType"/>
+        <result column="old_score" property="oldScore"/>
+        <result column="new_score" property="newScore"/>
+        <result column="old_comment" property="oldComment"/>
+        <result column="new_comment" property="newComment"/>
+        <result column="reason" property="reason"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <!-- 根据成绩ID查询批阅历史 -->
+    <select id="selectByExamResultId" resultMap="BaseResultMap">
+        SELECT
+            id,
+            exam_result_id,
+            grader_id,
+            grader_name,
+            action_type,
+            old_score,
+            new_score,
+            old_comment,
+            new_comment,
+            reason,
+            create_time
+        FROM biz_grading_history
+        WHERE exam_result_id = #{examResultId}
+        ORDER BY create_time DESC
+    </select>
+
+    <!-- 根据批阅人ID查询批阅历史 -->
+    <select id="selectByGraderId" resultMap="BaseResultMap">
+        SELECT
+            id,
+            exam_result_id,
+            grader_id,
+            grader_name,
+            action_type,
+            old_score,
+            new_score,
+            old_comment,
+            new_comment,
+            reason,
+            create_time
+        FROM biz_grading_history
+        WHERE grader_id = #{graderId}
+        ORDER BY create_time DESC
+        <if test="limit != null">
+            LIMIT #{limit}
+        </if>
+    </select>
+
+    <!-- 统计批阅人的操作次数 -->
+    <select id="countByGraderId" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM biz_grading_history
+        WHERE grader_id = #{graderId}
+    </select>
+
+</mapper>

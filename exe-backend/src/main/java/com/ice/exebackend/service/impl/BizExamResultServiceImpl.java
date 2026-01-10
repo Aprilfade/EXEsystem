@@ -268,13 +268,13 @@ public class BizExamResultServiceImpl extends ServiceImpl<BizExamResultMapper, B
             BizExamResult result = new BizExamResult();
             result.setId(id);
             result.setPublished(published);
-            // 修复：发布时同步更新状态
-            // published=true时，状态设为2（已批改）
-            // published=false时，状态设为1（待批改）
+            // 【优化】状态管理规范化：
+            // published=true时，状态设为3（已发布）
+            // published=false时，状态设为2（已批改但未发布）
             if (Boolean.TRUE.equals(published)) {
-                result.setStatus(2);  // 已批改
+                result.setStatus(3);  // 3=已发布
             } else if (Boolean.FALSE.equals(published)) {
-                result.setStatus(1);  // 待批改
+                result.setStatus(2);  // 2=已批改（取消发布）
             }
             return result;
         }).collect(Collectors.toList());
@@ -433,11 +433,11 @@ public class BizExamResultServiceImpl extends ServiceImpl<BizExamResultMapper, B
             return new ArrayList<>();
         }
 
-        // 3. 获取学生的错题记录
+        // 3. 获取学生的错题记录（使用 paper_id 而不是 exam_result_id）
         Set<Long> wrongQuestionIds = wrongRecordMapper.selectList(
                 new QueryWrapper<BizWrongRecord>()
                         .eq("student_id", studentId)
-                        .eq("exam_result_id", examResultId)
+                        .eq("paper_id", paperId)
         ).stream().map(BizWrongRecord::getQuestionId).collect(Collectors.toSet());
 
         // 4. 按知识点统计得分

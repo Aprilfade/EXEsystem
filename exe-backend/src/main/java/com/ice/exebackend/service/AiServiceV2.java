@@ -22,9 +22,17 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * AI 服务（优化版）
+ * AI 服务（优化版 V2）
  * 集成缓存、重试、配置化等特性
+ *
+ * @deprecated 此版本已废弃，请使用 {@link AiServiceV3}
+ * V3版本在V2基础上增加了：
+ * - 流式响应支持
+ * - 优雅降级机制
+ * - 断路器保护
+ * - 完善的限流和监控
  */
+@Deprecated(since = "3.02", forRemoval = true)
 @Service
 public class AiServiceV2 {
 

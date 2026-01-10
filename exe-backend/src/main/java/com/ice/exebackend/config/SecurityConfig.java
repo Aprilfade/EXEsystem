@@ -80,12 +80,18 @@ public class SecurityConfig {
                 .cors(cors -> {})
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // 【关键修复】必须放在第一位！允许所有 ASYNC 和 ERROR 类型的 dispatch，避免 async dispatch 时重新检查权限
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC).permitAll()
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
+
                         .requestMatchers(
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/register",
                                 "/api/v1/student/auth/login",
                                 "/api/v1/files/**",
+                                "/api/v1/portal/**", // 【新增】Portal导航页API，允许所有人访问
                                 "/ws/**",
+                                "/error", // 【修复】放行错误页面
                                 // Swagger API 文档白名单
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",

@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ice.exebackend.mapper.BizGradingApprovalMapper">
+
+    <resultMap id="BaseResultMap" type="com.ice.exebackend.entity.BizGradingApproval">
+        <id column="id" property="id"/>
+        <result column="exam_result_id" property="examResultId"/>
+        <result column="student_id" property="studentId"/>
+        <result column="student_name" property="studentName"/>
+        <result column="paper_id" property="paperId"/>
+        <result column="paper_title" property="paperTitle"/>
+        <result column="old_score" property="oldScore"/>
+        <result column="new_score" property="newScore"/>
+        <result column="score_change" property="scoreChange"/>
+        <result column="change_percentage" property="changePercentage"/>
+        <result column="old_comment" property="oldComment"/>
+        <result column="new_comment" property="newComment"/>
+        <result column="grader_id" property="graderId"/>
+        <result column="grader_name" property="graderName"/>
+        <result column="reason" property="reason"/>
+        <result column="status" property="status"/>
+        <result column="approver_id" property="approverId"/>
+        <result column="approver_name" property="approverName"/>
+        <result column="approval_comment" property="approvalComment"/>
+        <result column="submit_time" property="submitTime"/>
+        <result column="approval_time" property="approvalTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <!-- 分页查询审批记录 -->
+    <select id="selectApprovalPage" resultMap="BaseResultMap">
+        SELECT *
+        FROM biz_grading_approval
+        <where>
+            <if test="params.status != null and params.status != ''">
+                AND status = #{params.status}
+            </if>
+            <if test="params.studentId != null">
+                AND student_id = #{params.studentId}
+            </if>
+            <if test="params.graderId != null">
+                AND grader_id = #{params.graderId}
+            </if>
+            <if test="params.approverId != null">
+                AND approver_id = #{params.approverId}
+            </if>
+            <if test="params.paperId != null">
+                AND paper_id = #{params.paperId}
+            </if>
+            <if test="params.studentName != null and params.studentName != ''">
+                AND student_name LIKE CONCAT('%', #{params.studentName}, '%')
+            </if>
+            <if test="params.startDate != null and params.startDate != ''">
+                AND submit_time &gt;= #{params.startDate}
+            </if>
+            <if test="params.endDate != null and params.endDate != ''">
+                AND submit_time &lt;= #{params.endDate}
+            </if>
+        </where>
+        ORDER BY
+            CASE
+                WHEN status = 'PENDING' THEN 1
+                WHEN status = 'APPROVED' THEN 2
+                WHEN status = 'REJECTED' THEN 3
+            END,
+            submit_time DESC
+    </select>
+
+    <!-- 统计各状态审批数量 -->
+    <select id="countByStatus" resultType="map">
+        SELECT
+            status,
+            COUNT(*) as count
+        FROM biz_grading_approval
+        GROUP BY status
+    </select>
+
+    <!-- 查询待审批数量 -->
+    <select id="countPending" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM biz_grading_approval
+        WHERE status = 'PENDING'
+    </select>
+
+</mapper>

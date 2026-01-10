@@ -59,9 +59,23 @@
                   <el-image
                       v-if="getQuestion(pq.questionId)?.imageUrl"
                       :src="getQuestion(pq.questionId)?.imageUrl"
+                      fit="contain"
+                      lazy
+                      loading="lazy"
                       style="max-width: 300px; margin-top:10px"
                       :preview-src-list="[getQuestion(pq.questionId)?.imageUrl]"
-                  />
+                  >
+                    <template #placeholder>
+                      <div class="image-slot">
+                        <el-icon class="is-loading"><Loading /></el-icon>
+                      </div>
+                    </template>
+                    <template #error>
+                      <div class="image-slot">
+                        <el-icon><Picture /></el-icon>
+                      </div>
+                    </template>
+                  </el-image>
                 </div>
 
                 <div class="q-options">
@@ -104,12 +118,23 @@
                 <el-image
                     :src="img.imageUrl"
                     fit="contain"
+                    lazy
+                    loading="lazy"
                     :preview-src-list="paper.paperImages.map((i:any) => i.imageUrl)"
                     :initial-index="idx"
                     style="width: 100%; border: 1px solid #eee; margin-bottom: 20px; border-radius: 4px;"
                 >
                   <template #placeholder>
-                    <div class="image-slot">加载中...</div>
+                    <div class="image-slot">
+                      <el-icon class="is-loading" style="font-size: 24px;"><Loading /></el-icon>
+                      <div style="margin-top: 8px; font-size: 14px;">加载中...</div>
+                    </div>
+                  </template>
+                  <template #error>
+                    <div class="image-slot">
+                      <el-icon style="font-size: 32px; color: #909399;"><Picture /></el-icon>
+                      <div style="margin-top: 8px; font-size: 14px; color: #909399;">图片加载失败</div>
+                    </div>
                   </template>
                 </el-image>
               </div>
@@ -194,7 +219,7 @@ import { ref, reactive, onMounted, onUnmounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { fetchExamPaperDetail, submitExamPaper } from '@/api/studentAuth';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Timer, Monitor, View, WarningFilled, Lock } from '@element-plus/icons-vue';
+import { Timer, Monitor, View, WarningFilled, Lock, Loading, Picture } from '@element-plus/icons-vue';
 import request from '@/utils/request';
 import { useStudentAuthStore } from '@/stores/studentAuth'; // 1. 确保导入 Store
 

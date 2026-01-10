@@ -299,13 +299,16 @@
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="提交时间" width="160" />
-        <el-table-column label="操作" width="240" align="center" fixed="right">
+        <el-table-column label="操作" width="300" align="center" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link :icon="Edit" @click="openGrading(row)">
               批阅
             </el-button>
             <el-button type="success" link :icon="View" @click="viewDetail(row)">
               详情
+            </el-button>
+            <el-button type="info" link :icon="Clock" @click="viewHistory(row)">
+              历史
             </el-button>
             <el-button
               :type="row.published ? 'warning' : 'primary'"
@@ -350,6 +353,12 @@
       @edit="handleEditFromDetail"
     />
 
+    <!-- 批阅历史对话框 -->
+    <grading-history-dialog
+      v-model:visible="historyVisible"
+      :result-id="currentResultId"
+    />
+
     <!-- 统计图表抽屉 -->
     <el-drawer
       v-model="showStatsDrawer"
@@ -368,7 +377,7 @@ import { useRoute } from 'vue-router';
 import {
   Search, RefreshRight, Download, Delete, Edit, View,
   Document, Hide, DataAnalysis, User, TrendCharts,
-  Trophy, ArrowUp, ArrowDown, Select
+  Trophy, ArrowUp, ArrowDown, Select, Clock
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
@@ -385,6 +394,7 @@ import { fetchClassList as fetchClassListAPI } from '@/api/class';
 import { fetchAllSubjects as fetchAllSubjectsAPI } from '@/api/subject';
 import GradingDialog from '@/components/score/GradingDialog.vue';
 import ScoreDetailDialog from '@/components/score/ScoreDetailDialog.vue';
+import GradingHistoryDialog from '@/components/score/GradingHistoryDialog.vue';
 import ScoreStatsCharts from '@/components/score/ScoreStatsCharts.vue';
 
 // 加载状态
@@ -443,6 +453,7 @@ const subjectList = ref<any[]>([]);
 // 对话框和抽屉
 const gradingVisible = ref(false);
 const detailVisible = ref(false);
+const historyVisible = ref(false);
 const currentResultId = ref(0);
 const showStatsDrawer = ref(false);
 
@@ -690,6 +701,14 @@ const openGrading = (row: ExamResultDetail) => {
 const viewDetail = (row: ExamResultDetail) => {
   currentResultId.value = row.id;
   detailVisible.value = true;
+};
+
+/**
+ * 查看批阅历史
+ */
+const viewHistory = (row: ExamResultDetail) => {
+  currentResultId.value = row.id;
+  historyVisible.value = true;
 };
 
 /**

@@ -40,6 +40,17 @@ export function fetchKnowledgePointList(params: KnowledgePointPageParams): Promi
 }
 
 /**
+ * 【新增】获取所有知识点（不分页）
+ */
+export function fetchAllKnowledgePoints(params?: { subjectId?: number }): Promise<ApiResult<KnowledgePoint[]>> {
+    return request({
+        url: '/api/v1/knowledge-points/all',
+        method: 'get',
+        params
+    });
+}
+
+/**
  * 根据ID获取单个知识点详情
  */
 export function fetchKnowledgePointById(id: number): Promise<ApiResult<KnowledgePoint>> {
@@ -123,9 +134,12 @@ export function fetchPrerequisites(id: number): Promise<ApiResult<KnowledgePoint
         method: 'get'
     });
 }
-// 【新增】AI 智能生成知识点
+
+/**
+ * AI 智能生成知识点（标准版本）
+ */
 export function generateKnowledgePointsFromText(data: { text: string; count: number }): Promise<ApiResult<any[]>> {
-    const apiKey = localStorage.getItem('student_ai_key') || ''; // 复用之前存的 Key，或者新建 admin_ai_key
+    const apiKey = localStorage.getItem('student_ai_key') || '';
     const provider = localStorage.getItem('student_ai_provider') || 'DEEPSEEK';
 
     return request({
@@ -137,6 +151,93 @@ export function generateKnowledgePointsFromText(data: { text: string; count: num
             'X-Ai-Provider': provider
         }
     });
+}
+
+/**
+ * AI 智能生成知识点（流式版本）
+ */
+export function generateKnowledgePointsFromTextStream(
+    data: { text: string; count: number },
+    onChunk: (text: string) => void,
+    onComplete: (points: any[]) => void,
+    onError: (error: Error) => void
+): void {
+    const apiKey = localStorage.getItem('student_ai_key') || '';
+    const provider = localStorage.getItem('student_ai_provider') || 'DEEPSEEK';
+
+    const url = `${import.meta.env.VITE_API_BASE_URL || ''}/api/v1/knowledge-points/ai-generate-stream`;
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Ai-Api-Key': apiKey,
+            'X-Ai-Provider': provider,
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(data)
+    }).then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentEvent = '';
+
+        function processText(text: string) {
+            buffer += text;
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // 保留最后的不完整行
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) {
+                    currentEvent = ''; // 空行表示事件结束
+                    continue;
+                }
+
+                // SSE格式: event: xxx 或 data: xxx
+                if (line.startsWith('event:')) {
+                    currentEvent = line.substring(6).trim();
+                } else if (line.startsWith('data:')) {
+                    const dataContent = line.substring(5).trim();
+
+                    if (currentEvent === 'done') {
+                        // 完成：解析JSON结果
+                        try {
+                            const points = JSON.parse(dataContent);
+                            onComplete(points);
+                        } catch (e) {
+                            console.error('解析结果失败:', e, dataContent);
+                            onError(new Error('解析结果失败'));
+                        }
+                    } else if (currentEvent === 'message' || !currentEvent) {
+                        // 流式数据块
+                        onChunk(dataContent);
+                    }
+                }
+            }
+        }
+
+        function readStream(): void {
+            reader.read().then(({ done, value }) => {
+                if (done) {
+                    if (buffer) {
+                        processText('\n'); // 处理剩余数据
+                    }
+                    return;
+                }
+
+                const text = decoder.decode(value, { stream: true });
+                processText(text);
+                readStream();
+            }).catch(onError);
+        }
+
+        readStream();
+    }).catch(onError);
 }
 
 /**

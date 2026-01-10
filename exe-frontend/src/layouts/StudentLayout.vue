@@ -9,16 +9,12 @@
 
       <!-- 桌面端：水平菜单 -->
       <div v-if="!isMobile" class="header-menu">
-        <el-menu mode="horizontal" :default-active="$route.path" router :ellipsis="false">
-          <el-menu-item index="/student/dashboard">我的首页</el-menu-item>
-          <el-menu-item index="/student/courses">课程中心</el-menu-item>
-          <el-menu-item index="/student/classes">我的班级</el-menu-item>
-          <el-menu-item index="/student/wrong-records">我的错题本</el-menu-item>
-          <el-menu-item index="/student/practice">在线练习</el-menu-item>
-          <el-menu-item index="/student/battle"><el-icon><Lightning /></el-icon> 知识对战</el-menu-item>
-          <el-menu-item index="/student/exams">模拟考试</el-menu-item>
-          <el-menu-item index="/student/favorites">我的收藏</el-menu-item>
-        </el-menu>
+        <MegaMenu />
+      </div>
+
+      <!-- AI智能搜索栏（桌面端） -->
+      <div v-if="!isMobile" class="header-search">
+        <SmartSearchBar />
       </div>
 
       <!-- 用户信息 -->
@@ -75,7 +71,43 @@
           </el-icon>
           <span class="tab-label">{{ item.label }}</span>
         </div>
+        <!-- More menu button -->
+        <div class="tab-item" :class="{ active: showMoreMenu }" @click="showMoreMenu = !showMoreMenu">
+          <el-icon :size="22">
+            <More />
+          </el-icon>
+          <span class="tab-label">更多</span>
+        </div>
       </div>
+
+      <!-- More menu popup -->
+      <transition name="slide-up">
+        <div v-if="showMoreMenu" class="more-menu-overlay" @click="showMoreMenu = false">
+          <div class="more-menu-content" @click.stop>
+            <div class="more-menu-header">
+              <h3>更多功能</h3>
+              <el-button text @click="showMoreMenu = false">
+                <el-icon><Close /></el-icon>
+              </el-button>
+            </div>
+            <div class="more-menu-grid">
+              <div
+                v-for="item in moreMenuItems"
+                :key="item.path"
+                class="more-menu-item"
+                @click="handleMoreMenuClick(item.path)"
+              >
+                <div class="more-item-icon" :style="{ background: item.iconBg }">
+                  <el-icon :size="24" :color="item.iconColor">
+                    <component :is="item.icon" />
+                  </el-icon>
+                </div>
+                <span class="more-item-label">{{ item.label }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </transition>
     </el-footer>
 
     <profile-edit-dialog
@@ -90,7 +122,7 @@ import { ref } from 'vue';
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStudentAuthStore } from '@/stores/studentAuth';
-import {School, ArrowDown, Lightning, House, VideoPlay, UserFilled, Tickets, Trophy, Star, Document, Moon, Sunny
+import {School, ArrowDown, Lightning, House, VideoPlay, UserFilled, Tickets, Trophy, Star, Document, Moon, Sunny, More, Close, ChatDotRound, DocumentCopy, TrendCharts, Edit
 } from '@element-plus/icons-vue';
 import { useResponsive } from '@/composables/useResponsive';
 import { onMounted, onUnmounted } from 'vue';
@@ -98,19 +130,86 @@ import { useNotificationSocketStore } from '@/stores/notificationSocket';
 import ProfileEditDialog from '@/components/student/ProfileEditDialog.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
 import { useDarkMode } from '@/composables/useDarkMode';
+import SmartSearchBar from '@/components/ai/SmartSearchBar.vue';
+import MegaMenu from '@/components/navigation/MegaMenu.vue';
 
 const studentAuth = useStudentAuthStore();
 const router = useRouter();
 const isProfileDialogVisible = ref(false);
 const { isMobile } = useResponsive();
 const { isDark, toggleDarkMode } = useDarkMode();
+const showMoreMenu = ref(false);
+
 const navItems = [
   { path: '/student/dashboard', label: '首页', icon: House },
   { path: '/student/courses', label: '课程', icon: VideoPlay },
-  { path: '/student/classes', label: '班级', icon: UserFilled },
   { path: '/student/practice', label: '练习', icon: Tickets },
   { path: '/student/exams', label: '考试', icon: Document }
 ];
+
+const moreMenuItems = [
+  {
+    path: '/student/classes',
+    label: '我的班级',
+    icon: UserFilled,
+    iconBg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    iconColor: '#fff'
+  },
+  {
+    path: '/student/battle',
+    label: '知识对战',
+    icon: Lightning,
+    iconBg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+    iconColor: '#fff'
+  },
+  {
+    path: '/student/wrong-records',
+    label: '错题本',
+    icon: DocumentCopy,
+    iconBg: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+    iconColor: '#fff'
+  },
+  {
+    path: '/student/favorites',
+    label: '我的收藏',
+    icon: Star,
+    iconBg: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+    iconColor: '#fff'
+  },
+  {
+    path: '/student/ai-chat',
+    label: 'AI助手',
+    icon: ChatDotRound,
+    iconBg: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+    iconColor: '#fff'
+  },
+  {
+    path: '/student/learning-analysis',
+    label: '学习分析',
+    icon: TrendCharts,
+    iconBg: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+    iconColor: '#fff'
+  },
+  {
+    path: '/student/achievements',
+    label: '我的成就',
+    icon: Trophy,
+    iconBg: 'linear-gradient(135deg, #fddb92 0%, #d1fdff 100%)',
+    iconColor: '#fff'
+  },
+  {
+    path: '/student/ai-practice',
+    label: 'AI练习',
+    icon: Edit,
+    iconBg: 'linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)',
+    iconColor: '#fff'
+  }
+];
+
+const handleMoreMenuClick = (path: string) => {
+  router.push(path);
+  showMoreMenu.value = false;
+};
 const handleCommand = (command: string) => {
   if (command === 'logout') {
     studentAuth.logout();
@@ -273,4 +372,102 @@ onUnmounted(() => {
     gap: 0;
   }
 }
+
+/* More menu styles */
+.more-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+  display: flex;
+  align-items: flex-end;
+}
+
+.more-menu-content {
+  width: 100%;
+  background: white;
+  border-radius: 20px 20px 0 0;
+  padding: 20px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.more-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.more-menu-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.more-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.more-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.more-item-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: transform 0.3s;
+}
+
+.more-menu-item:active .more-item-icon {
+  transform: scale(0.9);
+}
+
+.more-item-label {
+  font-size: 12px;
+  color: var(--el-text-color-primary);
+  text-align: center;
+}
+
+/* Slide up animation */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-up-enter-from {
+  transform: translateY(100%);
+  opacity: 0;
+}
+
+.slide-up-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
+}
+
+.slide-up-enter-active .more-menu-overlay,
+.slide-up-leave-active .more-menu-overlay {
+  transition: opacity 0.3s;
+}
+
+.slide-up-enter-from .more-menu-overlay {
+  opacity: 0;
+}
+
 </style>

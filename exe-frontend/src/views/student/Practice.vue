@@ -65,7 +65,25 @@
         <div class="question-progress">题目 {{ currentQuestionIndex + 1 }} / {{ questions.length }}</div>
         <div class="question-content">
           <p>{{ currentQuestion.content }}</p>
-          <el-image v-if="currentQuestion.imageUrl" :src="currentQuestion.imageUrl" fit="contain" style="max-width: 300px; margin-top: 10px;"/>
+          <el-image
+              v-if="currentQuestion.imageUrl"
+              :src="currentQuestion.imageUrl"
+              fit="contain"
+              lazy
+              loading="lazy"
+              style="max-width: 300px; margin-top: 10px;"
+          >
+            <template #placeholder>
+              <div class="image-slot">
+                <el-icon class="is-loading"><Loading /></el-icon>
+              </div>
+            </template>
+            <template #error>
+              <div class="image-slot">
+                <el-icon><Picture /></el-icon>
+              </div>
+            </template>
+          </el-image>
         </div>
         <div class="options-container">
           <el-radio-group v-if="currentQuestion.questionType === 1 || currentQuestion.questionType === 2" v-model="userAnswers[currentQuestion.id]">
@@ -155,7 +173,7 @@ import { Collection, Reading } from '@element-plus/icons-vue';
 import { fetchPracticeQuestions } from '@/api/studentAuth'; // 确保你已修改此文件
 // 1. 导入 API 和 图标
 import { toggleFavorite, checkFavoriteStatus } from '@/api/favorite';
-import { Star, StarFilled } from '@element-plus/icons-vue';
+import { Star, StarFilled, Loading, Picture } from '@element-plus/icons-vue';
 // 引入 ElNotification
 import { ElMessage, ElNotification } from 'element-plus';
 
@@ -376,5 +394,16 @@ onMounted(loadAllSubjects);
 .result-answer-info { display: flex; gap: 20px; margin: 10px 0; }
 .result-explanation { background-color: #f5f7fa; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 0.9rem; color: #606266; }
 .question-summary {padding: 10px 15px;background-color: #f5f7fa; /* 一个浅灰色背景 */border-radius: 4px;margin-bottom: 20px; /* 与下方的进度条隔开 */display: flex;flex-wrap: wrap; /* 自动换行 */gap: 8px; /* 标签之间的间距 */}
+
+.image-slot {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 150px;
+  background: #f5f7fa;
+  color: #909399;
+}
 
 </style>

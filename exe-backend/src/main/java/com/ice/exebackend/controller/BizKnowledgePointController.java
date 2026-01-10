@@ -13,15 +13,19 @@ import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.mapper.BizQuestionKnowledgePointMapper;
 import com.ice.exebackend.service.BizKnowledgePointService;
 import com.ice.exebackend.service.BizQuestionService;
-import com.ice.exebackend.service.AiService; // 【新增】导入 AiService
+import com.ice.exebackend.service.AiServiceV3; // 【修改】使用 AiServiceV3
+import com.ice.exebackend.entity.SysUser;
+import com.ice.exebackend.service.SysUserService;
 import jakarta.servlet.http.HttpServletRequest; // 【新增】导入 HttpServletRequest
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.Collections;
 import java.util.List;
@@ -30,7 +34,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/knowledge-points")
-@PreAuthorize("hasAuthority('sys:kp:list')")
+// 移除类级别权限注解，改为在各个方法上单独添加
 public class BizKnowledgePointController {
 
     private static final Logger logger = LoggerFactory.getLogger(BizKnowledgePointController.class);
@@ -47,9 +51,13 @@ public class BizKnowledgePointController {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-    // 【新增】注入 AiService
+    // 【修改】注入 AiServiceV3
     @Autowired
-    private AiService aiService;
+    private AiServiceV3 aiServiceV3;
+
+    // 【新增】注入 SysUserService 用于获取用户信息
+    @Autowired
+    private SysUserService sysUserService;
 
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
 
@@ -65,6 +73,7 @@ public class BizKnowledgePointController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('sys:kp:list', 'sys:paper:list', 'sys:question:list')")
     public Result getKnowledgePointList(@RequestParam(defaultValue = "1") int current,
                                         @RequestParam(defaultValue = "10") int size,
                                         @RequestParam(required = false) Long subjectId,
@@ -99,7 +108,24 @@ public class BizKnowledgePointController {
         return Result.ok(stats);
     }
 
+    /**
+     * 【新增】获取所有知识点（不分页）
+     * 允许有知识点权限或试卷权限的用户访问
+     */
+    @GetMapping("/all")
+    @PreAuthorize("hasAnyAuthority('sys:kp:list', 'sys:paper:list', 'sys:paper:create')")
+    public Result getAllKnowledgePoints(@RequestParam(required = false) Long subjectId) {
+        QueryWrapper<BizKnowledgePoint> queryWrapper = new QueryWrapper<>();
+        if (subjectId != null) {
+            queryWrapper.eq("subject_id", subjectId);
+        }
+        queryWrapper.orderByDesc("create_time");
+        List<BizKnowledgePoint> list = knowledgePointService.list(queryWrapper);
+        return Result.suc(list);
+    }
+
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('sys:kp:list', 'sys:paper:list', 'sys:question:list')")
     public Result getKnowledgePointById(@PathVariable Long id) {
         BizKnowledgePoint knowledgePoint = knowledgePointService.getById(id);
         return Result.suc(knowledgePoint);
@@ -137,6 +163,7 @@ public class BizKnowledgePointController {
     }
 
     @GetMapping("/{id}/questions")
+    @PreAuthorize("hasAnyAuthority('sys:kp:list', 'sys:question:list')")
     public Result getQuestionsForKnowledgePoint(@PathVariable Long id) {
         List<BizQuestionKnowledgePoint> relations = questionKnowledgePointMapper.selectList(
                 new QueryWrapper<BizQuestionKnowledgePoint>().eq("knowledge_point_id", id)
@@ -155,11 +182,13 @@ public class BizKnowledgePointController {
     }
 
     @GetMapping("/graph/{subjectId}")
+    @PreAuthorize("hasAnyAuthority('sys:kp:list', 'sys:paper:list')")
     public Result getGraph(@PathVariable Long subjectId) {
         return Result.suc(knowledgePointService.getKnowledgeGraph(subjectId));
     }
 
     @PostMapping("/relation")
+    @PreAuthorize("hasAuthority('sys:kp:update')")
     @Log(title = "知识点管理", businessType = BusinessType.UPDATE)
     public Result addRelation(@RequestBody Map<String, Long> params) {
         Long parentId = params.get("parentId");
@@ -169,6 +198,7 @@ public class BizKnowledgePointController {
     }
 
     @PostMapping("/relation/delete")
+    @PreAuthorize("hasAuthority('sys:kp:update')")
     @Log(title = "知识点管理", businessType = BusinessType.DELETE)
     public Result removeRelation(@RequestBody Map<String, Long> params) {
         Long parentId = params.get("parentId");
@@ -178,6 +208,7 @@ public class BizKnowledgePointController {
     }
 
     @GetMapping("/{id}/prerequisites")
+    @PreAuthorize("hasAnyAuthority('sys:kp:list', 'sys:paper:list')")
     public Result getPrerequisites(@PathVariable Long id) {
         return Result.suc(knowledgePointService.findPrerequisitePoints(id));
     }
@@ -196,8 +227,9 @@ public class BizKnowledgePointController {
         return success ? Result.suc("批量更新成功") : Result.fail("批量更新失败");
     }
 
-    // 【新增】AI 智能生成知识点 (注意：这段代码必须在类的最后一个大括号之前)
+    // 【修改】AI 智能生成知识点 - 使用 AiServiceV3
     @PostMapping("/ai-generate")
+    @PreAuthorize("hasAnyAuthority('sys:kp:create', 'sys:paper:create')")
     @Log(title = "知识点管理", businessType = BusinessType.OTHER)
     public Result generateKnowledgePoints(@RequestBody Map<String, Object> params, HttpServletRequest request) {
         String text = (String) params.get("text");
@@ -211,15 +243,74 @@ public class BizKnowledgePointController {
             return Result.fail("请在设置中配置 AI API Key");
         }
 
+        // 获取当前登录用户ID
+        Long userId = null;
         try {
-            List<Map<String, String>> points = aiService.generateKnowledgePointsFromText(
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            SysUser user = sysUserService.lambdaQuery().eq(SysUser::getUsername, username).one();
+            if (user != null) {
+                userId = user.getId();
+            }
+        } catch (Exception e) {
+            logger.warn("获取用户ID失败，将使用匿名模式", e);
+        }
+
+        try {
+            // 使用 AiServiceV3，支持大文本分块、缓存、限流和日志记录
+            List<Map<String, String>> points = aiServiceV3.generateKnowledgePointsFromText(
                     apiKey, provider, text,
-                    count == null ? 5 : count
+                    count == null ? 5 : count,
+                    userId
             );
             return Result.suc(points);
         } catch (Exception e) {
             logger.error("AI生成知识点失败", e);
             return Result.fail("生成失败: " + e.getMessage());
+        }
+    }
+
+    // 【新增】AI 智能生成知识点（流式版本）
+    @PostMapping("/ai-generate-stream")
+    @PreAuthorize("hasAnyAuthority('sys:kp:create', 'sys:paper:create')")
+    @Log(title = "知识点管理", businessType = BusinessType.OTHER)
+    public SseEmitter generateKnowledgePointsStream(@RequestBody Map<String, Object> params, HttpServletRequest request) {
+        String text = (String) params.get("text");
+        Integer count = (Integer) params.get("count");
+
+        // 从 Header 获取 Key
+        String apiKey = request.getHeader("X-Ai-Api-Key");
+        String provider = request.getHeader("X-Ai-Provider");
+
+        if (!StringUtils.hasText(apiKey)) {
+            SseEmitter emitter = new SseEmitter();
+            emitter.completeWithError(new RuntimeException("请在设置中配置 AI API Key"));
+            return emitter;
+        }
+
+        // 获取当前登录用户ID
+        Long userId = null;
+        try {
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            SysUser user = sysUserService.lambdaQuery().eq(SysUser::getUsername, username).one();
+            if (user != null) {
+                userId = user.getId();
+            }
+        } catch (Exception e) {
+            logger.warn("获取用户ID失败，将使用匿名模式", e);
+        }
+
+        try {
+            // 使用 AiServiceV3 的流式方法
+            return aiServiceV3.generateKnowledgePointsFromTextStream(
+                    apiKey, provider, text,
+                    count == null ? 5 : count,
+                    userId
+            );
+        } catch (Exception e) {
+            logger.error("AI生成知识点（流式）失败", e);
+            SseEmitter emitter = new SseEmitter();
+            emitter.completeWithError(e);
+            return emitter;
         }
     }
 }

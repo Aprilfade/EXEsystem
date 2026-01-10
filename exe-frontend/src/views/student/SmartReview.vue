@@ -38,9 +38,22 @@
               <el-image
                   v-if="currentQuestionDetail?.imageUrl"
                   :src="currentQuestionDetail.imageUrl"
-                  style="max-height: 200px; margin: 10px 0;"
                   fit="contain"
-              />
+                  lazy
+                  loading="lazy"
+                  style="max-height: 200px; margin: 10px 0;"
+              >
+                <template #placeholder>
+                  <div class="image-slot">
+                    <el-icon class="is-loading"><Loading /></el-icon>
+                  </div>
+                </template>
+                <template #error>
+                  <div class="image-slot">
+                    <el-icon><Picture /></el-icon>
+                  </div>
+                </template>
+              </el-image>
 
               <div class="options-wrapper" v-if="[1, 2].includes(currentQuestionDetail?.questionType || 0)">
                 <div
@@ -106,8 +119,22 @@
               <el-image
                   v-if="currentQuestionDetail?.answerImageUrl"
                   :src="currentQuestionDetail.answerImageUrl"
+                  fit="contain"
+                  lazy
+                  loading="lazy"
                   style="max-width: 200px; margin-bottom: 15px;"
-              />
+              >
+                <template #placeholder>
+                  <div class="image-slot">
+                    <el-icon class="is-loading"><Loading /></el-icon>
+                  </div>
+                </template>
+                <template #error>
+                  <div class="image-slot">
+                    <el-icon><Picture /></el-icon>
+                  </div>
+                </template>
+              </el-image>
 
               <div class="judgment-actions">
                 <p>请自我评价：</p>
@@ -164,7 +191,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { fetchDailyReviewList, submitReviewResult } from '@/api/review';
 import { fetchWrongRecordDetail } from '@/api/wrongRecord';
 import { ElMessage } from 'element-plus';
-import { View, Select, CloseBold } from '@element-plus/icons-vue';
+import { View, Select, CloseBold, Loading, Picture } from '@element-plus/icons-vue';
 import type { WrongRecordVO } from '@/api/wrongRecord';
 
 const loading = ref(true);
@@ -414,4 +441,15 @@ const handleJudge = async (isCorrect: boolean) => {
 
 .opt-key { font-weight: bold; margin-right: 10px; min-width: 20px; }
 .input-wrapper { margin-top: 20px; }
+
+.image-slot {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 120px;
+  background: #f5f7fa;
+  color: #909399;
+}
 </style>

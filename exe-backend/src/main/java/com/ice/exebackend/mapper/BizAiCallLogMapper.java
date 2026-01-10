@@ -53,4 +53,11 @@ public interface BizAiCallLogMapper extends BaseMapper<BizAiCallLog> {
             "FROM biz_ai_call_log " +
             "WHERE create_time >= #{startTime}")
     Map<String, Object> getCacheHitRate(@Param("startTime") LocalDateTime startTime);
+
+    /**
+     * 获取平均响应时间
+     */
+    @Select("SELECT AVG(response_time) FROM biz_ai_call_log " +
+            "WHERE create_time >= #{startTime} AND success = 1")
+    Double getAvgResponseTime(@Param("startTime") LocalDateTime startTime);
 }

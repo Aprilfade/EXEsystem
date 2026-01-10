@@ -295,6 +295,77 @@
             </el-form-item>
           </el-form>
         </el-tab-pane>
+
+        <!-- AI助手设置 -->
+        <el-tab-pane name="ai-settings">
+          <template #label>
+            <span><el-icon><ChatDotRound /></el-icon> AI助手设置</span>
+          </template>
+
+          <el-form
+            ref="aiFormRef"
+            :model="aiForm"
+            label-width="120px"
+            class="profile-form"
+          >
+            <el-alert
+              title="AI助手配置说明"
+              type="info"
+              :closable="false"
+              show-icon
+              class="security-alert"
+            >
+              <template #default>
+                <p>配置您的AI API Key后，即可使用小艾学习助手、AI错题分析等功能</p>
+                <p style="margin-top: 8px;">
+                  支持的AI服务商：DeepSeek、OpenAI、文心一言、通义千问等
+                </p>
+              </template>
+            </el-alert>
+
+            <el-form-item label="AI服务商" prop="provider">
+              <el-select v-model="aiForm.provider" placeholder="选择AI服务商" style="width: 100%">
+                <el-option label="DeepSeek (推荐)" value="deepseek" />
+                <el-option label="OpenAI" value="openai" />
+                <el-option label="文心一言" value="ernie" />
+                <el-option label="通义千问" value="qwen" />
+                <el-option label="Kimi" value="kimi" />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item label="API Key" prop="apiKey">
+              <el-input
+                v-model="aiForm.apiKey"
+                type="password"
+                show-password
+                placeholder="请输入您的AI API Key"
+              >
+                <template #append>
+                  <el-button @click="testAiConnection" :loading="testing">测试连接</el-button>
+                </template>
+              </el-input>
+              <div class="form-tip">
+                <el-icon><InfoFilled /></el-icon>
+                <span>如何获取API Key？</span>
+                <el-link
+                  type="primary"
+                  href="https://platform.deepseek.com/api_keys"
+                  target="_blank"
+                  style="margin-left: 8px"
+                >
+                  DeepSeek官网
+                </el-link>
+              </div>
+            </el-form-item>
+
+            <el-form-item>
+              <el-button type="primary" @click="submitAiForm" :loading="saving">
+                保存设置
+              </el-button>
+              <el-button @click="resetAiForm">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
   </div>
@@ -307,7 +378,8 @@ import type { FormInstance, FormRules, UploadProps } from 'element-plus';
 import * as echarts from 'echarts';
 import {
   Camera, Edit, Medal, User, Postcard, TrophyBase, EditPen, Phone, School,
-  Lock, DataAnalysis, DocumentCopy, Star, Trophy, Flag, ArrowUp, ArrowDown
+  Lock, DataAnalysis, DocumentCopy, Star, Trophy, Flag, ArrowUp, ArrowDown,
+  ChatDotRound, InfoFilled
 } from '@element-plus/icons-vue';
 import { useStudentAuthStore } from '@/stores/studentAuth';
 import { updateStudentProfile } from '@/api/studentAuth';
@@ -458,6 +530,14 @@ const securityRules = reactive<FormRules>({
     }
   ]
 });
+
+// AI设置表单
+const aiFormRef = ref<FormInstance>();
+const aiForm = reactive({
+  provider: 'deepseek',
+  apiKey: ''
+});
+const testing = ref(false);
 
 // 图表引用
 const scoreChartRef = ref<HTMLElement | null>(null);
@@ -614,9 +694,90 @@ const submitSecurityForm = async () => {
   });
 };
 
+// 加载AI设置
+const loadAiSettings = () => {
+  // 从localStorage加载已保存的AI设置
+  const savedProvider = localStorage.getItem('student_ai_provider');
+  const savedApiKey = localStorage.getItem('student_ai_key');
+
+  if (savedProvider) {
+    aiForm.provider = savedProvider;
+  }
+  if (savedApiKey) {
+    aiForm.apiKey = savedApiKey;
+  }
+};
+
+// 测试AI连接
+const testAiConnection = async () => {
+  if (!aiForm.apiKey) {
+    ElMessage.warning('请先输入API Key');
+    return;
+  }
+
+  testing.value = true;
+  try {
+    // 发送测试请求到AI服务
+    const response = await fetch('/api/v1/student/ai/test-connection', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${studentAuth.token}`,
+        'X-Ai-Api-Key': aiForm.apiKey,
+        'X-Ai-Provider': aiForm.provider
+      },
+      body: JSON.stringify({
+        message: '你好，这是一个连接测试'
+      })
+    });
+
+    if (response.ok) {
+      ElMessage.success('连接测试成功！API Key有效');
+    } else {
+      ElMessage.error('连接测试失败，请检查API Key是否正确');
+    }
+  } catch (error) {
+    console.error('测试连接失败:', error);
+    ElMessage.error('连接测试失败，请检查网络或API Key');
+  } finally {
+    testing.value = false;
+  }
+};
+
+// 提交AI设置
+const submitAiForm = async () => {
+  if (!aiForm.apiKey) {
+    ElMessage.warning('请输入API Key');
+    return;
+  }
+
+  try {
+    saving.value = true;
+
+    // 使用store的setAiConfig方法保存配置
+    studentAuth.setAiConfig(aiForm.apiKey, aiForm.provider);
+
+    ElMessage.success('AI设置保存成功');
+  } catch (error) {
+    console.error('保存失败:', error);
+    ElMessage.error('保存失败，请重试');
+  } finally {
+    saving.value = false;
+  }
+};
+
+// 重置AI表单
+const resetAiForm = () => {
+  aiForm.provider = 'deepseek';
+  aiForm.apiKey = '';
+  studentAuth.setAiConfig('', 'deepseek');
+  ElMessage.success('已重置AI设置');
+};
+
 onMounted(() => {
   initData();
   initCharts();
+  loadAiSettings();
 });
 </script>
 
@@ -795,6 +956,19 @@ onMounted(() => {
 
 .security-alert {
   margin-bottom: 24px;
+}
+
+.form-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.form-tip .el-icon {
+  font-size: 14px;
 }
 
 /* 学习数据 */

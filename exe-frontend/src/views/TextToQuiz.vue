@@ -11,9 +11,17 @@
           <template #header>
             <div class="card-header">
               <span>素材输入</span>
-              <el-button type="primary" :loading="loading" @click="handleGenerate">
-                <el-icon><MagicStick /></el-icon> 开始生成
-              </el-button>
+              <div style="display: flex; align-items: center; gap: 15px;">
+                <el-switch
+                  v-model="useStreamMode"
+                  active-text="流式模式"
+                  inactive-text="标准模式"
+                  style="--el-switch-on-color: #13ce66;"
+                />
+                <el-button type="primary" :loading="loading" @click="handleGenerate">
+                  <el-icon><MagicStick /></el-icon> 开始生成
+                </el-button>
+              </div>
             </div>
           </template>
 
@@ -46,6 +54,21 @@
               </el-col>
             </el-row>
           </el-form>
+        </el-card>
+      </el-col>
+
+      <!-- 流式输出显示区域 -->
+      <el-col :span="14" v-if="useStreamMode && loading && streamContent">
+        <el-card shadow="never" style="margin-bottom: 20px;">
+          <template #header>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              <span>AI 正在生成题目，实时输出...</span>
+            </div>
+          </template>
+          <div style="max-height: 400px; overflow-y: auto; background: #f5f7fa; padding: 15px; border-radius: 4px;">
+            <pre style="white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.6; margin: 0;">{{ streamContent }}</pre>
+          </div>
         </el-card>
       </el-col>
 
@@ -140,9 +163,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { MagicStick, Delete } from '@element-plus/icons-vue';
+import { MagicStick, Delete, Loading } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
-import { generateQuestionsFromText, createQuestion } from '@/api/question';
+import { generateQuestionsFromText, generateQuestionsFromTextStream, createQuestion } from '@/api/question';
 import { fetchAllSubjects, type Subject } from '@/api/subject';
 import AiKeyDialog from '@/components/student/AiKeyDialog.vue'; // 复用组件
 
@@ -151,6 +174,10 @@ const saving = ref(false);
 const saveDialogVisible = ref(false);
 const keyDialogVisible = ref(false);
 const allSubjects = ref<Subject[]>([]);
+
+// 【流式响应】新增变量
+const useStreamMode = ref(true); // 默认启用流式模式
+const streamContent = ref(''); // 流式输出内容
 
 const form = reactive({
   text: '',
@@ -178,19 +205,48 @@ const handleGenerate = async () => {
   }
 
   loading.value = true;
+  streamContent.value = '';
+  generatedQuestions.value = [];
+
   try {
-    const res = await generateQuestionsFromText(form);
-    if (res.code === 200) {
-      // 对返回数据做简单的格式化处理，确保 options 是数组
-      generatedQuestions.value = res.data.map(q => ({
-        ...q,
-        options: q.options || []
-      }));
-      ElMessage.success(`成功生成 ${res.data.length} 道题目`);
+    if (useStreamMode.value) {
+      // 使用流式API
+      generateQuestionsFromTextStream(
+        form,
+        // onChunk: 接收流式数据
+        (chunk: string) => {
+          streamContent.value += chunk;
+        },
+        // onComplete: 完成时接收完整结果
+        (questions: any[]) => {
+          // 对返回数据做简单的格式化处理，确保 options 是数组
+          generatedQuestions.value = questions.map((q: any) => ({
+            ...q,
+            options: q.options || []
+          }));
+          loading.value = false;
+          ElMessage.success(`成功生成 ${questions.length} 道题目`);
+        },
+        // onError: 错误处理
+        (error: Error) => {
+          loading.value = false;
+          ElMessage.error('生成失败: ' + error.message);
+        }
+      );
+    } else {
+      // 使用标准API（原有代码）
+      const res = await generateQuestionsFromText(form);
+      if (res.code === 200) {
+        // 对返回数据做简单的格式化处理，确保 options 是数组
+        generatedQuestions.value = res.data.map((q: any) => ({
+          ...q,
+          options: q.options || []
+        }));
+        ElMessage.success(`成功生成 ${res.data.length} 道题目`);
+      }
+      loading.value = false;
     }
   } catch (e) {
-    // error handled
-  } finally {
     loading.value = false;
   }
 };
