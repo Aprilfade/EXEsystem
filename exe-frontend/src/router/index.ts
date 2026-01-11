@@ -271,8 +271,17 @@ router.beforeEach(async (to, from, next) => {
         if (requiredRole === 'STUDENT') {
             // --- 学生端路由保护 ---
             if (studentAuthStore.isAuthenticated) {
+                // ✅ 修复：只在student未加载时才调用fetchStudentInfo，避免重复请求
                 if (!studentAuthStore.student) {
-                    await studentAuthStore.fetchStudentInfo();
+                    try {
+                        await studentAuthStore.fetchStudentInfo();
+                    } catch (error) {
+                        console.error('加载学生信息失败:', error);
+                        // 获取失败则登出并重定向到登录页
+                        studentAuthStore.logout();
+                        next({ path: '/student/login', query: { redirect: to.fullPath } });
+                        return;
+                    }
                 }
                 next();
             } else {

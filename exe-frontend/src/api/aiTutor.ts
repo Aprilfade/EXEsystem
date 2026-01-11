@@ -1,7 +1,7 @@
 /**
  * AI家教相关API
  */
-import request from './request'
+import request from '@/utils/request'
 import { createDeepSeekClient } from '@/utils/deepseek'
 
 const deepseek = createDeepSeekClient()

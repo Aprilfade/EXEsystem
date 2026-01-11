@@ -41,10 +41,14 @@ const rules = reactive<FormRules>({
   password: [{ required: true, message: '密码不能为空', trigger: 'blur' }],
 });
 
-const handleLogin = () => {
-  formRef.value?.validate((valid) => {
+const handleLogin = async () => {
+  formRef.value?.validate(async (valid) => {
     if (valid) {
-      studentAuthStore.login(loginForm, route.query.redirect as string | undefined);
+      try {
+        await studentAuthStore.login(loginForm, route.query.redirect as string | undefined);
+      } catch (error: any) {
+        ElMessage.error(error.message || '登录失败，请检查学号和密码');
+      }
     } else {
       ElMessage.error('请检查输入项');
     }

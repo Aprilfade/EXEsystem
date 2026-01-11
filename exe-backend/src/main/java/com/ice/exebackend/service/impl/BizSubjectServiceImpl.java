@@ -87,6 +87,55 @@ public class BizSubjectServiceImpl extends ServiceImpl<BizSubjectMapper, BizSubj
             return dto;
         });
     }
+
+    /**
+     * 【新增】获取包含统计数据的科目列表（不分页）
+     * 用于学生端，与管理端数据同步，返回相同格式的统计数据
+     */
+    @Override
+    public List<SubjectStatsDTO> getSubjectStatsList(QueryWrapper<BizSubject> queryWrapper) {
+        // 1. 查询所有符合条件的科目
+        List<BizSubject> subjects = this.list(queryWrapper);
+
+        // 如果没有数据，直接返回空列表
+        if (CollectionUtils.isEmpty(subjects)) {
+            return Collections.emptyList();
+        }
+
+        // 2. 提取所有科目的 ID 列表
+        List<Long> subjectIds = subjects.stream()
+                .map(BizSubject::getId)
+                .collect(Collectors.toList());
+
+        // 3. 批量统计：知识点数量
+        Map<Long, Long> kpCounts = knowledgePointService.list(new QueryWrapper<BizKnowledgePoint>()
+                        .select("subject_id")
+                        .in("subject_id", subjectIds))
+                .stream()
+                .collect(Collectors.groupingBy(BizKnowledgePoint::getSubjectId, Collectors.counting()));
+
+        // 4. 批量统计：试题数量
+        List<Map<String, Object>> questionCountMaps = questionService.listMaps(new QueryWrapper<BizQuestion>()
+                .select("subject_id", "COUNT(*) as count")
+                .in("subject_id", subjectIds)
+                .groupBy("subject_id"));
+
+        Map<Long, Long> questionCounts = questionCountMaps.stream()
+                .collect(Collectors.toMap(
+                        m -> ((Number) m.get("subject_id")).longValue(),
+                        m -> ((Number) m.get("count")).longValue()
+                ));
+
+        // 5. 转换为 DTO 并填充统计数据
+        return subjects.stream().map(subject -> {
+            SubjectStatsDTO dto = new SubjectStatsDTO();
+            BeanUtils.copyProperties(subject, dto);
+            dto.setKnowledgePointCount(kpCounts.getOrDefault(subject.getId(), 0L));
+            dto.setQuestionCount(questionCounts.getOrDefault(subject.getId(), 0L));
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
     // 【同步修复】修复获取科目下试题列表的逻辑，使其与上面的统计逻辑一致
     @Override
     public List<BizQuestion> getQuestionsForSubject(Long subjectId) {

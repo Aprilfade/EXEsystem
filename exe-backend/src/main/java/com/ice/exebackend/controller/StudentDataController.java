@@ -135,11 +135,65 @@ public class StudentDataController {
         }
     }
 
+    /**
+     * 【优化】学生端获取科目列表 - 与管理端同步，支持统计数据和缓存
+     * 功能增强：
+     * 1. 返回科目统计数据（知识点数量、试题数量）
+     * 2. 支持按学生年级自动过滤
+     * 3. 添加Redis缓存提升性能
+     */
     @GetMapping("/subjects")
     @PreAuthorize("hasAuthority('ROLE_STUDENT')")
-    public Result getPracticeSubjects() {
-        List<BizSubject> subjects = subjectService.list();
-        return Result.suc(subjects);
+    public Result getPracticeSubjects(
+            @RequestParam(required = false) String grade,
+            Authentication authentication
+    ) {
+        try {
+            // 1. 如果未指定年级，尝试从当前登录学生获取
+            if (!StringUtils.hasText(grade) && authentication != null) {
+                String studentNo = authentication.getName();
+                BizStudent student = studentService.lambdaQuery()
+                        .eq(BizStudent::getStudentNo, studentNo)
+                        .one();
+
+                logger.info("学生端获取科目 - 学号: {}, 学生信息: {}", studentNo, student);
+
+                if (student != null && StringUtils.hasText(student.getGrade())) {
+                    grade = student.getGrade();
+                    logger.info("从学生信息获取年级: {}", grade);
+                }
+            }
+
+            // 2. 构建查询条件
+            QueryWrapper<BizSubject> queryWrapper = new QueryWrapper<>();
+
+            // 如果有年级信息，则过滤
+            if (StringUtils.hasText(grade)) {
+                queryWrapper.eq("grade", grade);
+                logger.info("科目查询 - 年级过滤: {}", grade);
+            } else {
+                logger.info("科目查询 - 无年级过滤，返回所有科目");
+            }
+
+            queryWrapper.orderByDesc("create_time");
+
+            // 3. 使用统一的Service方法获取科目统计数据
+            // 这与管理端使用相同的方法，确保数据一致性
+            List<com.ice.exebackend.dto.SubjectStatsDTO> subjectStats =
+                    subjectService.getSubjectStatsList(queryWrapper);
+
+            logger.info("科目查询结果 - 数量: {}, 数据: {}",
+                subjectStats.size(),
+                subjectStats.stream()
+                    .map(s -> s.getName() + "(" + s.getGrade() + ")")
+                    .collect(java.util.stream.Collectors.joining(", "))
+            );
+
+            return Result.suc(subjectStats);
+        } catch (Exception e) {
+            logger.error("学生端获取科目列表失败", e);
+            return Result.fail("获取科目列表失败");
+        }
     }
 
     @GetMapping("/practice-questions")

@@ -26,11 +26,25 @@ export const useStudentAuthStore = defineStore('studentAuth', {
                 if (response && response.code === 200) {
                     this.token = response.data.token;
                     localStorage.setItem(STUDENT_TOKEN_KEY, this.token);
-                    await this.fetchStudentInfo();
-                    router.push(redirect || '/student/dashboard');
+
+                    // ✅ 修复：确保student信息加载完成后再跳转，避免路由守卫重复加载
+                    try {
+                        await this.fetchStudentInfo();
+                    } catch (error) {
+                        console.error('获取学生信息失败:', error);
+                        // 如果获取信息失败，清除token并提示
+                        this.logout();
+                        throw new Error('获取用户信息失败，请重试');
+                    }
+
+                    // 使用setTimeout确保Vue状态完全更新后再跳转
+                    setTimeout(() => {
+                        router.push(redirect || '/student/dashboard');
+                    }, 100);
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error('学生登录失败:', error);
+                throw error;  // 向上抛出错误，让登录组件处理
             }
         },
 

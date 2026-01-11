@@ -19,7 +19,14 @@ service.interceptors.request.use(
         const studentAuthStore = useStudentAuthStore();
 
         // 【核心修改】根据请求的URL，动态决定附加哪个Token
-        if (config.url && config.url.startsWith('/api/v1/student/')) {
+        // 学生端API路径模式：/api/v1/student/... 或 /api/v1/questions/practice
+        const isStudentApi = config.url && (
+            config.url.startsWith('/api/v1/student/') ||
+            config.url.startsWith('/api/v1/questions/practice') ||
+            config.url.includes('/student/')
+        );
+
+        if (isStudentApi) {
             // 如果是发往学生端的API
             if (studentAuthStore.isAuthenticated && studentAuthStore.token) {
                 config.headers['Authorization'] = `Bearer ${studentAuthStore.token}`;

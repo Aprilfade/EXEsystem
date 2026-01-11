@@ -106,3 +106,91 @@ export function analyzeQuestionStream(
         onError(error);
     });
 }
+
+/**
+ * AI批改请求数据
+ */
+export interface GradingRequest {
+    questionId: number;
+    questionType: number;
+    questionContent: string;
+    correctAnswer: string;
+    userAnswer: string;
+}
+
+/**
+ * 流式AI批改
+ * @param data 批改请求数据
+ * @param onChunk 接收到数据块时的回调函数
+ * @param onComplete 完成时的回调函数
+ * @param onError 错误时的回调函数
+ */
+export function analyzeAnswerStream(
+    data: GradingRequest,
+    onChunk: (text: string) => void,
+    onComplete: () => void,
+    onError: (error: Error) => void
+): void {
+    const store = useStudentAuthStore();
+    const baseUrl = import.meta.env.VITE_APP_BASE_API || '';
+
+    fetch(baseUrl + '/api/v1/ai/grading/stream', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Ai-Api-Key': store.aiKey || '',
+            'X-Ai-Provider': store.aiProvider || 'deepseek',
+            'Authorization': 'Bearer ' + localStorage.getItem('studentToken')
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        if (!response.body) {
+            throw new Error('Response body is null');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        function read() {
+            reader.read().then(({ done, value }) => {
+                if (done) {
+                    onComplete();
+                    return;
+                }
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.substring(6).trim();
+
+                        if (data && data !== '[DONE]') {
+                            onChunk(data);
+                        }
+                    } else if (line.startsWith('event: ')) {
+                        const event = line.substring(7).trim();
+                        if (event === 'done') {
+                            onComplete();
+                            return;
+                        }
+                    }
+                }
+
+                read();
+            }).catch(error => {
+                onError(error);
+            });
+        }
+
+        read();
+    })
+    .catch(error => {
+        onError(error);
+    });
+}

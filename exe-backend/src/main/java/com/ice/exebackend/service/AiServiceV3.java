@@ -703,6 +703,126 @@ public class AiServiceV3 {
     }
 
     /**
+     * 【流式响应】主观题智能批改（流式）
+     * 返回 SseEmitter 对象用于实时推送批改分析
+     */
+    public SseEmitter gradeSubjectiveQuestionStream(String apiKey, String providerKey,
+                                                    String questionContent, String referenceAnswer,
+                                                    String studentAnswer, int maxScore, Long userId) {
+        // 创建 SseEmitter，设置超时时间为90秒
+        SseEmitter emitter = new SseEmitter(90000L);
+
+        // 在新线程中执行流式请求，避免阻塞主线程
+        new Thread(() -> {
+            try {
+                // 限流检查
+                if (!rateLimiter.checkGlobalRateLimit()) {
+                    emitter.completeWithError(new RuntimeException("系统繁忙，请稍后再试"));
+                    return;
+                }
+
+                if (!rateLimiter.checkUserRateLimit(userId)) {
+                    int remaining = rateLimiter.getRemainingQuota(userId);
+                    emitter.completeWithError(new RuntimeException(
+                        "您的请求过于频繁，请稍后再试。当前剩余配额: " + remaining + " 次/分钟"));
+                    return;
+                }
+
+                if (!rateLimiter.tryAcquireGlobalConcurrent()) {
+                    emitter.completeWithError(new RuntimeException("系统繁忙，请稍后再试"));
+                    return;
+                }
+
+                long startTime = System.currentTimeMillis();
+                StringBuilder fullContent = new StringBuilder();
+
+                try {
+                    log.info("开始流式AI主观题批改: provider={}, user={}, maxScore={}", providerKey, userId, maxScore);
+
+                    // 构建提示词
+                    String systemPrompt = "你是一位公正严谨的阅卷老师。请根据题目、参考答案和学生答案进行批改。\n" +
+                            "请按照以下Markdown格式输出：\n\n" +
+                            "## 评分\n得分：X/" + maxScore + "分\n\n" +
+                            "## 答题分析\n" +
+                            "### 优点\n- 列出答题的亮点\n\n" +
+                            "### 不足\n- 列出需要改进的地方\n\n" +
+                            "## 改进建议\n" +
+                            "1. 具体的改进建议\n2. 补充说明\n\n" +
+                            "## 知识点梳理\n" +
+                            "- 涉及的核心知识点\n\n" +
+                            "请保持语气鼓励和耐心，帮助学生理解错误并改进。";
+
+                    String userPrompt = String.format(
+                            "【题目】\n%s\n\n【参考答案】\n%s\n\n【该题满分】\n%d 分\n\n【学生答案】\n%s",
+                            questionContent, referenceAnswer, maxScore, studentAnswer
+                    );
+
+                    List<Map<String, String>> messages = List.of(
+                            Map.of("role", "system", "content", systemPrompt),
+                            Map.of("role", "user", "content", userPrompt)
+                    );
+
+                    // 发送流式请求
+                    aiHttpClient.sendStreamRequest(
+                        apiKey,
+                        providerKey,
+                        messages,
+                        0.5,  // temperature 降低随机性,使批改更稳定
+                        aiConfig.getTimeout().getGrading(),
+                        // onChunk: 接收到数据块时发送给前端
+                        (chunk) -> {
+                            try {
+                                fullContent.append(chunk);
+                                emitter.send(SseEmitter.event()
+                                    .name("message")
+                                    .data(chunk));
+                            } catch (Exception e) {
+                                log.error("发送SSE数据失败", e);
+                            }
+                        },
+                        // onComplete: 完成时通知前端
+                        () -> {
+                            try {
+                                long duration = System.currentTimeMillis() - startTime;
+
+                                // 记录日志
+                                logCall(userId, "STUDENT", "grading", providerKey, true, duration,
+                                    false, 0, null,
+                                    questionContent.substring(0, Math.min(100, questionContent.length())));
+
+                                emitter.send(SseEmitter.event().name("done").data(""));
+                                emitter.complete();
+                                log.info("流式AI主观题批改完成: user={}, duration={}ms", userId, duration);
+                            } catch (Exception e) {
+                                log.error("完成SSE时出错", e);
+                                emitter.completeWithError(e);
+                            }
+                        },
+                        // onError: 发生错误时通知前端
+                        (error) -> {
+                            long duration = System.currentTimeMillis() - startTime;
+                            logCall(userId, "STUDENT", "grading", providerKey, false, duration,
+                                false, 0, error.getMessage(),
+                                questionContent.substring(0, Math.min(100, questionContent.length())));
+
+                            emitter.completeWithError(error);
+                        }
+                    );
+
+                } finally {
+                    rateLimiter.releaseGlobalConcurrent();
+                }
+
+            } catch (Exception e) {
+                log.error("流式AI批改异常", e);
+                emitter.completeWithError(e);
+            }
+        }).start();
+
+        return emitter;
+    }
+
+    /**
      * 【流式响应】生成知识点（流式）
      * 返回 SseEmitter 对象用于实时推送生成内容
      */

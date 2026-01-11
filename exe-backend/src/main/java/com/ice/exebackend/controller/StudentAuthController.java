@@ -125,6 +125,11 @@ public class StudentAuthController {
         String newPassword = passwordRequest.get("newPassword");
         String studentNo = authentication.getName();
 
+        // ✅ 新增：密码长度验证
+        if (newPassword == null || newPassword.length() < 6) {
+            return Result.fail("新密码长度至少为6位");
+        }
+
         BizStudent student = studentService.lambdaQuery().eq(BizStudent::getStudentNo, studentNo).one();
         if (student == null || !passwordEncoder.matches(oldPassword, student.getPassword())) {
             return Result.fail("旧密码不正确");
@@ -159,6 +164,10 @@ public class StudentAuthController {
 
         // 只有当用户输入了新密码时，才进行加密和更新
         if (studentUpdateData.getPassword() != null && !studentUpdateData.getPassword().isEmpty()) {
+            // ✅ 新增：密码长度验证
+            if (studentUpdateData.getPassword().length() < 6) {
+                return Result.fail("密码长度至少为6位");
+            }
             studentToUpdate.setPassword(passwordEncoder.encode(studentUpdateData.getPassword()));
         }
 

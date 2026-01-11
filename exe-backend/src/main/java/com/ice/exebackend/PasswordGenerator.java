@@ -7,7 +7,7 @@ public class PasswordGenerator {
         BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
         // 您可以在这里放入任何您想设置的密码
-        String rawPassword = "123";
+        String rawPassword = "123456";
 
         String encodedPassword = encoder.encode(rawPassword);
 

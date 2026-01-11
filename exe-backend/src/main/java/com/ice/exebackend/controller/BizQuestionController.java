@@ -325,4 +325,52 @@ public class BizQuestionController {
         }
         return success ? Result.suc("批量删除成功") : Result.fail("删除失败");
     }
+
+    /**
+     * 【新增】学生获取练习题目（公开接口，无需管理员权限）
+     */
+    @GetMapping("/practice")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result getPracticeQuestions(@RequestParam(defaultValue = "1") int current,
+                                       @RequestParam(defaultValue = "10") int size,
+                                       @RequestParam(required = false) Long subjectId,
+                                       @RequestParam(required = false) Integer questionType) {
+        logger.info("学生获取练习题目: subjectId={}, questionType={}, size={}", subjectId, questionType, size);
+
+        Page<BizQuestion> page = new Page<>(current, size);
+        QueryWrapper<BizQuestion> queryWrapper = new QueryWrapper<>();
+
+        if (subjectId != null) {
+            queryWrapper.eq("subject_id", subjectId);
+        }
+        if (questionType != null) {
+            queryWrapper.eq("question_type", questionType);
+        }
+
+        // 随机排序，让每次获取的题目不同
+        queryWrapper.orderByAsc("RAND()");
+
+        questionService.page(page, queryWrapper);
+
+        logger.info("成功获取 {} 道练习题目", page.getRecords().size());
+        return Result.suc(page.getRecords(), page.getTotal());
+    }
+
+    /**
+     * 【新增】学生获取题目详情（公开接口，无需管理员权限）
+     */
+    @GetMapping("/practice/{id}")
+    @PreAuthorize("hasAuthority('ROLE_STUDENT')")
+    public Result getQuestionDetail(@PathVariable Long id) {
+        logger.info("学生获取题目详情: questionId={}", id);
+
+        BizQuestion question = questionService.getById(id);
+        if (question == null) {
+            logger.warn("题目不存在: questionId={}", id);
+            return Result.fail("题目不存在");
+        }
+
+        logger.info("成功获取题目详情: questionId={}", id);
+        return Result.suc(question);
+    }
 }

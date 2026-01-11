@@ -31,12 +31,12 @@ export default defineConfig({
 
     // 生产环境移除 console
     minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true
-      }
-    },
+    // terserOptions: {
+    //   compress: {
+    //     drop_console: true,
+    //     drop_debugger: true
+    //   }
+    // },
 
     // 代码分割优化
     rollupOptions: {

@@ -12,22 +12,35 @@
       </div>
     </el-card>
 
-    <div v-loading="loading" class="course-grid">
-      <div v-for="course in courseList" :key="course.id" class="course-card" @click="openCourseDetail(course)">
-        <div class="course-cover-wrapper">
-          <div class="course-cover" :style="{ backgroundImage: `url(${course.coverUrl || '/default-course.jpg'})` }"></div>
-          <div class="course-badge">{{ getSubjectName(course.subjectId) }}</div>
-        </div>
-        <div class="course-info">
-          <h3 class="course-title" :title="course.name">{{ course.name }}</h3>
-          <div class="course-meta">
-            <el-tag size="small" type="info" effect="plain">{{ course.grade }}</el-tag>
-            <span class="time">{{ formatDate(course.createTime) }}</span>
-          </div>
-          <p class="course-desc">{{ course.description || '暂无简介...' }}</p>
-        </div>
-      </div>
-    </div>
+    <!-- 课程卡片网格 -->
+    <transition-group
+      name="course-list"
+      tag="div"
+      class="course-grid"
+      appear
+    >
+      <!-- 骨架屏 -->
+      <CourseCardSkeleton
+        v-if="loading"
+        v-for="n in 6"
+        :key="`skeleton-${n}`"
+      />
+
+      <!-- 课程卡片 -->
+      <CourseCard
+        v-else
+        v-for="course in courseList"
+        :key="course.id"
+        :course="course"
+        :subject-name="getSubjectName(course.subjectId)"
+        :progress-percent="getCourseProgressPercent(course.id!)"
+        :completed-count="getCourseCompletedCount(course.id!)"
+        :total-count="getCourseResourceCount(course.id!)"
+        :study-time="getCourseStudyTime(course.id!)"
+        @click="openCourseDetail(course)"
+        @quick-start="handleQuickStart(course)"
+      />
+    </transition-group>
 
     <el-empty v-if="!loading && courseList.length === 0" description="暂无相关课程" />
 
@@ -74,6 +87,48 @@
         <p class="detail-desc">{{ currentCourse.description }}</p>
 
         <el-tabs v-model="activeTab" class="course-tabs">
+          <!-- 【新增】学习中心tab -->
+          <el-tab-pane label="学习中心" name="learning">
+            <div class="learning-center">
+              <!-- 视频播放器 -->
+              <div v-if="showVideoPlayer && currentResource" class="video-section">
+                <div class="video-header">
+                  <h3>{{ currentResource.name }}</h3>
+                  <el-button type="danger" size="small" @click="closeViewer">关闭播放器</el-button>
+                </div>
+                <VideoPlayer
+                  :video-url="currentResource.resourceUrl"
+                  :resource-id="currentResource.id"
+                  :last-position="getResourcePercent(currentResource.id)"
+                />
+              </div>
+
+              <!-- 文档查看器 -->
+              <div v-if="showDocumentViewer && currentResource" class="document-section">
+                <DocumentViewer
+                  :document-url="currentResource.resourceUrl"
+                  :resource-id="currentResource.id"
+                  :document-type="currentResource.resourceType as 'PDF' | 'PPT'"
+                  :document-name="currentResource.name"
+                  :last-page="parseInt(store.getResourceLastPosition(currentResource.id) || '1')"
+                />
+              </div>
+
+              <!-- 章节树 -->
+              <div class="chapter-section">
+                <ChapterTree
+                  :chapters="store.chapters"
+                  @resource-click="handleResourceClick"
+                />
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <!-- 【新增】学习数据分析tab -->
+          <el-tab-pane label="学习数据" name="analytics">
+            <LearningAnalytics :course-id="currentCourse?.id" />
+          </el-tab-pane>
+
           <el-tab-pane label="课程目录" name="resources">
             <div class="resource-list">
               <div v-for="(res, index) in currentResources" :key="res.id" class="resource-item" @click="previewResource(res)">
@@ -89,7 +144,7 @@
                 </div>
                 <el-icon class="arrow-icon"><ArrowRight /></el-icon>
               </div>
-              <el-empty v-if="currentResources.length === 0" description="暂无章节资源" image-size="60" />
+              <el-empty v-if="currentResources.length === 0" description="暂无章节资源" :image-size="60" />
             </div>
           </el-tab-pane>
 
@@ -137,7 +192,7 @@
                     </div>
                   </div>
                 </div>
-                <el-empty v-if="commentsList.length === 0" description="还没有人评论，快来抢沙发！" image-size="60" />
+                <el-empty v-if="commentsList.length === 0" description="还没有人评论，快来抢沙发！" :image-size="60" />
               </div>
             </div>
           </el-tab-pane>
@@ -156,6 +211,15 @@ import type { Course, CourseResource } from '@/api/course';
 // 【新增】导入评论API和组件
 import { fetchComments, addComment, deleteComment, type CourseComment } from '@/api/courseComment';
 import UserAvatar from '@/components/UserAvatar.vue';
+// 【新增】导入课程学习组件
+import ChapterTree from './course-learning/ChapterTree.vue';
+import VideoPlayer from './course-learning/VideoPlayer.vue';
+import DocumentViewer from './course-learning/DocumentViewer.vue';
+import LearningAnalytics from './course-learning/LearningAnalytics.vue';
+import CourseCard from './course-learning/CourseCard.vue';
+import CourseCardSkeleton from './course-learning/CourseCardSkeleton.vue';
+import { useCourseStore } from '@/stores/courseStore';
+import { useCourseProgress } from '@/hooks/useCourseProgress';
 import { Search, VideoPlay, Document, DataBoard, Link, ArrowRight, Loading, Picture } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -167,6 +231,21 @@ const total = ref(0);
 const detailVisible = ref(false);
 const currentCourse = ref<Course | null>(null);
 const currentResources = ref<CourseResource[]>([]);
+
+// 【新增】课程学习相关状态
+const store = useCourseStore();
+const { calculateCourseProgress, getResourcePercent } = useCourseProgress();
+const currentResource = ref<CourseResource | null>(null);
+const showVideoPlayer = ref(false);
+const showDocumentViewer = ref(false);
+
+// 【新增】课程进度缓存
+const courseProgressCache = ref<Map<number, {
+  percent: number;
+  completed: number;
+  total: number;
+  studyTime: number;
+}>>(new Map());
 
 // 【新增】评论相关状态
 const activeTab = ref('resources');
@@ -241,6 +320,7 @@ const openCourseDetail = async (course: Course) => {
   currentCourse.value = course;
   detailVisible.value = true;
   activeTab.value = 'resources'; // 默认切回资源页
+  showVideoPlayer.value = false; // 关闭视频播放器
 
   // 1. 加载资源
   const res = await fetchStudentCourseDetail(course.id!);
@@ -248,7 +328,17 @@ const openCourseDetail = async (course: Course) => {
     currentResources.value = res.data.resources || [];
   }
 
-  // 2. 加载评论
+  // 2. 加载课程学习数据（章节树、进度等）
+  await store.loadCourseDetail(course.id!, {
+    id: course.id!,
+    name: course.name,
+    description: course.description,
+    coverImage: course.coverUrl,
+    teacherId: 0,
+    teacherName: ''
+  });
+
+  // 3. 加载评论
   loadComments(course.id!);
 };
 
@@ -295,55 +385,406 @@ const formatTime = (timeStr: string) => {
   return timeStr ? timeStr.replace('T', ' ').substring(0, 16) : '';
 };
 
+// 【新增】处理章节树资源点击
+const handleResourceClick = async (resource: CourseResource) => {
+  currentResource.value = resource;
+
+  // 关闭其他播放器
+  showVideoPlayer.value = false;
+  showDocumentViewer.value = false;
+
+  // 根据资源类型打开相应的查看器
+  if (resource.resourceType === 'VIDEO') {
+    showVideoPlayer.value = true;
+    activeTab.value = 'learning'; // 切换到学习tab
+
+    // 开始学习会话
+    await store.startSession(resource.id);
+  } else if (resource.resourceType === 'PDF' || resource.resourceType === 'PPT') {
+    showDocumentViewer.value = true;
+    activeTab.value = 'learning'; // 切换到学习tab
+
+    // 开始学习会话
+    await store.startSession(resource.id);
+  } else {
+    // 其他资源类型，使用原有的预览方法
+    previewResource(resource);
+  }
+};
+
+// 【新增】关闭播放器/查看器
+const closeViewer = async () => {
+  showVideoPlayer.value = false;
+  showDocumentViewer.value = false;
+
+  // 结束学习会话
+  if (store.hasActiveSession) {
+    await store.endSession();
+  }
+};
+
+// 【新增】获取课程进度百分比
+const getCourseProgressPercent = (courseId: number): number => {
+  const cached = courseProgressCache.value.get(courseId);
+  return cached?.percent || 0;
+};
+
+// 【新增】获取课程已完成资源数
+const getCourseCompletedCount = (courseId: number): number => {
+  const cached = courseProgressCache.value.get(courseId);
+  return cached?.completed || 0;
+};
+
+// 【新增】获取课程总资源数
+const getCourseResourceCount = (courseId: number): number => {
+  const cached = courseProgressCache.value.get(courseId);
+  return cached?.total || 0;
+};
+
+// 【新增】获取课程学习时长
+const getCourseStudyTime = (courseId: number): number => {
+  const cached = courseProgressCache.value.get(courseId);
+  return cached?.studyTime || 0;
+};
+
+// 【新增】快速开始学习
+const handleQuickStart = async (course: Course) => {
+  // 先打开课程详情
+  await openCourseDetail(course);
+
+  // 自动切换到学习中心tab
+  activeTab.value = 'learning';
+
+  // 如果有上次学习的资源，自动打开
+  if (store.resources.length > 0) {
+    // 找到第一个未完成的资源
+    const unfinishedResource = store.resources.find(r => {
+      const progress = store.progressMap.get(r.id);
+      return !progress || progress.isCompleted === 0;
+    });
+
+    if (unfinishedResource) {
+      await handleResourceClick(unfinishedResource);
+    }
+  }
+};
+
 onMounted(() => {
   loadSubjects();
   getList();
 });
 </script>
 
-<style scoped>
-/* 原有样式保持不变 */
-.page-container { padding: 24px; max-width: 1200px; margin: 0 auto; }
-.filter-card { margin-bottom: 20px; border-radius: 8px; }
-.header-flex { display: flex; justify-content: space-between; align-items: center; }
-.header-flex h2 { margin: 0; font-size: 20px; font-weight: 600; }
-.filter-group { display: flex; align-items: center; }
-.course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
-.course-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; border: 1px solid #ebeef5; display: flex; flex-direction: column; }
-.course-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); border-color: var(--el-color-primary-light-5); }
-.course-cover-wrapper { position: relative; height: 150px; background: #f5f7fa; overflow: hidden; }
-.course-cover { width: 100%; height: 100%; background-size: cover; background-position: center; transition: transform 0.3s; }
-.course-card:hover .course-cover { transform: scale(1.05); }
-.course-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 12px; backdrop-filter: blur(4px); }
-.course-info { padding: 16px; flex-grow: 1; display: flex; flex-direction: column; }
-.course-title { margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.course-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.time { font-size: 12px; color: #909399; }
-.course-desc { font-size: 13px; color: #606266; line-height: 1.5; margin: 0; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.pagination { margin-top: 30px; justify-content: center; display: flex;}
-.drawer-header { display: flex; align-items: center; gap: 10px; }
-.drawer-title { font-size: 18px; font-weight: bold; }
-.course-detail-content { padding: 10px; }
-.detail-desc { margin: 15px 0; color: #606266; line-height: 1.6; }
-.resource-list { margin-top: 10px; }
-.resource-item { display: flex; align-items: center; padding: 12px; border-radius: 8px; background: #f8f9fa; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }
-.resource-item:hover { background: #ecf5ff; }
-.res-icon { font-size: 24px; margin-right: 12px; display: flex; align-items: center; }
-.res-info { flex-grow: 1; }
-.res-name { font-weight: 500; color: #303133; font-size: 14px; }
-.res-type { font-size: 12px; color: #909399; margin-top: 2px; }
-.arrow-icon { color: #c0c4cc; }
+<style scoped lang="scss">
+/* 页面容器 */
+.page-container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: calc(100vh - 60px);
+}
 
-/* --- 【新增】评论区样式 --- */
-.course-tabs { margin-top: 20px; }
-.discussion-area { padding-top: 10px; }
-.comment-input-box { margin-bottom: 15px; }
-.comment-list { display: flex; flex-direction: column; gap: 15px; }
-.comment-item { display: flex; gap: 12px; }
-.comment-avatar { flex-shrink: 0; }
-.comment-body { flex-grow: 1; background: #f9f9f9; padding: 10px 15px; border-radius: 8px; }
-.comment-header { display: flex; justify-content: space-between; font-size: 12px; color: #909399; margin-bottom: 6px; }
-.user-name { font-weight: bold; color: #303133; }
-.comment-content { font-size: 14px; color: #303133; line-height: 1.5; white-space: pre-wrap; }
-.comment-actions { text-align: right; margin-top: 4px; height: 20px; }
+/* 筛选卡片 */
+.filter-card {
+  margin-bottom: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+}
+
+.header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+
+  h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 课程网格 */
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+/* 过渡动画 */
+.course-list-move,
+.course-list-enter-active,
+.course-list-leave-active {
+  transition: all 0.5s cubic-bezier(0.55, 0, 0.1, 1);
+}
+
+.course-list-enter-from {
+  opacity: 0;
+  transform: translateY(30px) scale(0.9);
+}
+
+.course-list-leave-to {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.course-list-leave-active {
+  position: absolute;
+}
+
+/* 分页 */
+.pagination {
+  margin-top: 32px;
+  justify-content: center;
+  display: flex;
+}
+
+/* 抽屉样式 */
+.drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  .drawer-title {
+    font-size: 20px;
+    font-weight: 600;
+  }
+}
+
+.course-detail-content {
+  padding: 12px;
+}
+
+.detail-desc {
+  margin: 15px 0;
+  color: #606266;
+  line-height: 1.8;
+  font-size: 15px;
+}
+
+/* 资源列表 */
+.resource-list {
+  margin-top: 12px;
+}
+
+.resource-item {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #f8f9fa;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover {
+    background: #ecf5ff;
+    transform: translateX(6px);
+    box-shadow: 0 2px 8px rgba(64, 158, 255, 0.2);
+  }
+}
+
+.res-icon {
+  font-size: 28px;
+  margin-right: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.res-info {
+  flex-grow: 1;
+}
+
+.res-name {
+  font-weight: 500;
+  color: #303133;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.res-type {
+  font-size: 13px;
+  color: #909399;
+}
+
+.arrow-icon {
+  color: #c0c4cc;
+  transition: all 0.3s;
+}
+
+.resource-item:hover .arrow-icon {
+  color: #409EFF;
+  transform: translateX(4px);
+}
+
+/* 评论区样式 */
+.course-tabs {
+  margin-top: 20px;
+
+  :deep(.el-tabs__nav-wrap) {
+    padding: 0 20px;
+  }
+}
+
+.discussion-area {
+  padding-top: 12px;
+}
+
+.comment-input-box {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
+.comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.comment-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
+  transition: all 0.3s;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.comment-avatar {
+  flex-shrink: 0;
+}
+
+.comment-body {
+  flex-grow: 1;
+  background: #f9f9f9;
+  padding: 12px 16px;
+  border-radius: 8px;
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #303133;
+}
+
+.comment-content {
+  font-size: 14px;
+  color: #303133;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.comment-actions {
+  text-align: right;
+  margin-top: 6px;
+  height: 24px;
+}
+
+/* 学习中心样式 */
+.learning-center {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 0;
+}
+
+.video-section,
+.document-section {
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.video-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+  }
+}
+
+.chapter-section {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .course-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .page-container {
+    padding: 16px;
+  }
+
+  .header-flex {
+    flex-direction: column;
+    align-items: stretch;
+
+    h2 {
+      font-size: 20px;
+    }
+  }
+
+  .filter-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .course-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .learning-center {
+    padding: 12px 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .filter-card {
+    border-radius: 8px;
+  }
+
+  .course-grid {
+    gap: 12px;
+  }
+}
 </style>

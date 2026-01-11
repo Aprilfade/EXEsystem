@@ -165,40 +165,130 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="resourceDrawerVisible" title="课程内容编排" size="700px" direction="rtl">
+    <el-drawer v-model="resourceDrawerVisible" title="课程管理中心" size="80%" direction="rtl">
       <template #header>
         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-          <span>课程内容编排 - <strong>{{ currentCourseName }}</strong></span>
-          <el-button type="primary" icon="Plus" @click="openResourceDialog()">添加章节资源</el-button>
+          <span>课程管理 - <strong>{{ currentCourseName }}</strong></span>
         </div>
       </template>
 
-      <el-table :data="currentResources" stripe style="width: 100%">
-        <el-table-column type="index" width="50" label="#" />
-        <el-table-column prop="name" label="资源名称" show-overflow-tooltip />
-        <el-table-column prop="resourceType" label="类型" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="row.resourceType === 'VIDEO'" type="success">视频</el-tag>
-            <el-tag v-else-if="row.resourceType === 'PDF'" type="danger">PDF</el-tag>
-            <el-tag v-else-if="row.resourceType === 'PPT'" type="warning">PPT</el-tag>
-            <el-tag v-else type="info">链接</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="关联知识点" show-overflow-tooltip>
-          <template #default="{ row }">
-            <el-tag v-if="row.knowledgePointId" size="small" effect="plain">
-              {{ getKpName(row.knowledgePointId) }}
-            </el-tag>
-            <span v-else style="color: #ccc; font-size: 12px;">未关联</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="150" align="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="previewResource(row)">预览</el-button>
-            <el-button link type="danger" @click="handleDeleteResource(row.id)">移除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <el-tabs v-model="activeTab" class="course-tabs">
+        <!-- 基本信息标签页 -->
+        <el-tab-pane label="基本信息" name="info">
+          <el-form :model="courseForm" label-width="100px" style="max-width: 600px; padding: 20px;">
+            <el-form-item label="课程名称">
+              <el-input v-model="courseForm.name" placeholder="例如：高中数学必修一精讲" />
+            </el-form-item>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="适用年级">
+                  <el-select
+                      v-model="courseForm.grade"
+                      placeholder="选择年级"
+                      style="width: 100%"
+                      clearable
+                      @change="handleDialogGradeChange"
+                  >
+                    <el-option v-for="g in ['七年级','八年级','九年级','高一','高二','高三']" :key="g" :label="g" :value="g" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="所属科目">
+                  <el-select
+                      v-model="courseForm.subjectId"
+                      placeholder="选择科目"
+                      style="width: 100%"
+                      filterable
+                      @change="handleDialogSubjectChange"
+                      :disabled="dialogSubjectOptions.length === 0 && !!courseForm.grade"
+                  >
+                    <el-option
+                        v-for="sub in dialogSubjectOptions"
+                        :key="sub.id"
+                        :label="courseForm.grade ? sub.name : `${sub.name} (${sub.grade})`"
+                        :value="sub.id"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item label="封面图">
+              <el-upload
+                  class="cover-uploader"
+                  action="/api/v1/files/upload"
+                  :show-file-list="false"
+                  :on-success="handleCoverSuccess"
+                  :headers="uploadHeaders"
+              >
+                <img v-if="courseForm.coverUrl" :src="courseForm.coverUrl" class="cover-img" />
+                <el-icon v-else class="uploader-icon"><Plus /></el-icon>
+                <template #tip>
+                  <div class="el-upload__tip">建议尺寸 16:9，支持 JPG/PNG</div>
+                </template>
+              </el-upload>
+            </el-form-item>
+            <el-form-item label="课程简介">
+              <el-input v-model="courseForm.description" type="textarea" :rows="4" placeholder="简要介绍课程目标和内容..." />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="submitCourse">保存基本信息</el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+
+        <!-- 章节管理标签页 -->
+        <el-tab-pane label="章节管理" name="chapters">
+          <ChapterTreeEditor
+            v-if="currentCourseId && activeTab === 'chapters'"
+            :course-id="currentCourseId"
+          />
+        </el-tab-pane>
+
+        <!-- 资源管理标签页 -->
+        <el-tab-pane label="资源管理" name="resources">
+          <div style="padding: 20px;">
+            <div style="margin-bottom: 20px;">
+              <el-button type="primary" icon="Plus" @click="openResourceDialog()">添加课程资源</el-button>
+            </div>
+
+            <el-table :data="currentResources" stripe style="width: 100%">
+              <el-table-column type="index" width="50" label="#" />
+              <el-table-column prop="name" label="资源名称" show-overflow-tooltip />
+              <el-table-column prop="resourceType" label="类型" width="100" align="center">
+                <template #default="{ row }">
+                  <el-tag v-if="row.resourceType === 'VIDEO'" type="success">视频</el-tag>
+                  <el-tag v-else-if="row.resourceType === 'PDF'" type="danger">PDF</el-tag>
+                  <el-tag v-else-if="row.resourceType === 'PPT'" type="warning">PPT</el-tag>
+                  <el-tag v-else type="info">链接</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="关联知识点" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-tag v-if="row.knowledgePointId" size="small" effect="plain">
+                    {{ getKpName(row.knowledgePointId) }}
+                  </el-tag>
+                  <span v-else style="color: #ccc; font-size: 12px;">未关联</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="150" align="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click="previewResource(row)">预览</el-button>
+                  <el-button link type="danger" @click="handleDeleteResource(row.id)">移除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-tab-pane>
+
+        <!-- 学习数据标签页 -->
+        <el-tab-pane label="学习数据" name="progress">
+          <CourseProgressDashboard
+            v-if="currentCourseId && activeTab === 'progress'"
+            :course-id="currentCourseId"
+          />
+        </el-tab-pane>
+      </el-tabs>
     </el-drawer>
 
     <el-dialog v-model="resourceDialogVisible" title="添加课程资源" width="500px" append-to-body destroy-on-close>
@@ -273,6 +363,8 @@ import { fetchKnowledgePointList, type KnowledgePoint } from '@/api/knowledgePoi
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Search, Refresh, UploadFilled, Check, Edit, Delete, MoreFilled, FolderOpened } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
+import ChapterTreeEditor from './course-admin/ChapterTreeEditor.vue';
+import CourseProgressDashboard from './course-admin/CourseProgressDashboard.vue';
 
 const authStore = useAuthStore();
 const uploadHeaders = computed(() => ({ 'Authorization': 'Bearer ' + authStore.token }));
@@ -294,6 +386,7 @@ const courseDialogVisible = ref(false);
 const resourceDrawerVisible = ref(false);
 const resourceDialogVisible = ref(false);
 const isEdit = ref(false);
+const activeTab = ref('info'); // 标签页控制：info/chapters/resources/progress
 
 // 表单数据
 const courseForm = ref<Partial<Course>>({});
@@ -461,9 +554,15 @@ const manageResources = async (course: Course) => {
   currentCourseName.value = course.name;
   currentCourseSubjectId.value = course.subjectId; // 记录当前科目ID
 
+  // 填充课程表单用于"基本信息"标签页
+  courseForm.value = { ...course };
+
   // 重新获取该课程详情（含资源）
   const res = await fetchCourseDetail(course.id!);
   currentResources.value = res.data.resources || [];
+
+  // 默认打开基本信息标签页
+  activeTab.value = 'info';
   resourceDrawerVisible.value = true;
 };
 
@@ -645,4 +744,13 @@ const previewResource = (row: CourseResource) => {
 .uploader-icon { font-size: 28px; color: #8c939d; width: 200px; height: 112px; line-height: 112px; text-align: center; }
 .cover-img { width: 200px; height: 112px; object-fit: cover; display: block; }
 .form-tip { font-size: 12px; color: #909399; margin-top: 5px; line-height: 1.2; }
+
+/* 标签页样式优化 */
+.course-tabs {
+  height: calc(100vh - 120px);
+}
+.course-tabs :deep(.el-tabs__content) {
+  height: calc(100% - 55px);
+  overflow-y: auto;
+}
 </style>

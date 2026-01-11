@@ -1300,7 +1300,7 @@ const handleLogin = async () => {
       router.push('/home');
     } else {
       await studentAuthStore.login({
-        studentNumber: loginForm.value.username,
+        studentNo: loginForm.value.username,
         password: loginForm.value.password
       });
       ElMessage.success('登录成功');

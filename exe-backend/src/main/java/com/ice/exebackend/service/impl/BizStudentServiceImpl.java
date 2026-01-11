@@ -78,6 +78,10 @@ public class BizStudentServiceImpl extends ServiceImpl<BizStudentMapper, BizStud
 
                 // ✅ 核心安全修复：如果Excel中密码为空或未提供，保留数据库中的加密密码
                 if (StringUtils.hasText(student.getPassword())) {
+                    // ✅ 新增：密码长度验证
+                    if (student.getPassword().length() < 6) {
+                        throw new RuntimeException("学号 " + student.getStudentNo() + " 的密码长度至少为6位");
+                    }
                     // Excel中提供了新密码，需要加密
                     student.setPassword(passwordEncoder.encode(student.getPassword()));
                 } else {
@@ -88,13 +92,18 @@ public class BizStudentServiceImpl extends ServiceImpl<BizStudentMapper, BizStud
                 this.updateById(student);
             } else {
                 // 新增学生
-                // ✅ 设置默认密码：学号后6位（如果学号不足6位则使用全部）
+                // ✅ 设置默认密码：学号后6位，如果不足6位则使用"123456"
                 if (!StringUtils.hasText(student.getPassword())) {
                     String studentNo = student.getStudentNo();
                     String defaultPassword = studentNo.length() >= 6
                             ? studentNo.substring(studentNo.length() - 6)
-                            : studentNo;
+                            : "123456";  // ✅ 修改：不足6位时使用默认密码
                     student.setPassword(defaultPassword);
+                }
+
+                // ✅ 新增：密码长度验证
+                if (student.getPassword().length() < 6) {
+                    throw new RuntimeException("学号 " + student.getStudentNo() + " 的密码长度至少为6位");
                 }
 
                 // ✅ 加密密码

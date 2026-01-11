@@ -68,11 +68,23 @@
 
               <!-- 科目选择 -->
               <el-form-item label="科目" v-if="practiceForm.mode !== 'wrong'">
-                <el-select v-model="practiceForm.subject" placeholder="请选择科目" style="width: 100%">
-                  <el-option label="数学" value="math" />
-                  <el-option label="英语" value="english" />
-                  <el-option label="物理" value="physics" />
-                  <el-option label="化学" value="chemistry" />
+                <el-select
+                  v-model="practiceForm.subject"
+                  placeholder="请选择科目"
+                  style="width: 100%"
+                  :loading="subjectsLoading"
+                >
+                  <el-option
+                    v-for="subject in allSubjects"
+                    :key="subject.id"
+                    :label="subject.name"
+                    :value="subject.id.toString()"
+                  >
+                    <span>{{ subject.name }}</span>
+                    <span v-if="subject.knowledgePointCount || subject.questionCount" style="float: right; color: #8492a6; font-size: 12px; margin-left: 10px;">
+                      {{ subject.knowledgePointCount }}个知识点 | {{ subject.questionCount }}道题
+                    </span>
+                  </el-option>
                 </el-select>
               </el-form-item>
 
@@ -168,7 +180,6 @@
                 v-for="badge in achievementBadges"
                 :key="badge.id"
                 :class="['badge-item', { unlocked: badge.unlocked }]"
-                v-loading="!badge.unlocked"
               >
                 <el-tooltip :content="badge.description" placement="top">
                   <div class="badge-content">
@@ -452,6 +463,39 @@
                 >
                   检查答案
                 </el-button>
+
+                <!-- AI批改按钮（仅主观题显示） -->
+                <el-button
+                  v-if="currentQuestion.type === 'calculation' || currentQuestion.type === 'blank'"
+                  type="success"
+                  @click="requestAiGrading"
+                  :loading="aiGrading"
+                  :disabled="!userAnswers[currentQuestion.id]"
+                >
+                  🤖 请AI批改
+                </el-button>
+              </div>
+            </el-card>
+
+            <!-- AI批改结果面板 -->
+            <el-card v-if="showAiGrading && aiGradingResult" class="ai-grading-card" shadow="hover">
+              <template #header>
+                <div class="grading-header">
+                  <span>🤖 AI智能批改</span>
+                  <el-button text @click="showAiGrading = false">关闭</el-button>
+                </div>
+              </template>
+
+              <div class="grading-content">
+                <!-- 流式显示的批改内容 -->
+                <div v-if="aiGrading" class="grading-streaming">
+                  <el-icon class="is-loading"><Loading /></el-icon>
+                  <p>AI正在批改中...</p>
+                  <div class="streaming-text" v-html="renderMarkdown(streamingContent)"></div>
+                </div>
+
+                <!-- 完整批改结果 -->
+                <div v-else class="grading-result" v-html="renderMarkdown(aiGradingResult)"></div>
               </div>
             </el-card>
           </div>
@@ -864,7 +908,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus';
 import {
   Edit, DocumentCopy, MagicStick, Star, Document, Loading,
   Download, Promotion, View, ChatDotRound, StarFilled, TrendCharts,
@@ -872,6 +916,17 @@ import {
   Search, ArrowUp, ArrowDown, Trophy, Medal, Finished, WarningFilled
 } from '@element-plus/icons-vue';
 import * as echarts from 'echarts';
+import { marked } from 'marked';
+import { markRaw } from 'vue';
+import { analyzeAnswerStream } from '@/api/ai';
+import { useStudentAuthStore } from '@/stores/studentAuth';
+import { fetchPracticeQuestions } from '@/api/question';
+import type { Question as ApiQuestion } from '@/api/question';
+// 【新增】导入科目API
+import { fetchPracticeSubjects } from '@/api/studentAuth';
+import type { Subject } from '@/api/subject';
+
+const studentAuthStore = useStudentAuthStore();
 
 // ==================== 类型定义 ====================
 interface Question {
@@ -926,12 +981,16 @@ interface PracticeResult {
 }
 
 // ==================== 响应式数据 ====================
+// 【新增】科目列表
+const allSubjects = ref<Subject[]>([]);
+const subjectsLoading = ref(false);
+
 // 练习配置表单
 const practiceForm = ref({
   mode: 'weakness' as 'weakness' | 'knowledge' | 'wrong' | 'custom',
   practiceMode: 'normal' as 'normal' | 'challenge' | 'timed',
   timeLimit: 30,
-  subject: 'math',
+  subject: '', // 【修改】默认为空，等待加载后设置
   weaknessPoints: [] as number[],
   knowledgePoints: [] as any[],
   questionCount: 20,
@@ -1019,6 +1078,13 @@ const showAnswerSheet = ref(false);
 const showHistoryDetailDialog = ref(false);
 const showResultDialog = ref(false);
 
+// AI批改相关
+const aiGrading = ref(false);
+const showAiGrading = ref(false);
+const aiGradingResult = ref('');
+const streamingContent = ref('');
+const currentGradingQuestion = ref<Question | null>(null);
+
 // 历史记录
 const practiceHistory = ref<PracticeHistory[]>([]);
 const historyDateRange = ref<[Date, Date] | null>(null);
@@ -1053,7 +1119,7 @@ const achievementBadges = ref<AchievementBadge[]>([
     id: 'first_practice',
     name: '初来乍到',
     description: '完成第一次练习',
-    icon: Medal,
+    icon: markRaw(Medal),
     color: '#E6A23C',
     unlocked: true,
     progress: 100,
@@ -1063,7 +1129,7 @@ const achievementBadges = ref<AchievementBadge[]>([
     id: 'continuous_7',
     name: '坚持不懈',
     description: '连续练习7天',
-    icon: Trophy,
+    icon: markRaw(Trophy),
     color: '#409EFF',
     unlocked: false,
     progress: 60,
@@ -1073,7 +1139,7 @@ const achievementBadges = ref<AchievementBadge[]>([
     id: 'total_100',
     name: '百题斩',
     description: '累计完成100道题',
-    icon: Finished,
+    icon: markRaw(Finished),
     color: '#67C23A',
     unlocked: false,
     progress: 75,
@@ -1083,7 +1149,7 @@ const achievementBadges = ref<AchievementBadge[]>([
     id: 'accuracy_90',
     name: '学霸之路',
     description: '单次练习正确率达90%',
-    icon: StarFilled,
+    icon: markRaw(StarFilled),
     color: '#F56C6C',
     unlocked: false,
     progress: 50,
@@ -1115,6 +1181,18 @@ const resultPieChart = ref<HTMLElement | null>(null);
 const currentQuestion = computed(() => {
   return generatedQuestions.value[currentQuestionIndex.value];
 });
+
+// 监听当前题目变化，确保多选题答案初始化为数组
+watch(currentQuestion, (newQuestion) => {
+  if (newQuestion && newQuestion.type === 'multiple') {
+    if (!userAnswers.value[newQuestion.id]) {
+      userAnswers.value[newQuestion.id] = [];
+    } else if (!Array.isArray(userAnswers.value[newQuestion.id])) {
+      // 如果已存在但不是数组，转换为数组
+      userAnswers.value[newQuestion.id] = [userAnswers.value[newQuestion.id]];
+    }
+  }
+}, { immediate: true });
 
 const practiceProgress = computed(() => {
   const answered = Object.keys(userAnswers.value).length;
@@ -1186,7 +1264,30 @@ const resultMessage = computed(() => {
 });
 
 // ==================== 生命周期 ====================
+// 【新增】加载科目列表
+const loadSubjects = async () => {
+  subjectsLoading.value = true;
+  try {
+    const res = await fetchPracticeSubjects();
+    if (res.code === 200) {
+      allSubjects.value = res.data || [];
+      // 如果有科目，设置第一个为默认值
+      if (allSubjects.value.length > 0 && !practiceForm.value.subject) {
+        practiceForm.value.subject = allSubjects.value[0].id.toString();
+      }
+    } else {
+      ElMessage.error('加载科目列表失败');
+    }
+  } catch (error) {
+    console.error('加载科目失败:', error);
+    ElMessage.error('加载科目列表失败');
+  } finally {
+    subjectsLoading.value = false;
+  }
+};
+
 onMounted(() => {
+  loadSubjects(); // 【新增】加载科目
   loadFromLocalStorage();
   calculateStatistics();
 });
@@ -1226,69 +1327,156 @@ const generatePractice = async () => {
   generating.value = true;
   generatingProgress.value = 0;
 
-  // 模拟进度
+  // 进度模拟
   const interval = setInterval(() => {
-    generatingProgress.value += 10;
-    if (generatingProgress.value >= 100) {
-      clearInterval(interval);
+    if (generatingProgress.value < 90) {
+      generatingProgress.value += 10;
     }
-  }, 500);
+  }, 300);
 
   try {
-    // TODO: 调用AI API生成题目
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
-    // 模拟生成的题目
-    const questionCount = practiceForm.value.mode === 'wrong' ? 10 : practiceForm.value.questionCount;
-    generatedQuestions.value = Array.from({ length: questionCount }, (_, i) => ({
-      id: `q_${Date.now()}_${i}`,
-      type: ['single', 'multiple', 'blank', 'calculation'][Math.floor(Math.random() * 4)] as any,
-      difficulty: ['easy', 'medium', 'hard'][Math.floor(Math.random() * 3)] as any,
-      knowledgePoint: ['函数与导数', '导数应用', '三角函数', '立体几何'][Math.floor(Math.random() * 4)],
-      content: `这是第 ${i + 1} 道题目的内容描述...`,
-      options: ['A. 选项一', 'B. 选项二', 'C. 选项三', 'D. 选项四'],
-      answer: 'A',
-      explanation: '这是详细的答案解析...'
-    }));
-
-    // 模拟真实题目
-    generatedQuestions.value[0] = {
-      id: generatedQuestions.value[0].id,
-      type: 'single',
-      difficulty: 'medium',
-      knowledgePoint: '函数与导数',
-      content: '函数 f(x) = x² - 2x + 1 在区间 [0, 3] 上的最大值是？',
-      options: ['A. 1', 'B. 2', 'C. 3', 'D. 4'],
-      answer: 'D',
-      explanation: '这是一个二次函数，开口向上，对称轴为 x=1。在区间[0,3]上，当x=3时取得最大值，f(3) = 9 - 6 + 1 = 4。'
+    // 题型映射：前端 -> 后端 (1-单选, 2-多选, 3-填空, 5-主观, 6-计算)
+    const typeMap: Record<string, number> = {
+      'single': 1,
+      'multiple': 2,
+      'blank': 3,
+      'calculation': 6
     };
 
-    if (generatedQuestions.value.length > 1) {
-      generatedQuestions.value[1] = {
-        id: generatedQuestions.value[1].id,
-        type: 'multiple',
-        difficulty: 'hard',
-        knowledgePoint: '导数应用',
-        content: '关于函数 f(x) = x³ - 3x + 1，下列说法正确的是？',
-        options: [
-          'A. 在 x=1 处取得极值',
-          'B. 在 x=-1 处取得极值',
-          'C. 有两个极值点',
-          'D. 单调递增'
-        ],
-        answer: 'ABC',
-        explanation: '求导得 f\'(x) = 3x² - 3 = 3(x² - 1) = 3(x+1)(x-1)，令f\'(x)=0得x=±1，这是两个极值点。所以A、B、C正确，D错误。'
-      };
+    const questionCount = practiceForm.value.mode === 'wrong' ? 10 : practiceForm.value.questionCount;
+
+    // 如果选择了多种题型，需要分别获取并合并
+    let allQuestions: ApiQuestion[] = [];
+
+    if (practiceForm.value.questionTypes.length > 0) {
+      // 每种题型获取相应数量的题目
+      const countPerType = Math.ceil(questionCount / practiceForm.value.questionTypes.length);
+
+      for (const type of practiceForm.value.questionTypes) {
+        const questionType = typeMap[type];
+        if (!questionType) continue;
+
+        generatingProgress.value = 30 + (practiceForm.value.questionTypes.indexOf(type) / practiceForm.value.questionTypes.length) * 50;
+
+        const response = await fetchPracticeQuestions({
+          current: 1,
+          size: countPerType,
+          questionType: questionType,
+          subjectId: getSubjectId(practiceForm.value.subject)
+        });
+
+        if (response.code === 200 && response.data) {
+          allQuestions = allQuestions.concat(response.data);
+        }
+      }
+    } else {
+      // 如果没有选择题型，获取所有类型
+      const response = await fetchPracticeQuestions({
+        current: 1,
+        size: questionCount,
+        subjectId: getSubjectId(practiceForm.value.subject)
+      });
+
+      if (response.code === 200 && response.data) {
+        allQuestions = response.data;
+      }
     }
 
+    generatingProgress.value = 90;
+
+    if (allQuestions.length === 0) {
+      ElMessage.warning('未找到符合条件的题目，请调整筛选条件或联系管理员添加题目');
+      return;
+    }
+
+    // 随机打乱题目顺序
+    allQuestions = shuffleArray(allQuestions).slice(0, questionCount);
+
+    // 转换为前端格式
+    generatedQuestions.value = allQuestions.map((q, index) => ({
+      id: `q_${q.id}_${index}`,
+      type: getQuestionTypeKey(q.questionType),
+      difficulty: estimateDifficulty(),
+      knowledgePoint: q.knowledgePointIds && q.knowledgePointIds.length > 0
+        ? `知识点${q.knowledgePointIds[0]}`
+        : '综合练习',
+      content: q.content,
+      imageUrl: q.imageUrl,
+      options: parseOptions(q.options),
+      answer: q.answer,
+      answerImageUrl: q.answerImageUrl,
+      explanation: q.description || '暂无解析'
+    }));
+
+    generatingProgress.value = 100;
     estimatedCompletionTime.value = generatedQuestions.value.length * 2;
 
-    ElMessage.success('练习生成成功！');
-  } catch (error) {
-    ElMessage.error('生成失败，请重试');
+    ElMessage.success(`成功生成${generatedQuestions.value.length}道练习题！`);
+  } catch (error: any) {
+    console.error('生成练习失败:', error);
+    ElMessage.error('生成失败: ' + (error.message || '请重试'));
   } finally {
+    clearInterval(interval);
     generating.value = false;
   }
+};
+
+// 辅助函数：获取科目ID
+const getSubjectId = (subject: string): number | undefined => {
+  // 【修改】直接将字符串转换为数字ID（因为现在存储的就是ID）
+  const subjectId = parseInt(subject, 10);
+  return isNaN(subjectId) ? undefined : subjectId;
+};
+
+// 辅助函数：将后端题型转换为前端类型
+const getQuestionTypeKey = (questionType: number): string => {
+  const typeMap: Record<number, string> = {
+    1: 'single',      // 单选
+    2: 'multiple',    // 多选
+    3: 'blank',       // 填空
+    4: 'judge',       // 判断
+    5: 'subjective',  // 主观
+    6: 'calculation'  // 计算
+  };
+  return typeMap[questionType] || 'single';
+};
+
+// 辅助函数：解析选项
+const parseOptions = (options: string | any[]): string[] => {
+  if (Array.isArray(options)) {
+    return options.map((opt: any) =>
+      typeof opt === 'string' ? opt : `${opt.key}. ${opt.value}`
+    );
+  }
+  if (typeof options === 'string') {
+    try {
+      const parsed = JSON.parse(options);
+      if (Array.isArray(parsed)) {
+        return parsed.map((opt: any) =>
+          typeof opt === 'string' ? opt : `${opt.key}. ${opt.value}`
+        );
+      }
+    } catch (e) {
+      console.warn('选项解析失败:', e);
+    }
+  }
+  return [];
+};
+
+// 辅助函数：随机打乱数组
+const shuffleArray = <T>(array: T[]): T[] => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
+
+// 辅助函数：估算难度（可以根据题目统计数据改进）
+const estimateDifficulty = (): string => {
+  const difficulties = ['easy', 'medium', 'hard'];
+  return difficulties[Math.floor(Math.random() * difficulties.length)];
 };
 
 // 应用推荐
@@ -1336,6 +1524,74 @@ const showAnswer = (question: Question) => {
 const askAiAboutQuestion = (question: Question) => {
   ElMessage.info('AI讲解功能开发中...');
 };
+
+// Markdown渲染
+const renderMarkdown = (text: string): string => {
+  if (!text) return '';
+  return marked(text) as string;
+};
+
+// AI批改功能
+const requestAiGrading = async () => {
+  const question = currentQuestion.value;
+  const userAnswer = userAnswers.value[question.id];
+
+  if (!userAnswer || !userAnswer.trim()) {
+    ElMessage.warning('请先完成答题');
+    return;
+  }
+
+  // 检查是否配置了AI Key
+  if (!studentAuthStore.aiKey) {
+    ElMessage.warning('请先在个人设置中配置AI API Key');
+    return;
+  }
+
+  aiGrading.value = true;
+  showAiGrading.value = true;
+  streamingContent.value = '';
+  aiGradingResult.value = '';
+  currentGradingQuestion.value = question;
+
+  try {
+    analyzeAnswerStream(
+      {
+        questionId: parseInt(question.id.split('_')[1]) || 0,
+        questionType: question.type === 'calculation' ? 6 : 3,
+        questionContent: question.content,
+        correctAnswer: question.answer || '参考答案',
+        userAnswer: userAnswer,
+        maxScore: 100
+      },
+      // onChunk - 流式接收数据
+      (chunk: string) => {
+        streamingContent.value += chunk;
+      },
+      // onComplete - 完成
+      () => {
+        aiGrading.value = false;
+        aiGradingResult.value = streamingContent.value;
+        ElNotification({
+          title: '✅ 批改完成',
+          message: 'AI批改已完成，请查看详细反馈',
+          type: 'success',
+          duration: 3000
+        });
+      },
+      // onError - 错误
+      (error: Error) => {
+        aiGrading.value = false;
+        showAiGrading.value = false;
+        ElMessage.error('AI批改失败: ' + error.message);
+      }
+    );
+  } catch (error: any) {
+    aiGrading.value = false;
+    showAiGrading.value = false;
+    ElMessage.error('AI批改请求失败: ' + error.message);
+  }
+};
+
 
 // 开始练习
 const startPractice = () => {
@@ -1392,6 +1648,61 @@ const nextQuestion = () => {
   }
 };
 
+// 智能匹配填空题答案（支持多空题）
+const checkFillBlankAnswer = (correctAnswer: string, userAnswer: string): boolean => {
+  // 统一转换中文逗号为英文逗号
+  const correctLower = correctAnswer.toLowerCase().trim().replace(/，/g, ',');
+  const userLower = userAnswer.toLowerCase().trim().replace(/，/g, ',');
+
+  if (!correctLower.includes('###')) {
+    // 单答案，直接匹配
+    return userLower === correctLower;
+  }
+
+  const parts = correctLower.split('###').map(ans => ans.trim());
+
+  // 检查是否为多空题格式（某些部分包含逗号，某些不包含）
+  const templatePart = parts.find(p => p.includes(','));
+
+  if (templatePart && userLower.includes(',')) {
+    // 多空题：模板格式 "固定部分，可变部分1###可变部分2###可变部分3"
+    const templateFields = templatePart.split(',').map(f => f.trim());
+    const userFields = userLower.split(',').map(f => f.trim());
+
+    if (templateFields.length !== userFields.length) {
+      // 空格数量不匹配，尝试完整匹配
+      return parts.some(ans => userLower === ans);
+    }
+
+    // 逐个字段检查
+    return templateFields.every((templateField, index) => {
+      const userField = userFields[index];
+
+      // 收集这个位置的所有可能答案
+      const possibleAnswers: string[] = [];
+
+      parts.forEach(p => {
+        if (p.includes(',')) {
+          // 从完整答案中提取对应字段
+          const fields = p.split(',').map(f => f.trim());
+          if (fields[index]) {
+            possibleAnswers.push(fields[index]);
+          }
+        } else if (index === templateFields.length - 1) {
+          // 单个词可能是最后一个字段的替代答案
+          possibleAnswers.push(p);
+        }
+      });
+
+      // 检查用户输入是否在可能答案中
+      return possibleAnswers.includes(userField);
+    });
+  } else {
+    // 单空多答案：直接匹配任意一个
+    return parts.some(ans => userLower === ans);
+  }
+};
+
 // 检查当前答案（闯关模式）
 const checkCurrentAnswer = () => {
   const question = currentQuestion.value;
@@ -1404,7 +1715,8 @@ const checkCurrentAnswer = () => {
     const sortedCorrectAnswer = question.answer.split('').sort().join('');
     isCorrect = sortedUserAnswer === sortedCorrectAnswer;
   } else {
-    isCorrect = userAnswer === question.answer;
+    // 使用智能匹配函数
+    isCorrect = checkFillBlankAnswer(question.answer, userAnswer);
   }
 
   if (isCorrect) {
@@ -1476,7 +1788,8 @@ const submitPractice = () => {
       const sortedCorrectAnswer = question.answer.split('').sort().join('');
       isCorrect = sortedUserAnswer === sortedCorrectAnswer;
     } else {
-      isCorrect = userAnswer === question.answer;
+      // 使用智能匹配函数
+      isCorrect = userAnswer ? checkFillBlankAnswer(question.answer, userAnswer) : false;
     }
 
     if (isCorrect) {
@@ -2585,6 +2898,134 @@ const renderStatsCharts = () => {
   display: flex;
   gap: 12px;
   justify-content: center;
+}
+
+/* AI批改卡片样式 */
+.ai-grading-card {
+  margin-top: 20px;
+  border-left: 4px solid #67c23a;
+}
+
+.grading-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.grading-content {
+  .grading-streaming {
+    text-align: center;
+    padding: 20px;
+
+    .el-icon {
+      font-size: 32px;
+      color: #409eff;
+      margin-bottom: 12px;
+    }
+
+    p {
+      color: #606266;
+      margin-bottom: 20px;
+    }
+
+    .streaming-text {
+      text-align: left;
+      background: #f5f7fa;
+      padding: 16px;
+      border-radius: 8px;
+      min-height: 100px;
+      line-height: 1.6;
+
+      :deep(h2) {
+        color: #303133;
+        font-size: 18px;
+        margin: 16px 0 8px 0;
+        border-bottom: 2px solid #409eff;
+        padding-bottom: 8px;
+      }
+
+      :deep(h3) {
+        color: #606266;
+        font-size: 16px;
+        margin: 12px 0 6px 0;
+      }
+
+      :deep(ul), :deep(ol) {
+        margin: 8px 0;
+        padding-left: 24px;
+      }
+
+      :deep(li) {
+        margin: 4px 0;
+        line-height: 1.8;
+      }
+
+      :deep(p) {
+        margin: 8px 0;
+      }
+
+      :deep(code) {
+        background: #e1f3d8;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+      }
+    }
+  }
+
+  .grading-result {
+    background: #f5f7fa;
+    padding: 20px;
+    border-radius: 8px;
+    line-height: 1.8;
+
+    :deep(h2) {
+      color: #303133;
+      font-size: 20px;
+      margin: 20px 0 12px 0;
+      border-bottom: 2px solid #67c23a;
+      padding-bottom: 8px;
+
+      &:first-child {
+        margin-top: 0;
+      }
+    }
+
+    :deep(h3) {
+      color: #606266;
+      font-size: 16px;
+      margin: 16px 0 8px 0;
+    }
+
+    :deep(ul), :deep(ol) {
+      margin: 12px 0;
+      padding-left: 28px;
+    }
+
+    :deep(li) {
+      margin: 6px 0;
+      line-height: 2;
+    }
+
+    :deep(p) {
+      margin: 12px 0;
+      color: #606266;
+    }
+
+    :deep(strong) {
+      color: #303133;
+      font-weight: 600;
+    }
+
+    :deep(code) {
+      background: #e1f3d8;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      color: #67c23a;
+      font-weight: 500;
+    }
+  }
 }
 
 /* 响应式 */

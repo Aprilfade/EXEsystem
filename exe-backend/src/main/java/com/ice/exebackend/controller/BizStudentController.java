@@ -84,6 +84,12 @@ public class BizStudentController {
                     : (studentNo != null ? studentNo : "123456");
             student.setPassword(defaultPassword);
         }
+
+        // ✅ 新增：密码长度验证（至少6位）
+        if (student.getPassword().length() < 6) {
+            return Result.fail("密码长度至少为6位");
+        }
+
         // 对密码进行 BCrypt 加密
         student.setPassword(passwordEncoder.encode(student.getPassword()));
 

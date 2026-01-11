@@ -39,9 +39,6 @@
               <el-button type="primary" size="small" @click="startPractice(rec.questionId)">
                 立即练习
               </el-button>
-              <el-button size="small" @click="viewDetail(rec.questionId)">
-                查看详情
-              </el-button>
             </div>
           </div>
 
@@ -207,16 +204,18 @@ const stripHtml = (html: string) => {
  * 开始练习
  */
 const startPractice = (questionId: number) => {
-  // TODO: 跳转到练习页面
-  ElMessage.info('即将开始练习题目 #' + questionId);
-};
+  console.log('开始练习题目:', questionId);
 
-/**
- * 查看详情
- */
-const viewDetail = (questionId: number) => {
-  // TODO: 显示题目详情对话框
-  ElMessage.info('查看题目详情 #' + questionId);
+  // 跳转到练习页面
+  router.push({
+    name: 'StudentPractice',
+    query: {
+      questionId: questionId.toString(),
+      from: 'ai-recommendation'
+    }
+  });
+
+  ElMessage.success('正在跳转到题目练习...');
 };
 
 /**

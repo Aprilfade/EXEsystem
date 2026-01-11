@@ -11,9 +11,12 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "axios": "^1.11.0",
+    "dplayer": "^1.27.1",
     "echarts": "^5.6.0",
     "element-plus": "^2.10.5",
     "gsap": "^3.13.0",
+    "hls.js": "^1.6.15",
+    "lodash-es": "^4.17.22",
     "markdown-it": "^14.1.0",
     "marked": "^17.0.1",
     "pinia": "^3.0.3",
@@ -23,6 +26,7 @@
     "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
+    "@types/lodash-es": "^4.17.12",
     "@types/node": "^20.14.9",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/tsconfig": "^0.7.0",

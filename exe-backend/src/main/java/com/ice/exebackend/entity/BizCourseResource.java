@@ -12,6 +12,7 @@ public class BizCourseResource {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
     private Long courseId;
+    private Long chapterId; // 章节ID（新增字段）
     private String name;
     private String resourceType; // VIDEO, PDF, PPT
     private String resourceUrl;
@@ -24,6 +25,8 @@ public class BizCourseResource {
     public void setId(Long id) { this.id = id; }
     public Long getCourseId() { return courseId; }
     public void setCourseId(Long courseId) { this.courseId = courseId; }
+    public Long getChapterId() { return chapterId; }
+    public void setChapterId(Long chapterId) { this.chapterId = chapterId; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getResourceType() { return resourceType; }

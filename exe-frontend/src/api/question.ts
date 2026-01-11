@@ -128,6 +128,22 @@ export function batchUpdateQuestions(data: { questionIds: number[]; subjectId?: 
 }
 
 /**
+ * 【新增】学生获取练习题目（无需管理员权限）
+ */
+export function fetchPracticeQuestions(params: {
+    current: number;
+    size: number;
+    subjectId?: number;
+    questionType?: number;
+}): Promise<ApiResult<Question[]>> {
+    return request({
+        url: '/api/v1/questions/practice',
+        method: 'get',
+        params
+    });
+}
+
+/**
  * AI 智能生成题目（标准版本）
  */
 export function generateQuestionsFromText(data: { text: string; count: number; type: number }): Promise<ApiResult<any[]>> {
