@@ -24,9 +24,9 @@ const defaultLayoutConfig: LayoutConfig = {
     modules: [
         { id: 'quick-actions', title: '快捷操作', enabled: true, order: 1, width: 24 },
         { id: 'stat-cards', title: '统计卡片', enabled: true, order: 2, width: 24 },
-        { id: 'todo-list', title: '待办事项', enabled: true, order: 3, width: 8 },
-        { id: 'notifications', title: '系统通知', enabled: true, order: 4, width: 8 },
-        { id: 'charts', title: '数据图表', enabled: true, order: 5, width: 16 },
+        { id: 'todo-list', title: '待办事项', enabled: true, order: 3, width: 24 },
+        { id: 'notifications', title: '系统通知', enabled: true, order: 4, width: 24 },
+        { id: 'charts', title: '数据图表', enabled: true, order: 5, width: 24 },
         { id: 'activities', title: '最近活动', enabled: true, order: 6, width: 24 }
     ],
     theme: 'light',
@@ -44,7 +44,7 @@ export const layoutPresets = {
         config: {
             ...defaultLayoutConfig,
             compactMode: true,
-            modules: defaultLayoutConfig.modules.map(m => ({ ...m, width: m.width === 24 ? 24 : 12 }))
+            modules: defaultLayoutConfig.modules.map(m => ({ ...m, width: 24 }))
         }
     },
     analysis: {
@@ -54,8 +54,8 @@ export const layoutPresets = {
             modules: [
                 { id: 'stat-cards', title: '统计卡片', enabled: true, order: 1, width: 24 },
                 { id: 'charts', title: '数据图表', enabled: true, order: 2, width: 24 },
-                { id: 'todo-list', title: '待办事项', enabled: true, order: 3, width: 12 },
-                { id: 'activities', title: '最近活动', enabled: true, order: 4, width: 12 },
+                { id: 'todo-list', title: '待办事项', enabled: true, order: 3, width: 24 },
+                { id: 'activities', title: '最近活动', enabled: true, order: 4, width: 24 },
                 { id: 'quick-actions', title: '快捷操作', enabled: false, order: 5, width: 24 },
                 { id: 'notifications', title: '系统通知', enabled: false, order: 6, width: 24 }
             ]
@@ -67,8 +67,8 @@ export const layoutPresets = {
             ...defaultLayoutConfig,
             modules: [
                 { id: 'quick-actions', title: '快捷操作', enabled: true, order: 1, width: 24 },
-                { id: 'todo-list', title: '待办事项', enabled: true, order: 2, width: 12 },
-                { id: 'notifications', title: '系统通知', enabled: true, order: 3, width: 12 },
+                { id: 'todo-list', title: '待办事项', enabled: true, order: 2, width: 24 },
+                { id: 'notifications', title: '系统通知', enabled: true, order: 3, width: 24 },
                 { id: 'stat-cards', title: '统计卡片', enabled: true, order: 4, width: 24 },
                 { id: 'activities', title: '最近活动', enabled: true, order: 5, width: 24 },
                 { id: 'charts', title: '数据图表', enabled: false, order: 6, width: 24 }

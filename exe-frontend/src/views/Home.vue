@@ -56,9 +56,22 @@
       </div>
     </div>
 
-    <!-- 快捷操作区 -->
-    <el-row v-if="!loading && isModuleEnabled('quick-actions')" :gutter="20" class="module-row">
-      <el-col :span="getModuleWidth('quick-actions')" class="module-col">
+    <!-- 可拖拽的模块容器 -->
+    <VueDraggable
+      v-model="sortedModules"
+      :disabled="!isEditMode"
+      @end="handleDragEnd"
+      item-key="id"
+      class="draggable-container"
+      handle=".drag-handle"
+      animation="300"
+      ghost-class="ghost-module"
+    >
+      <template #item="{ element: module }">
+        <div class="draggable-item" :key="module.id">
+          <!-- 快捷操作模块 -->
+          <el-row v-if="module.id === 'quick-actions' && !loading" :gutter="20" class="module-row">
+            <el-col :span="module.width || 24" class="module-col">
         <div class="module-wrapper" :class="{ 'edit-mode': isEditMode }">
           <div v-if="isEditMode" class="module-toolbar">
             <el-icon class="drag-handle"><Rank /></el-icon>
@@ -99,9 +112,9 @@
       </el-col>
     </el-row>
 
-    <!-- 顶部统计卡片 - 骨架屏或实际数据 -->
-    <el-row v-if="!loading && isModuleEnabled('stat-cards')" :gutter="20" class="module-row">
-      <el-col :span="getModuleWidth('stat-cards')" class="module-col">
+          <!-- 统计卡片模块 -->
+          <el-row v-if="module.id === 'stat-cards' && !loading" :gutter="20" class="module-row">
+            <el-col :span="module.width || 24" class="module-col">
         <div class="module-wrapper" :class="{ 'edit-mode': isEditMode }">
           <!-- 编辑模式工具栏 -->
           <div v-if="isEditMode" class="module-toolbar">
@@ -156,15 +169,14 @@
       </el-col>
     </el-row>
 
-    <!-- 中部主要内容区 -->
-    <el-row :gutter="20" class="main-content-row">
-      <!-- 左侧列 - 待办事项和通知 -->
-      <el-col :xs="24" :sm="24" :md="8" v-if="isModuleEnabled('todo-list')">
+          <!-- 待办事项模块 -->
+          <el-row v-if="module.id === 'todo-list' && !loading" :gutter="20" class="main-content-row">
+            <el-col :xs="24" :sm="24" :md="module.width || 24">
         <div class="module-wrapper" :class="{ 'edit-mode': isEditMode }">
           <!-- 编辑模式工具栏 -->
           <div v-if="isEditMode" class="module-toolbar">
             <el-icon class="drag-handle"><Rank /></el-icon>
-            <span class="module-title">待办事项</span>
+            <span class="module-title">待办事项 & 活动</span>
             <el-select
               v-model="currentConfig.modules.find(m => m.id === 'todo-list')!.width"
               size="small"
@@ -178,70 +190,109 @@
             </el-select>
           </div>
 
-          <!-- 待办事项 -->
-          <SkeletonCard v-if="loading || todoLoading" :rows="4" show-header custom-class="todo-card" />
-          <el-card v-else shadow="never" class="section-card todo-card">
-            <template #header>
-              <div class="card-header-enhanced">
-                <div class="header-title">
-                  <el-icon><Checked /></el-icon>
-                  <span>待办事项</span>
+          <!-- 三个模块横向排列 -->
+          <el-row :gutter="20">
+            <!-- 待办事项 -->
+            <el-col :xs="24" :sm="24" :md="8">
+              <SkeletonCard v-if="loading || todoLoading" :rows="4" show-header custom-class="todo-card" />
+              <el-card v-else shadow="never" class="section-card todo-card">
+                <template #header>
+                  <div class="card-header-enhanced">
+                    <div class="header-title">
+                      <el-icon><Checked /></el-icon>
+                      <span>待办事项</span>
+                    </div>
+                    <el-badge :value="todoCount" :hidden="todoCount === 0" type="danger" />
+                  </div>
+                </template>
+                <div class="todo-list">
+                  <div v-if="todoItems.length === 0" class="empty-state">
+                    <el-icon :size="48" color="#C0C4CC"><Select /></el-icon>
+                    <p>暂无待办事项</p>
+                  </div>
+                  <div v-else class="todo-item" v-for="item in todoItems" :key="item.id">
+                    <div class="todo-icon" :style="{ background: item.color }">
+                      <el-icon><component :is="item.icon" /></el-icon>
+                    </div>
+                    <div class="todo-content">
+                      <div class="todo-title">{{ item.title }}</div>
+                      <div class="todo-meta">{{ item.count }} 项 · {{ item.time }}</div>
+                    </div>
+                    <el-button type="primary" link @click="handleTodoClick(item)">
+                      处理
+                    </el-button>
+                  </div>
                 </div>
-                <el-badge :value="todoCount" :hidden="todoCount === 0" type="danger" />
-              </div>
-            </template>
-            <div class="todo-list">
-              <div v-if="todoItems.length === 0" class="empty-state">
-                <el-icon :size="48" color="#C0C4CC"><Select /></el-icon>
-                <p>暂无待办事项</p>
-              </div>
-              <div v-else class="todo-item" v-for="item in todoItems" :key="item.id">
-                <div class="todo-icon" :style="{ background: item.color }">
-                  <el-icon><component :is="item.icon" /></el-icon>
-                </div>
-                <div class="todo-content">
-                  <div class="todo-title">{{ item.title }}</div>
-                  <div class="todo-meta">{{ item.count }} 项 · {{ item.time }}</div>
-                </div>
-                <el-button type="primary" link @click="handleTodoClick(item)">
-                  处理
-                </el-button>
-              </div>
-            </div>
-          </el-card>
+              </el-card>
+            </el-col>
 
-          <!-- 系统通知 -->
-          <SkeletonCard v-if="loading" :rows="4" show-header custom-class="notification-card" />
-          <el-card v-else shadow="never" class="section-card notification-card">
-            <template #header>
-              <div class="card-header-enhanced">
-                <div class="header-title">
-                  <el-icon><Bell /></el-icon>
-                  <span>系统通知</span>
+            <!-- 系统通知 -->
+            <el-col :xs="24" :sm="24" :md="8">
+              <SkeletonCard v-if="loading" :rows="4" show-header custom-class="notification-card" />
+              <el-card v-else shadow="never" class="section-card notification-card">
+                <template #header>
+                  <div class="card-header-enhanced">
+                    <div class="header-title">
+                      <el-icon><Bell /></el-icon>
+                      <span>系统通知</span>
+                    </div>
+                    <el-button type="primary" link @click="$router.push('/notifications')">
+                      查看全部
+                    </el-button>
+                  </div>
+                </template>
+                <div class="notification-list">
+                  <el-empty v-if="!stats.notifications || stats.notifications.length === 0"
+                           description="暂无通知" :image-size="60" />
+                  <div v-else class="notification-item" v-for="item in stats.notifications" :key="item.id"
+                       @click="handleNotificationClick(item.id)">
+                    <div class="notification-dot"></div>
+                    <div class="notification-content">
+                      <div class="notification-text">{{ item.content }}</div>
+                      <div class="notification-date">{{ item.date }}</div>
+                    </div>
+                  </div>
                 </div>
-                <el-button type="primary" link @click="$router.push('/notifications')">
-                  查看全部
-                </el-button>
-              </div>
-            </template>
-            <div class="notification-list">
-              <el-empty v-if="!stats.notifications || stats.notifications.length === 0"
-                       description="暂无通知" :image-size="60" />
-              <div v-else class="notification-item" v-for="item in stats.notifications" :key="item.id"
-                   @click="handleNotificationClick(item.id)">
-                <div class="notification-dot"></div>
-                <div class="notification-content">
-                  <div class="notification-text">{{ item.content }}</div>
-                  <div class="notification-date">{{ item.date }}</div>
-                </div>
-              </div>
-            </div>
-          </el-card>
+              </el-card>
+            </el-col>
+
+            <!-- 最近活动 -->
+            <el-col :xs="24" :sm="24" :md="8">
+              <SkeletonCard v-if="loading" :rows="5" show-header custom-class="activity-card" />
+              <el-card v-else shadow="never" class="section-card activity-card">
+                <template #header>
+                  <div class="card-header-enhanced">
+                    <div class="header-title">
+                      <el-icon><Clock /></el-icon>
+                      <span>最近活动</span>
+                    </div>
+                    <el-button type="primary" link @click="showMoreActivities">查看更多</el-button>
+                  </div>
+                </template>
+                <el-timeline class="activity-timeline">
+                  <el-timeline-item
+                    v-for="(activity, index) in recentActivities"
+                    :key="index"
+                    :timestamp="activity.time"
+                    :color="activity.color"
+                    placement="top"
+                  >
+                    <div class="activity-content">
+                      <el-icon :color="activity.color"><component :is="activity.icon" /></el-icon>
+                      <span>{{ activity.content }}</span>
+                    </div>
+                  </el-timeline-item>
+                </el-timeline>
+              </el-card>
+            </el-col>
+          </el-row>
         </div>
       </el-col>
+    </el-row>
 
-      <!-- 右侧列 - 图表统计 -->
-      <el-col :xs="24" :sm="24" :md="16" v-if="isModuleEnabled('charts')">
+          <!-- 图表模块 -->
+          <el-row v-if="module.id === 'charts' && !loading" :gutter="20" class="main-content-row">
+            <el-col :xs="24" :sm="24" :md="module.width || 16">
         <div class="module-wrapper" :class="{ 'edit-mode': isEditMode }">
           <!-- 编辑模式工具栏 -->
           <div v-if="isEditMode" class="module-toolbar">
@@ -270,6 +321,24 @@
                   <span>知识点&题目统计</span>
                 </div>
                 <div class="header-controls">
+                  <el-select
+                    v-model="selectedSubjectsForKpChart"
+                    multiple
+                    collapse-tags
+                    collapse-tags-tooltip
+                    placeholder="筛选科目"
+                    style="width: 200px; margin-right: 12px;"
+                    size="small"
+                    @change="updateKpAndQuestionChart"
+                    clearable
+                  >
+                    <el-option
+                      v-for="sub in availableSubjects"
+                      :key="sub"
+                      :label="sub"
+                      :value="sub"
+                    />
+                  </el-select>
                   <el-date-picker
                     v-model="selectedMonth"
                     type="month"
@@ -345,6 +414,26 @@
                       <el-icon><CollectionTag /></el-icon>
                       <span>知识点覆盖率</span>
                     </div>
+                    <div class="header-controls" style="margin-left: auto;">
+                      <el-select
+                        v-model="selectedSubjectsForCoverage"
+                        multiple
+                        collapse-tags
+                        collapse-tags-tooltip
+                        placeholder="筛选科目"
+                        style="width: 140px;"
+                        size="small"
+                        @change="updateKpCoverageChart"
+                        clearable
+                      >
+                        <el-option
+                          v-for="sub in availableSubjectsForCoverage"
+                          :key="sub"
+                          :label="sub"
+                          :value="sub"
+                        />
+                      </el-select>
+                    </div>
                   </div>
                 </template>
                 <div ref="kpCoverageChart" class="chart-container-small" v-loading="chartLoading"></div>
@@ -368,58 +457,9 @@
         </div>
       </el-col>
     </el-row>
-
-    <!-- 最近活动 -->
-    <el-row v-if="isModuleEnabled('activities')" style="margin-top: 20px;" class="module-row">
-      <el-col :span="getModuleWidth('activities')" class="module-col">
-        <div class="module-wrapper" :class="{ 'edit-mode': isEditMode }">
-          <!-- 编辑模式工具栏 -->
-          <div v-if="isEditMode" class="module-toolbar">
-            <el-icon class="drag-handle"><Rank /></el-icon>
-            <span class="module-title">最近活动</span>
-            <el-select
-              v-model="currentConfig.modules.find(m => m.id === 'activities')!.width"
-              size="small"
-              style="width: 110px"
-            >
-              <el-option label="1/4" :value="6" />
-              <el-option label="1/3" :value="8" />
-              <el-option label="1/2" :value="12" />
-              <el-option label="2/3" :value="16" />
-              <el-option label="全宽" :value="24" />
-            </el-select>
-          </div>
-
-          <!-- 活动时间线 -->
-          <SkeletonCard v-if="loading" :rows="5" show-header />
-          <el-card v-else shadow="never" class="section-card">
-            <template #header>
-              <div class="card-header-enhanced">
-                <div class="header-title">
-                  <el-icon><Clock /></el-icon>
-                  <span>最近活动</span>
-                </div>
-                <el-button type="primary" link>查看更多</el-button>
-              </div>
-            </template>
-            <el-timeline class="activity-timeline">
-              <el-timeline-item
-                v-for="(activity, index) in recentActivities"
-                :key="index"
-                :timestamp="activity.time"
-                :color="activity.color"
-                placement="top"
-              >
-                <div class="activity-content">
-                  <el-icon :color="activity.color"><component :is="activity.icon" /></el-icon>
-                  <span>{{ activity.content }}</span>
-                </div>
-              </el-timeline-item>
-            </el-timeline>
-          </el-card>
         </div>
-      </el-col>
-    </el-row>
+      </template>
+    </VueDraggable>
 
     <!-- 通知预览对话框 -->
     <notification-preview-dialog
@@ -436,6 +476,35 @@
       @reset="handleSettingsReset"
       @apply-preset="handleApplyPreset"
     />
+
+    <!-- 更多活动对话框 -->
+    <el-dialog
+      v-model="showActivitiesDialog"
+      title="最近活动"
+      width="700px"
+      :close-on-click-modal="false"
+    >
+      <div v-loading="activitiesDialogLoading" style="min-height: 300px;">
+        <el-empty v-if="allActivities.length === 0" description="暂无活动记录" :image-size="100" />
+        <el-timeline v-else class="activity-timeline-dialog">
+          <el-timeline-item
+            v-for="(activity, index) in allActivities"
+            :key="index"
+            :timestamp="activity.time"
+            :color="activity.color"
+            placement="top"
+          >
+            <div class="activity-content">
+              <el-icon :color="activity.color"><component :is="activity.icon" /></el-icon>
+              <span>{{ activity.content }}</span>
+            </div>
+          </el-timeline-item>
+        </el-timeline>
+      </div>
+      <template #footer>
+        <el-button @click="showActivitiesDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -443,7 +512,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import * as echarts from 'echarts';
 import { ElMessage } from 'element-plus';
-import { getDashboardStats, getTodoList, getRecentActivities, getKnowledgePointCoverage, getWeakKnowledgePoints, type DashboardStats, type ChartData, type TodoItem, type RecentActivity } from '@/api/dashboard';
+import { getDashboardStats, getTodoList, getRecentActivities, getKnowledgePointCoverage, getWeakKnowledgePoints, type DashboardStats, type ChartData, type TodoItem, type RecentActivity, type KnowledgePointCoverage } from '@/api/dashboard';
 import NotificationPreviewDialog from "@/components/notification/NotificationPreviewDialog.vue";
 import { fetchNotificationById, type Notification } from '@/api/notification';
 import { gsap } from "gsap";
@@ -463,6 +532,7 @@ import StatCardsSkeleton from '@/components/common/StatCardsSkeleton.vue';
 import { useDarkMode } from '@/composables/useDarkMode';
 import { useLayoutConfig, type DashboardModule } from '@/composables/useLayoutConfig';
 import LayoutSettingsDialog from '@/components/dashboard/LayoutSettingsDialog.vue';
+import VueDraggable from 'vuedraggable';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -484,6 +554,11 @@ const {
 } = useLayoutConfig();
 
 const showLayoutSettings = ref(false);
+
+// 更多活动对话框
+const showActivitiesDialog = ref(false);
+const activitiesDialogLoading = ref(false);
+const allActivities = ref<RecentActivity[]>([]);
 
 // 响应式数据
 const loading = ref(true);
@@ -520,6 +595,14 @@ const stats = ref<DashboardStats>({
   subjectStatsByGrade: { categories: [], series: [] }
 });
 const selectedMonth = ref(new Date());
+
+// 图表筛选状态
+const selectedSubjectsForKpChart = ref<string[]>([]);
+const availableSubjects = computed(() => stats.value.kpAndQuestionStats?.categories || []);
+
+const selectedSubjectsForCoverage = ref<string[]>([]);
+const kpCoverageRawData = ref<KnowledgePointCoverage[]>([]);
+const availableSubjectsForCoverage = computed(() => kpCoverageRawData.value.map(item => item.subject_name));
 
 // 快捷操作
 const quickActions = ref([
@@ -748,11 +831,156 @@ const handleApplyPreset = (presetName: string) => {
   applyPreset(presetName as any);
 };
 
+/**
+ * 可排序的模块列表（用于拖拽）
+ */
+const sortedModules = computed({
+  get: () => enabledModules.value,
+  set: (value) => {
+    updateModuleOrder(value);
+  }
+});
+
+/**
+ * 处理模块拖拽结束
+ */
+const handleDragEnd = () => {
+  // 拖拽结束后更新模块顺序
+  updateModuleOrder(sortedModules.value);
+  ElMessage.success('布局已更新，请点击"保存布局"以保存更改');
+};
+
+/**
+ * 更新知识点&题目统计图表（根据筛选）
+ */
+const updateKpAndQuestionChart = () => {
+  const fullCategories = stats.value.kpAndQuestionStats?.categories;
+  const fullSeries = stats.value.kpAndQuestionStats?.series;
+
+  // 如果没有数据，直接返回
+  if (!fullCategories || fullCategories.length === 0) return;
+
+  // 确定的目标科目列表
+  const targetSubjects = selectedSubjectsForKpChart.value.length > 0
+    ? selectedSubjectsForKpChart.value
+    : fullCategories; // 默认全部
+
+  // 找到对应的索引，以保持原始顺序
+  const indices = fullCategories
+    .map((cat, idx) => targetSubjects.includes(cat) ? idx : -1)
+    .filter(idx => idx !== -1);
+
+  const filteredCategories = indices.map(i => fullCategories[i]);
+  const filteredSeries = fullSeries.map(s => ({
+    ...s,
+    data: indices.map(i => s.data[i])
+  }));
+
+  initKpAndQuestionChart({ categories: filteredCategories, series: filteredSeries });
+};
+
+/**
+ * 更新知识点覆盖率图表（根据筛选）
+ */
+const updateKpCoverageChart = () => {
+  if (!kpCoverageRawData.value || kpCoverageChart.value === null) return;
+
+  const theme = getChartTheme();
+  if (!kpCoverageChartInstance) {
+    kpCoverageChartInstance = echarts.init(kpCoverageChart.value);
+  }
+
+  // 筛选数据
+  let filteredData = kpCoverageRawData.value;
+  if (selectedSubjectsForCoverage.value.length > 0) {
+    filteredData = filteredData.filter(item => selectedSubjectsForCoverage.value.includes(item.subject_name));
+  }
+
+  const chartData = filteredData.map((item: any) => ({
+    value: item.coverage_rate || 0,
+    name: item.subject_name
+  }));
+
+  const colors = ['#667eea', '#43e97b', '#4facfe', '#f093fb', '#fa709a'];
+  kpCoverageChartInstance.setOption({
+    backgroundColor: theme.backgroundColor,
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}: {c}%'
+    },
+    legend: {
+      orient: 'vertical',
+      left: 'left',
+      top: 'center',
+      icon: 'circle',
+      itemWidth: 8,
+      itemHeight: 8,
+      textStyle: { fontSize: 12, color: theme.textColor }
+    },
+    series: [{
+      name: '覆盖率',
+      type: 'pie',
+      radius: ['45%', '75%'],
+      center: ['60%', '50%'],
+      avoidLabelOverlap: false,
+      itemStyle: {
+        borderRadius: 8,
+        borderColor: theme.borderColor,
+        borderWidth: 2
+      },
+      label: {
+        show: true,
+        formatter: '{b}\n{c}%',
+        fontSize: 11,
+        color: theme.labelColor
+      },
+      emphasis: {
+        label: {
+          show: true,
+          fontSize: 14,
+          fontWeight: 'bold'
+        }
+      },
+      data: chartData.map((item: any, index: number) => ({
+        ...item,
+        itemStyle: { color: colors[index % colors.length] }
+      }))
+    }]
+  });
+};
+
+/**
+ * 显示更多活动
+ */
+const showMoreActivities = async () => {
+  showActivitiesDialog.value = true;
+  activitiesDialogLoading.value = true;
+
+  try {
+    // 加载更多活动，这里获取50条
+    const res = await getRecentActivities(50);
+    if (res.code === 200) {
+      allActivities.value = res.data.activities || [];
+    } else {
+      ElMessage.warning(res.message || '获取活动记录失败');
+    }
+  } catch (error: any) {
+    console.error('获取活动记录失败:', error);
+    ElMessage.error(error.message || '获取活动记录失败');
+  } finally {
+    activitiesDialogLoading.value = false;
+  }
+};
+
 // 初始化图表
 const initKpAndQuestionChart = (chartData: ChartData) => {
   if (kpAndQuestionChart.value && chartData?.series) {
     const theme = getChartTheme();
-    kpChartInstance = echarts.init(kpAndQuestionChart.value);
+    // 重用图表实例，避免重复初始化
+    if (!kpChartInstance) {
+      kpChartInstance = echarts.init(kpAndQuestionChart.value);
+    }
+
     kpChartInstance.setOption({
       backgroundColor: theme.backgroundColor,
       tooltip: {
@@ -777,7 +1005,12 @@ const initKpAndQuestionChart = (chartData: ChartData) => {
         data: chartData.categories,
         axisTick: { show: false },
         axisLine: { lineStyle: { color: theme.axisLineColor } },
-        axisLabel: { color: theme.labelColor, interval: 0, fontSize: 12 }
+        axisLabel: {
+          color: theme.labelColor,
+          interval: 0,
+          fontSize: 12,
+          rotate: chartData.categories.length > 6 ? 30 : 0  // 科目超过6个时旋转标签
+        }
       },
       yAxis: {
         type: 'value',
@@ -804,7 +1037,7 @@ const initKpAndQuestionChart = (chartData: ChartData) => {
         },
         animationDelay: (idx: number) => idx * 50
       }))
-    });
+    }, true);  // 使用 true 覆盖之前的配置，防止残留数据
   }
 };
 
@@ -911,65 +1144,22 @@ const initSubjectStatsChart = (chartData: ChartData) => {
   }
 };
 
-// 【知识点功能增强】初始化知识点覆盖率图表
-const initKpCoverageChart = async () => {
+// 【知识点功能增强】加载并初始化知识点覆盖率图表
+const loadAndInitKpCoverageChart = async () => {
   try {
     const res = await getKnowledgePointCoverage();
-    if (res.code === 200 && res.data && kpCoverageChart.value) {
-      const theme = getChartTheme();
-      kpCoverageChartInstance = echarts.init(kpCoverageChart.value);
+    if (res.code === 200 && res.data) {
+      kpCoverageRawData.value = res.data;
 
-      const chartData = res.data.map((item: any) => ({
-        value: item.coverage_rate || 0,
-        name: item.subject_name
-      }));
+      // 【新增】默认只显示前5个科目，避免图表过于拥挤
+      const allSubjects = res.data.map((item: KnowledgePointCoverage) => item.subject_name);
+      if (allSubjects.length > 5) {
+        selectedSubjectsForCoverage.value = allSubjects.slice(0, 5);
+      } else {
+        selectedSubjectsForCoverage.value = []; // 5个以内全部显示
+      }
 
-      const colors = ['#667eea', '#43e97b', '#4facfe', '#f093fb', '#fa709a'];
-      kpCoverageChartInstance.setOption({
-        backgroundColor: theme.backgroundColor,
-        tooltip: {
-          trigger: 'item',
-          formatter: '{b}: {c}%'
-        },
-        legend: {
-          orient: 'vertical',
-          left: 'left',
-          top: 'center',
-          icon: 'circle',
-          itemWidth: 8,
-          itemHeight: 8,
-          textStyle: { fontSize: 12, color: theme.textColor }
-        },
-        series: [{
-          name: '覆盖率',
-          type: 'pie',
-          radius: ['45%', '75%'],
-          center: ['60%', '50%'],
-          avoidLabelOverlap: false,
-          itemStyle: {
-            borderRadius: 8,
-            borderColor: theme.borderColor,
-            borderWidth: 2
-          },
-          label: {
-            show: true,
-            formatter: '{b}\n{c}%',
-            fontSize: 11,
-            color: theme.labelColor
-          },
-          emphasis: {
-            label: {
-              show: true,
-              fontSize: 14,
-              fontWeight: 'bold'
-            }
-          },
-          data: chartData.map((item: any, index: number) => ({
-            ...item,
-            itemStyle: { color: colors[index % colors.length] }
-          }))
-        }]
-      });
+      updateKpCoverageChart();
     }
   } catch (error) {
     console.error('获取知识点覆盖率失败:', error);
@@ -1064,13 +1254,21 @@ const fetchData = async () => {
         statCards.value[5].trend = stats.value.trends.paperCountTrend;
       }
 
+      // 【新增】初始化科目筛选：默认选中前7个科目，避免初始加载时文字重叠
+      const allCats = stats.value.kpAndQuestionStats?.categories || [];
+      if (allCats.length > 7) {
+        selectedSubjectsForKpChart.value = allCats.slice(0, 7);
+      } else {
+        selectedSubjectsForKpChart.value = []; // 空数组表示全选
+      }
+
       // 延迟初始化图表，确保DOM已渲染
       setTimeout(() => {
-        initKpAndQuestionChart(stats.value.kpAndQuestionStats);
+        updateKpAndQuestionChart();
         initSubjectStatsChart(stats.value.subjectStatsByGrade);
         initWrongStatsChart(stats.value.wrongQuestionStats);
         // 【知识点功能增强】初始化知识点统计图表
-        initKpCoverageChart();
+        loadAndInitKpCoverageChart();
         initWeakKpChart();
         chartLoading.value = false;
       }, 100);
@@ -1183,9 +1381,7 @@ onMounted(async () => {
 
 // 监听深色模式变化，重新渲染图表
 watch(isDark, () => {
-  if (stats.value.kpAndQuestionStats?.series?.length) {
-    initKpAndQuestionChart(stats.value.kpAndQuestionStats);
-  }
+  updateKpAndQuestionChart();
   if (stats.value.wrongQuestionStats?.series?.length) {
     initWrongStatsChart(stats.value.wrongQuestionStats);
   }
@@ -1193,7 +1389,7 @@ watch(isDark, () => {
     initSubjectStatsChart(stats.value.subjectStatsByGrade);
   }
   // 【知识点功能增强】重新渲染知识点统计图表
-  initKpCoverageChart();
+  updateKpCoverageChart();
   initWeakKpChart();
 });
 
@@ -1522,6 +1718,13 @@ onUnmounted(() => {
   overflow-y: auto;
 }
 
+/* 最近活动卡片 */
+.activity-card :deep(.el-card__body) {
+  padding: 0;
+  height: 280px;
+  overflow-y: auto;
+}
+
 .notification-list {
   padding: 12px;
 }
@@ -1626,7 +1829,26 @@ onUnmounted(() => {
 
 /* 最近活动 */
 .activity-timeline {
-  padding: 20px;
+  padding: 12px;
+}
+
+.activity-timeline-dialog {
+  padding: 10px 20px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.activity-timeline-dialog::-webkit-scrollbar {
+  width: 6px;
+}
+
+.activity-timeline-dialog::-webkit-scrollbar-thumb {
+  background: #dcdfe6;
+  border-radius: 3px;
+}
+
+.activity-timeline-dialog::-webkit-scrollbar-thumb:hover {
+  background: #c0c4cc;
 }
 
 .activity-content {
@@ -1682,6 +1904,22 @@ onUnmounted(() => {
 }
 
 /* ==================== 布局编辑模式样式 ==================== */
+.draggable-container {
+  width: 100%;
+}
+
+.draggable-item {
+  width: 100%;
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+}
+
+.ghost-module {
+  opacity: 0.5;
+  background: rgba(64, 158, 255, 0.1);
+  border: 2px dashed #409EFF !important;
+}
+
 .module-row {
   margin-bottom: 0 !important;
 }
@@ -1725,11 +1963,27 @@ onUnmounted(() => {
 .drag-handle {
   cursor: move;
   font-size: 18px;
-  transition: transform 0.2s ease;
+  transition: all 0.2s ease;
+  opacity: 0.7;
 }
 
 .drag-handle:hover {
   transform: scale(1.2);
+  opacity: 1;
+  color: #66b1ff;
+}
+
+.module-wrapper.edit-mode .drag-handle {
+  animation: pulse-drag 2s infinite;
+}
+
+@keyframes pulse-drag {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .module-title {
