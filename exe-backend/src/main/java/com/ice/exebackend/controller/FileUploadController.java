@@ -110,33 +110,57 @@ public class FileUploadController {
         return false;
     }
 
+    /**
+     * 文件下载接口 - 安全加固版
+     * 防止路径遍历攻击（如 ../../etc/passwd）
+     */
     @GetMapping("/{filename:.+}")
     public ResponseEntity<Resource> serveFile(@PathVariable String filename) {
-        // ... (保持原有的下载逻辑不变，它已经是比较安全的) ...
         try {
-            Path file = Paths.get(uploadDir).resolve(filename);
+            // 1. 文件名安全验证 - 仅允许UUID格式的文件名
+            if (!filename.matches("^[a-f0-9\\-]{36}\\.[a-z0-9]{2,5}$")) {
+                logger.warn("非法文件名访问尝试: {}", filename);
+                return ResponseEntity.badRequest().build();
+            }
+
+            // 2. 获取规范化的上传目录路径
+            Path uploadPath = Paths.get(uploadDir).toRealPath();
+
+            // 3. 解析请求的文件路径
+            Path file = uploadPath.resolve(filename).normalize();
+
+            // 4. 路径验证 - 确保文件在上传目录内（防止路径遍历）
+            if (!file.startsWith(uploadPath)) {
+                logger.warn("路径遍历攻击尝试: {}", filename);
+                return ResponseEntity.status(403).build();
+            }
+
+            // 5. 加载文件资源
             Resource resource = new UrlResource(file.toUri());
 
-            if (resource.exists() || resource.isReadable()) {
-                String contentType = null;
-                try {
-                    contentType = Files.probeContentType(file);
-                } catch (IOException e) {
-                    // ignore
-                }
-                if(contentType == null) {
+            if (resource.exists() && resource.isReadable()) {
+                // 6. 获取Content-Type
+                String contentType = Files.probeContentType(file);
+                if (contentType == null) {
                     contentType = "application/octet-stream";
                 }
 
+                // 7. 返回文件
                 return ResponseEntity.ok()
                         .header(HttpHeaders.CONTENT_TYPE, contentType)
-                        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
+                        .header(HttpHeaders.CONTENT_DISPOSITION,
+                                "inline; filename=\"" + resource.getFilename() + "\"")
                         .body(resource);
             } else {
-                throw new RuntimeException("无法读取文件!");
+                return ResponseEntity.notFound().build();
             }
+
+        } catch (IOException e) {
+            logger.error("文件访问错误: {}", filename, e);
+            return ResponseEntity.status(500).build();
         } catch (Exception e) {
-            throw new RuntimeException("无法读取文件!", e);
+            logger.error("文件服务异常: {}", filename, e);
+            return ResponseEntity.status(500).build();
         }
     }
 }

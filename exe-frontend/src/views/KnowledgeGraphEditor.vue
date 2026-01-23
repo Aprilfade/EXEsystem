@@ -1,5 +1,22 @@
 <template>
   <div class="graph-container">
+    <!-- 页面头部 -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="header-icon">
+          <el-icon :size="28"><Share /></el-icon>
+        </div>
+        <div>
+          <h2>知识图谱编辑器</h2>
+          <p>可视化知识点关联关系，构建完整知识体系</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <el-button icon="Refresh" @click="handleRefresh" :loading="loading">刷新</el-button>
+        <el-button icon="Download" type="primary" plain @click="handleExport">导出图谱</el-button>
+      </div>
+    </div>
+
     <div class="toolbar">
       <el-select v-model="subjectId" placeholder="选择科目" @change="loadGraph" style="width: 200px;" size="large">
         <template #prefix><el-icon><Collection /></el-icon></template>
@@ -11,6 +28,54 @@
         </el-tag>
       </div>
     </div>
+
+    <!-- 统计卡片 -->
+    <el-row :gutter="20" class="stats-row">
+      <el-col :span="6">
+        <div class="stat-card stat-nodes">
+          <div class="stat-icon">
+            <el-icon :size="32"><Grid /></el-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">知识点数量</div>
+            <div class="stat-value">{{ nodes.length }}</div>
+          </div>
+        </div>
+      </el-col>
+      <el-col :span="6">
+        <div class="stat-card stat-links">
+          <div class="stat-icon">
+            <el-icon :size="32"><Connection /></el-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">关联数量</div>
+            <div class="stat-value">{{ links.length }}</div>
+          </div>
+        </div>
+      </el-col>
+      <el-col :span="6">
+        <div class="stat-card stat-core">
+          <div class="stat-icon">
+            <el-icon :size="32"><Star /></el-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">核心节点</div>
+            <div class="stat-value">{{ coreNodeCount }}</div>
+          </div>
+        </div>
+      </el-col>
+      <el-col :span="6">
+        <div class="stat-card stat-subject">
+          <div class="stat-icon">
+            <el-icon :size="32"><Collection /></el-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">当前科目</div>
+            <div class="stat-value">{{ currentSubjectName }}</div>
+          </div>
+        </div>
+      </el-col>
+    </el-row>
 
     <div class="main-area">
       <div ref="chartRef" class="chart-box"></div>
@@ -30,7 +95,7 @@
           </el-form-item>
           <div class="btn-group">
             <el-button type="primary" @click="submitRelation" icon="Link" style="flex: 1;">建立关联</el-button>
-            <el-button type="danger" plain @click="handleRemoveRelation" icon="Unlink" style="flex: 1;">断开</el-button>
+            <el-button type="danger" plain @click="handleRemoveRelation" icon="Link" style="flex: 1;">断开</el-button>
           </div>
         </el-form>
       </div>
@@ -39,13 +104,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, nextTick } from 'vue';
+import { ref, onMounted, reactive, nextTick, computed } from 'vue';
 import * as echarts from 'echarts';
 import { fetchAllSubjects } from '@/api/subject';
 import { fetchKnowledgeGraph, addKpRelation, removeKpRelation } from '@/api/knowledgePoint';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Collection, InfoFilled, Link, Unlink } from '@element-plus/icons-vue';
+import { Collection, InfoFilled, Link, Share, Grid, Connection, Star, Refresh, Download } from '@element-plus/icons-vue';
 
+const loading = ref(false);
 const chartRef = ref<HTMLElement>();
 let myChart: echarts.ECharts | null = null;
 
@@ -56,6 +122,16 @@ const links = ref<any[]>([]);
 
 const form = reactive({ parentId: undefined as number | undefined, childId: undefined as number | undefined });
 
+// 计算属性
+const coreNodeCount = computed(() => {
+  return nodes.value.filter(n => n.degree > 4).length;
+});
+
+const currentSubjectName = computed(() => {
+  const subject = subjects.value.find(s => s.id === subjectId.value);
+  return subject ? subject.name : '未选择';
+});
+
 // 炫酷的配色方案
 const colors = [
   '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'
@@ -63,13 +139,20 @@ const colors = [
 
 const loadGraph = async () => {
   if (!subjectId.value) return;
-  const res = await fetchKnowledgeGraph(subjectId.value);
-  if (res.code === 200) {
-    // 对数据进行预处理，计算权重和类别
-    const { processedNodes, processedLinks, categories } = processData(res.data.nodes, res.data.links);
-    nodes.value = processedNodes;
-    links.value = processedLinks;
-    renderChart(categories);
+  loading.value = true;
+  try {
+    const res = await fetchKnowledgeGraph(subjectId.value);
+    if (res.code === 200) {
+      // 对数据进行预处理，计算权重和类别
+      const { processedNodes, processedLinks, categories } = processData(res.data.nodes, res.data.links);
+      nodes.value = processedNodes;
+      links.value = processedLinks;
+      renderChart(categories);
+    }
+  } catch (error) {
+    ElMessage.error('加载知识图谱失败');
+  } finally {
+    loading.value = false;
   }
 };
 
@@ -268,6 +351,19 @@ const handleRemoveRelation = async () => {
   } catch (e) { }
 };
 
+const handleRefresh = () => {
+  if (subjectId.value) {
+    loadGraph();
+    ElMessage.success('刷新成功');
+  } else {
+    ElMessage.warning('请先选择科目');
+  }
+};
+
+const handleExport = () => {
+  ElMessage.info('导出功能开发中...');
+};
+
 onMounted(async () => {
   const res = await fetchAllSubjects();
   subjects.value = res.data;
@@ -275,12 +371,61 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 页面容器 */
 .graph-container {
-  padding: 20px;
+  padding: 24px;
   height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); /* 添加一个微妙的渐变背景 */
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+/* 页面头部 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.page-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: #303133;
+}
+
+.page-header p {
+  color: #909399;
+  font-size: 14px;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .toolbar {
@@ -296,6 +441,96 @@ onMounted(async () => {
 }
 .tips {
   margin-left: 20px;
+}
+
+/* 统计卡片 */
+.stats-row {
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.stat-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: bold;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* 统计卡片颜色 */
+.stat-nodes::before { background: linear-gradient(90deg, #409eff 0%, #66b1ff 100%); }
+.stat-nodes .stat-icon {
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.1) 0%, rgba(102, 177, 255, 0.1) 100%);
+  color: #409eff;
+}
+.stat-nodes .stat-value { color: #409eff; }
+
+.stat-links::before { background: linear-gradient(90deg, #67c23a 0%, #85ce61 100%); }
+.stat-links .stat-icon {
+  background: linear-gradient(135deg, rgba(103, 194, 58, 0.1) 0%, rgba(133, 206, 97, 0.1) 100%);
+  color: #67c23a;
+}
+.stat-links .stat-value { color: #67c23a; }
+
+.stat-core::before { background: linear-gradient(90deg, #e6a23c 0%, #ebb563 100%); }
+.stat-core .stat-icon {
+  background: linear-gradient(135deg, rgba(230, 162, 60, 0.1) 0%, rgba(235, 181, 99, 0.1) 100%);
+  color: #e6a23c;
+}
+.stat-core .stat-value { color: #e6a23c; }
+
+.stat-subject::before { background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); }
+.stat-subject .stat-icon {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  color: #667eea;
+}
+.stat-subject .stat-value {
+  color: #667eea;
+  font-size: 18px;
 }
 
 .main-area {
@@ -349,5 +584,48 @@ onMounted(async () => {
   display: flex;
   gap: 10px;
   margin-top: 20px;
+}
+
+/* 响应式设计 */
+@media (max-width: 1400px) {
+  .stats-row .el-col {
+    margin-bottom: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .graph-container {
+    padding: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .stat-card {
+    padding: 16px;
+  }
+
+  .stat-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .stat-value {
+    font-size: 24px;
+  }
+
+  .edit-panel {
+    position: static;
+    width: 100%;
+    margin-top: 20px;
+  }
 }
 </style>

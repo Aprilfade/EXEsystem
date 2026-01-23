@@ -123,10 +123,14 @@ public class BattleGameManager {
         // 1.3 存入 Redis 队列 (仅存 UserId，不存 Session 对象)
         // 使用 List: LPUSH
         redisTemplate.opsForList().leftPush(QUEUE_PREFIX + tier, userId);
+
+        // 1.4 记录加入时间，用于超时判断
+        redisTemplate.opsForValue().set("battle:wait_time:" + userId,
+            String.valueOf(System.currentTimeMillis()), 30, TimeUnit.SECONDS);
     }
 
     /**
-     * 核心轮询匹配逻辑 (之前代码中缺失)
+     * 核心轮询匹配逻辑 (支持人机匹配)
      */
     private void processMatchMaking() {
         // 简单匹配逻辑：遍历每个段位的队列，尝试两两匹配
@@ -139,11 +143,27 @@ public class BattleGameManager {
                 if (p2Id != null) {
                     // 匹配成功 -> 创建分布式房间
                     createRoomDistributed(p1Id, p2Id);
+                    // 清理等待时间记录
+                    redisTemplate.delete("battle:wait_time:" + p1Id);
+                    redisTemplate.delete("battle:wait_time:" + p2Id);
                 } else {
-                    // 没有对手，放回队列头部等待 (或者安排机器人)
-                    redisTemplate.opsForList().rightPush(QUEUE_PREFIX + tier, p1Id);
-
-                    // TODO: 这里可以判断等待时间，如果太久则触发 createBotMatch
+                    // 没有对手，检查等待时间
+                    String waitTimeStr = redisTemplate.opsForValue().get("battle:wait_time:" + p1Id);
+                    if (waitTimeStr != null) {
+                        long waitTime = System.currentTimeMillis() - Long.parseLong(waitTimeStr);
+                        // 如果等待超过5秒，匹配人机
+                        if (waitTime > 5000) {
+                            logger.info("玩家 {} 等待超时，创建人机对战", p1Id);
+                            createBotMatchDistributed(p1Id);
+                            redisTemplate.delete("battle:wait_time:" + p1Id);
+                        } else {
+                            // 放回队列继续等待
+                            redisTemplate.opsForList().rightPush(QUEUE_PREFIX + tier, p1Id);
+                        }
+                    } else {
+                        // 没有等待时间记录，直接放回
+                        redisTemplate.opsForList().rightPush(QUEUE_PREFIX + tier, p1Id);
+                    }
                 }
             }
         }
@@ -187,6 +207,60 @@ public class BattleGameManager {
 
         String json = toJson(pubMsg);
         redisTemplate.convertAndSend(CHANNEL_NAME, json);
+    }
+
+    /**
+     * 创建人机对战 (基于Redis userId)
+     */
+    private void createBotMatchDistributed(String userId) {
+        try {
+            // 从本地session映射获取session
+            WebSocketSession session = BattleMessageSubscriber.LOCAL_SESSION_MAP.get(userId);
+            if (session == null) {
+                logger.warn("无法找到玩家session: {}", userId);
+                return;
+            }
+
+            BizStudent student = getStudentBySession(session);
+            if (student == null) {
+                logger.warn("无法找到玩家信息: {}", userId);
+                return;
+            }
+
+            // 创建机器人玩家
+            BizStudent botStudent = new BizStudent();
+            botStudent.setId(-1L);
+            botStudent.setName("AI 智能助教");
+            botStudent.setAvatar("https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png");
+            botStudent.setPoints(new Random().nextInt(200) + 500);
+
+            // 创建房间
+            String roomId = UUID.randomUUID().toString();
+            List<BizQuestion> questions = questionService.list(
+                    new QueryWrapper<BizQuestion>()
+                            .eq("question_type", 1)
+                            .last("ORDER BY RAND() LIMIT 5")
+            );
+
+            BattleRoom room = new BattleRoom(roomId, session, null, questions);
+            room.isBotGame = true;
+
+            rooms.put(roomId, room);
+            playerRoomMap.put(session.getId(), roomId);
+
+            // 发送匹配成功消息
+            sendMatchSuccess(session, botStudent);
+
+            // 1秒后开始游戏
+            scheduler.schedule(() -> {
+                sendQuestion(room);
+                startRoundTimer(room);
+            }, 1, TimeUnit.SECONDS);
+
+            logger.info("成功为玩家 {} 创建人机对战", userId);
+        } catch (Exception e) {
+            logger.error("创建人机对战失败: userId={}", userId, e);
+        }
     }
 
     /**

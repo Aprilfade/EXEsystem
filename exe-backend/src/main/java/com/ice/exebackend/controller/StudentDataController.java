@@ -325,12 +325,23 @@ public class StudentDataController {
             answerResults.add(answerResult);
         }
 
-        BizLearningActivity log = new BizLearningActivity();
-        log.setStudentId(student.getId());
-        log.setActivityType("PRACTICE_SUBMIT");
-        log.setDescription("完成了在线练习，共" + questionIds.size() + "道题，答对" + correctCount + "题");
-        log.setCreateTime(LocalDateTime.now());
-        learningActivityService.save(log);
+        // 记录学习活动（使用新的recordActivity方法）
+        Integer practiceDuration = submission.getDuration() != null ? submission.getDuration() : 600; // 默认10分钟
+        Long subjectId = null;
+
+        // 从第一道题目获取科目ID
+        if (!answerResults.isEmpty() && answerResults.get(0).getQuestion() != null) {
+            subjectId = answerResults.get(0).getQuestion().getSubjectId();
+        }
+
+        learningActivityService.recordActivity(
+            student.getId(),
+            "PRACTICE_SUBMIT",
+            practiceDuration,
+            subjectId,
+            null, // 练习没有关联业务ID
+            "完成了在线练习，共" + questionIds.size() + "道题，答对" + correctCount + "题"
+        );
 
         // 【修改】删除增加修为和灵根经验的逻辑
         // int expGain = 10 + (correctCount * 10);
@@ -641,12 +652,16 @@ public class StudentDataController {
         //     }
         // }
 
-        BizLearningActivity activity = new BizLearningActivity();
-        activity.setStudentId(student.getId());
-        activity.setActivityType("EXAM");
-        activity.setDescription("参加了模拟考试《" + paper.getName() + "》，得分：" + studentScore + "/" + totalScore);
-        activity.setCreateTime(LocalDateTime.now());
-        learningActivityService.save(activity);
+        // 记录学习活动（使用新的recordActivity方法）
+        Integer examDuration = submission.getDuration() != null ? submission.getDuration() : 1800; // 默认30分钟
+        learningActivityService.recordActivity(
+            student.getId(),
+            "EXAM",
+            examDuration,
+            paper.getSubjectId(),
+            examResult.getId(),
+            "参加了模拟考试《" + paper.getName() + "》，得分：" + studentScore + "/" + totalScore
+        );
 
         student.setPoints((student.getPoints() == null ? 0 : student.getPoints()) + 10);
         studentService.updateById(student);

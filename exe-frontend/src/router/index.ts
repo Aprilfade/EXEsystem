@@ -228,6 +228,27 @@ const routes: Array<RouteRecordRaw> = [
                 name: 'StudentKnowledgeGraph',
                 component: () => import('@/views/student/KnowledgeGraph.vue'),
                 meta: { title: '知识图谱' }
+            },
+            // 学生通知中心
+            {
+                path: 'notifications',
+                name: 'StudentNotifications',
+                component: () => import('@/views/student/Notifications.vue'),
+                meta: { title: '我的通知' }
+            },
+            // 学习时长统计
+            {
+                path: 'study-time',
+                name: 'StudentStudyTime',
+                component: () => import('@/views/student/StudyTime.vue'),
+                meta: { title: '学习时长' }
+            },
+            // 成就系统
+            {
+                path: 'achievements',
+                name: 'StudentAchievements',
+                component: () => import('@/views/student/Achievements.vue'),
+                meta: { title: '我的成就' }
             }
         ]
     }

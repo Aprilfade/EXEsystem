@@ -46,12 +46,28 @@ spring:
       # Redis 地址也应该可配
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD} # 如果 Redis 有密码
+      password: ${REDIS_PASSWORD:}  # 如果 Redis 有密码，为空则无密码
+      # 连接超时时间（毫秒）
+      timeout: 3000
+      # 数据库索引（默认0）
+      database: ${REDIS_DATABASE:0}
       lettuce:
         pool:
-          max-active: 100
-          max-idle: 20
-          min-idle: 5
+          # 最大连接数（生产环境根据并发量调整）
+          max-active: 200
+          # 最大空闲连接（建议设置为max-active的1/4到1/2）
+          max-idle: 50
+          # 最小空闲连接（保持一定数量的热连接）
+          min-idle: 10
+          # 连接池最大阻塞等待时间（毫秒）
+          max-wait: 5000
+        # 关闭超时时间（毫秒）
+        shutdown-timeout: 100
+        # 集群配置（如果使用Redis Cluster）
+        # cluster:
+        #   refresh:
+        #     adaptive: true
+        #     period: 60000
 
 jwt:
   # 【核心】生产环境必须注入高强度密钥

@@ -41,4 +41,12 @@ public interface BizQuestionService extends IService<BizQuestion> {
     List<QuestionExcelDTO> getQuestionsForExport(QuestionPageParams params);
     // 【新增】批量更新试题的科目和年级
     boolean batchUpdateQuestions(QuestionBatchUpdateDTO dto);
+
+    /**
+     * 【新增 - 安全修复】删除试题及其关联数据（级联删除）
+     * @param questionId 试题ID
+     * @return 是否删除成功
+     * @throws RuntimeException 如果试题被试卷使用则抛出异常
+     */
+    boolean deleteQuestionWithCascade(Long questionId);
 }

@@ -115,3 +115,13 @@ export function updateMyProfile(data: Partial<UserInfo>): Promise<ApiResult<null
         data: data
     });
 }
+
+/**
+ * @description 获取当前登录用户信息
+ */
+export function getUserInfo(): Promise<ApiResult<UserInfo>> {
+    return request({
+        url: '/api/v1/users/me',
+        method: 'get'
+    });
+}

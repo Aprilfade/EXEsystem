@@ -12,7 +12,105 @@
         />
         <div class="welcome-text">
           <h2>{{ welcomeMessage }}，{{ studentAuth.studentName }} 同学！</h2>
-          <p>“学而不思则罔，思而不学则殆。” 坚持学习，不断进步！</p>
+          <p>"学而不思则罔，思而不学则殆。" 坚持学习，不断进步！</p>
+        </div>
+      </div>
+    </el-card>
+
+    <!-- 快捷入口 - 移到顶部 -->
+    <el-card shadow="never" class="quick-access-card">
+      <template #header>
+        <div class="card-header quick-access-header">
+          <div class="header-left">
+            <div class="header-icon-bg">
+              <el-icon><Operation /></el-icon>
+            </div>
+            <div class="header-text">
+              <h3>快捷入口</h3>
+              <p>快速访问常用功能</p>
+            </div>
+          </div>
+        </div>
+      </template>
+      <div class="quick-access-grid">
+        <div class="access-item item-blue" @click="navigateTo('/student/practice')">
+          <div class="item-bg-decoration"></div>
+          <div class="icon-wrapper">
+            <el-icon><EditPen /></el-icon>
+          </div>
+          <span class="title">开始练习</span>
+          <span class="desc">随机刷题 / 智能推题</span>
+          <div class="hover-indicator"></div>
+        </div>
+
+        <div class="access-item item-red" @click="navigateTo('/student/wrong-records')">
+          <div class="item-bg-decoration"></div>
+          <div class="icon-wrapper">
+            <el-icon><Memo /></el-icon>
+          </div>
+          <span class="title">我的错题本</span>
+          <span class="desc">温故知新 / 举一反三</span>
+          <div class="hover-indicator"></div>
+        </div>
+
+        <div class="access-item item-green" @click="navigateTo('/student/review')">
+          <div class="item-bg-decoration"></div>
+          <div class="icon-wrapper">
+            <el-icon><AlarmClock /></el-icon>
+          </div>
+          <span class="title">智能复习</span>
+          <span class="desc">基于遗忘曲线 / 科学记忆</span>
+          <div class="hover-indicator"></div>
+        </div>
+
+        <div class="access-item item-purple" @click="navigateTo('/student/exams')">
+          <div class="item-bg-decoration"></div>
+          <div class="icon-wrapper">
+            <el-icon><DataLine /></el-icon>
+          </div>
+          <span class="title">模拟考试</span>
+          <span class="desc">全真模拟 / 实战演练</span>
+          <div class="hover-indicator"></div>
+        </div>
+
+        <div class="access-item item-orange" @click="navigateTo('/student/history')">
+          <div class="item-bg-decoration"></div>
+          <div class="icon-wrapper">
+            <el-icon><Finished /></el-icon>
+          </div>
+          <span class="title">考试记录</span>
+          <span class="desc">查看过往成绩详情</span>
+          <div class="hover-indicator"></div>
+        </div>
+
+        <div class="access-item item-teal" @click="navigateTo('/student/favorites')">
+          <div class="item-bg-decoration"></div>
+          <div class="icon-wrapper">
+            <el-icon><Star /></el-icon>
+          </div>
+          <span class="title">我的收藏</span>
+          <span class="desc">重点难题一键回顾</span>
+          <div class="hover-indicator"></div>
+        </div>
+
+        <div class="access-item item-indigo" @click="navigateTo('/student/battle')">
+          <div class="item-bg-decoration"></div>
+          <div class="icon-wrapper">
+            <el-icon><Lightning /></el-icon>
+          </div>
+          <span class="title">知识对战</span>
+          <span class="desc">1V1 实时竞技 PK</span>
+          <div class="hover-indicator"></div>
+        </div>
+
+        <div class="access-item item-gold" @click="isMallVisible = true">
+          <div class="item-bg-decoration"></div>
+          <div class="icon-wrapper">
+            <el-icon><Present /></el-icon>
+          </div>
+          <span class="title">积分商城</span>
+          <span class="desc">兑换专属奖励</span>
+          <div class="hover-indicator"></div>
         </div>
       </div>
     </el-card>
@@ -154,86 +252,10 @@
     </el-row>
 
     <el-row :gutter="20">
-      <el-col :span="16">
-        <el-card shadow="never">
-          <template #header>
-            <div class="card-header">
-              <span>快捷入口</span>
-            </div>
-          </template>
-          <div class="quick-access-grid">
-            <div class="access-item item-blue" @click="navigateTo('/student/practice')">
-              <div class="icon-wrapper">
-                <el-icon><EditPen /></el-icon>
-              </div>
-              <span class="title">开始练习</span>
-              <span class="desc">随机刷题 / 智能推题</span>
-            </div>
-
-            <div class="access-item item-red" @click="navigateTo('/student/wrong-records')">
-              <div class="icon-wrapper">
-                <el-icon><Memo /></el-icon>
-              </div>
-              <span class="title">我的错题本</span>
-              <span class="desc">温故知新 / 举一反三</span>
-            </div>
-
-            <div class="access-item item-green" @click="navigateTo('/student/review')">
-              <div class="icon-wrapper">
-                <el-icon><AlarmClock /></el-icon>
-              </div>
-              <span class="title">智能复习</span>
-              <span class="desc">基于遗忘曲线 / 科学记忆</span>
-            </div>
-
-            <div class="access-item item-purple" @click="navigateTo('/student/exams')">
-              <div class="icon-wrapper">
-                <el-icon><DataLine /></el-icon>
-              </div>
-              <span class="title">模拟考试</span>
-              <span class="desc">全真模拟 / 实战演练</span>
-            </div>
-
-            <div class="access-item item-orange" @click="navigateTo('/student/history')">
-              <div class="icon-wrapper">
-                <el-icon><Finished /></el-icon>
-              </div>
-              <span class="title">考试记录</span>
-              <span class="desc">查看过往成绩详情</span>
-            </div>
-
-            <div class="access-item item-green" @click="navigateTo('/student/favorites')">
-              <div class="icon-wrapper">
-                <el-icon><Star /></el-icon>
-              </div>
-              <span class="title">我的收藏</span>
-              <span class="desc">重点难题一键回顾</span>
-            </div>
-
-
-            <div class="access-item item-purple" @click="navigateTo('/student/battle')">
-              <div class="icon-wrapper">
-                <el-icon><Lightning /></el-icon>
-              </div>
-              <span class="title">知识对战</span>
-              <span class="desc">1V1 实时竞技 PK</span>
-            </div>
-
-            <div class="access-item item-gold" @click="isMallVisible = true">
-              <div class="icon-wrapper">
-                <el-icon><Present /></el-icon>
-              </div>
-              <span class="title">积分商城</span>
-              <span class="desc">兑换专属奖励</span>
-            </div>
-
-
-            <points-mall-dialog v-model:visible="isMallVisible" />
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="8">
+      <el-col :span="24">
         <SignInCalendar style="margin-bottom: 20px;" />
+      </el-col>
+      <el-col :span="24">
         <el-card shadow="never">
           <template #header>
             <div class="card-header">
@@ -249,6 +271,9 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- 积分商城对话框 -->
+    <points-mall-dialog v-model:visible="isMallVisible" />
   </div>
 </template>
 
@@ -435,83 +460,339 @@ onMounted(async () => {
 .rank-info .name { font-size: 14px; font-weight: 600; }
 .rank-info .grade { font-size: 12px; color: #999; }
 .rank-score { font-weight: bold; color: #f56c6c; }
-/* --- 快捷入口样式优化 --- */
-.quick-access-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr); /* 改为5列，容纳所有入口 */
-  gap: 20px;
-  margin-top: 10px;
+/* === 快捷入口卡片样式 === */
+.quick-access-card {
+  margin-bottom: 20px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border: 1px solid #e8ecf4;
 }
 
+.quick-access-card :deep(.el-card__header) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-bottom: none;
+  padding: 20px 24px;
+}
+
+.quick-access-header {
+  color: white;
+}
+
+.quick-access-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.quick-access-header .header-icon-bg {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.quick-access-header .header-text h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+}
+
+.quick-access-header .header-text p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* --- 快捷入口网格样式 --- */
+.quick-access-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  padding: 4px;
+}
+
+/* 响应式布局 */
+@media (max-width: 1200px) {
+  .quick-access-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .quick-access-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+}
+
+/* 快捷入口卡片项 */
 .access-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #f0f2f5;
-  border-radius: 12px;
-  padding: 24px 10px;
+  background: white;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  padding: 28px 16px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* 背景装饰元素 */
+.item-bg-decoration {
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  opacity: 0;
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+/* 悬停指示器 */
+.hover-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) scaleX(0);
+  width: 60%;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .access-item:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
-  border-color: transparent;
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+.access-item:hover .item-bg-decoration {
+  opacity: 0.08;
+  transform: rotate(45deg);
+}
+
+.access-item:hover .hover-indicator {
+  transform: translateX(-50%) scaleX(1);
+}
+
+.access-item:active {
+  transform: translateY(-6px) scale(1.01);
 }
 
 /* 图标容器 */
 .icon-wrapper {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 12px;
-  font-size: 28px;
-  transition: all 0.3s;
+  margin-bottom: 16px;
+  font-size: 32px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  position: relative;
+  z-index: 1;
+}
+
+.access-item:hover .icon-wrapper {
+  transform: rotateY(360deg) scale(1.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 .title {
   font-size: 16px;
   font-weight: 600;
   color: #303133;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 1;
 }
 
 .desc {
   font-size: 12px;
   color: #909399;
+  text-align: center;
+  line-height: 1.5;
+  position: relative;
+  z-index: 1;
 }
 
-/* 各个卡片的配色方案 */
-/* 蓝色 */
-.item-blue .icon-wrapper { background: #e8f3ff; color: #409eff; }
-.item-blue:hover .icon-wrapper { background: #409eff; color: #fff; }
+/* === 各个卡片的配色方案 === */
 
-/* 红色 */
-.item-red .icon-wrapper { background: #fde2e2; color: #f56c6c; }
-.item-red:hover .icon-wrapper { background: #f56c6c; color: #fff; }
+/* 蓝色 - 开始练习 */
+.item-blue .icon-wrapper {
+  background: linear-gradient(135deg, #e8f3ff 0%, #d4e8ff 100%);
+  color: #409eff;
+}
+.item-blue:hover {
+  border-color: #409eff;
+  background: linear-gradient(135deg, #f0f7ff 0%, #e8f3ff 100%);
+}
+.item-blue:hover .icon-wrapper {
+  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
+  color: white;
+}
+.item-blue .item-bg-decoration {
+  background: radial-gradient(circle, #409eff 0%, transparent 70%);
+}
+.item-blue .hover-indicator {
+  background: linear-gradient(90deg, #409eff 0%, #66b1ff 100%);
+}
 
-/* 紫色 */
-.item-purple .icon-wrapper { background: #f3e5f5; color: #9c27b0; }
-.item-purple:hover .icon-wrapper { background: #9c27b0; color: #fff; }
+/* 红色 - 错题本 */
+.item-red .icon-wrapper {
+  background: linear-gradient(135deg, #fef0f0 0%, #fde2e2 100%);
+  color: #f56c6c;
+}
+.item-red:hover {
+  border-color: #f56c6c;
+  background: linear-gradient(135deg, #fff5f5 0%, #fef0f0 100%);
+}
+.item-red:hover .icon-wrapper {
+  background: linear-gradient(135deg, #f56c6c 0%, #f78989 100%);
+  color: white;
+}
+.item-red .item-bg-decoration {
+  background: radial-gradient(circle, #f56c6c 0%, transparent 70%);
+}
+.item-red .hover-indicator {
+  background: linear-gradient(90deg, #f56c6c 0%, #f78989 100%);
+}
 
-/* 橙色 */
-.item-orange .icon-wrapper { background: #fdf6ec; color: #e6a23c; }
-.item-orange:hover .icon-wrapper { background: #e6a23c; color: #fff; }
+/* 绿色 - 智能复习 */
+.item-green .icon-wrapper {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e1f3d8 100%);
+  color: #67c23a;
+}
+.item-green:hover {
+  border-color: #67c23a;
+  background: linear-gradient(135deg, #f5fef0 0%, #e1f3d8 100%);
+}
+.item-green:hover .icon-wrapper {
+  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
+  color: white;
+}
+.item-green .item-bg-decoration {
+  background: radial-gradient(circle, #67c23a 0%, transparent 70%);
+}
+.item-green .hover-indicator {
+  background: linear-gradient(90deg, #67c23a 0%, #85ce61 100%);
+}
 
-/* 绿色 */
-.item-green .icon-wrapper { background: #e1f3d8; color: #67c23a; }
-.item-green:hover .icon-wrapper { background: #67c23a; color: #fff; }
+/* 紫色 - 模拟考试 */
+.item-purple .icon-wrapper {
+  background: linear-gradient(135deg, #f9f0ff 0%, #f3e5f5 100%);
+  color: #9c27b0;
+}
+.item-purple:hover {
+  border-color: #9c27b0;
+  background: linear-gradient(135deg, #fcf5ff 0%, #f9f0ff 100%);
+}
+.item-purple:hover .icon-wrapper {
+  background: linear-gradient(135deg, #9c27b0 0%, #ba68c8 100%);
+  color: white;
+}
+.item-purple .item-bg-decoration {
+  background: radial-gradient(circle, #9c27b0 0%, transparent 70%);
+}
+.item-purple .hover-indicator {
+  background: linear-gradient(90deg, #9c27b0 0%, #ba68c8 100%);
+}
 
-.item-gold .icon-wrapper { background: #fffbf0; color: #faad14; }
-.item-gold:hover .icon-wrapper { background: #faad14; color: #fff; }
+/* 橙色 - 考试记录 */
+.item-orange .icon-wrapper {
+  background: linear-gradient(135deg, #fffbf0 0%, #fdf6ec 100%);
+  color: #e6a23c;
+}
+.item-orange:hover {
+  border-color: #e6a23c;
+  background: linear-gradient(135deg, #fffef5 0%, #fffbf0 100%);
+}
+.item-orange:hover .icon-wrapper {
+  background: linear-gradient(135deg, #e6a23c 0%, #ebb563 100%);
+  color: white;
+}
+.item-orange .item-bg-decoration {
+  background: radial-gradient(circle, #e6a23c 0%, transparent 70%);
+}
+.item-orange .hover-indicator {
+  background: linear-gradient(90deg, #e6a23c 0%, #ebb563 100%);
+}
+
+/* 青色 - 我的收藏 */
+.item-teal .icon-wrapper {
+  background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
+  color: #00bcd4;
+}
+.item-teal:hover {
+  border-color: #00bcd4;
+  background: linear-gradient(135deg, #e0f7fa 0%, #e0f7fa 100%);
+}
+.item-teal:hover .icon-wrapper {
+  background: linear-gradient(135deg, #00bcd4 0%, #26c6da 100%);
+  color: white;
+}
+.item-teal .item-bg-decoration {
+  background: radial-gradient(circle, #00bcd4 0%, transparent 70%);
+}
+.item-teal .hover-indicator {
+  background: linear-gradient(90deg, #00bcd4 0%, #26c6da 100%);
+}
+
+/* 靛蓝色 - 知识对战 */
+.item-indigo .icon-wrapper {
+  background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
+  color: #5c6bc0;
+}
+.item-indigo:hover {
+  border-color: #5c6bc0;
+  background: linear-gradient(135deg, #f3f4fb 0%, #e8eaf6 100%);
+}
+.item-indigo:hover .icon-wrapper {
+  background: linear-gradient(135deg, #5c6bc0 0%, #7986cb 100%);
+  color: white;
+}
+.item-indigo .item-bg-decoration {
+  background: radial-gradient(circle, #5c6bc0 0%, transparent 70%);
+}
+.item-indigo .hover-indicator {
+  background: linear-gradient(90deg, #5c6bc0 0%, #7986cb 100%);
+}
+
+/* 金色 - 积分商城 */
+.item-gold .icon-wrapper {
+  background: linear-gradient(135deg, #fffbf0 0%, #fff8dc 100%);
+  color: #faad14;
+}
+.item-gold:hover {
+  border-color: #faad14;
+  background: linear-gradient(135deg, #fffef7 0%, #fffbf0 100%);
+}
+.item-gold:hover .icon-wrapper {
+  background: linear-gradient(135deg, #faad14 0%, #ffc53d 100%);
+  color: white;
+}
+.item-gold .item-bg-decoration {
+  background: radial-gradient(circle, #faad14 0%, transparent 70%);
+}
+.item-gold .hover-indicator {
+  background: linear-gradient(90deg, #faad14 0%, #ffc53d 100%);
+}
 
 /* === 悬浮AI助手样式 === */
 .floating-ai-assistant {

@@ -41,6 +41,13 @@ public class BizQuestionServiceImpl extends ServiceImpl<BizQuestionMapper, BizQu
     @Autowired
     private BizQuestionKnowledgePointMapper questionKnowledgePointMapper;
 
+    // 【新增 - 安全修复】级联删除所需的依赖
+    @Autowired
+    private com.ice.exebackend.service.BizPaperQuestionService paperQuestionService;
+
+    @Autowired
+    private com.ice.exebackend.service.BizWrongRecordService wrongRecordService;
+
     @Override
     @Transactional
     public boolean createQuestionWithKnowledgePoints(QuestionDTO questionDTO) {
@@ -287,5 +294,60 @@ public class BizQuestionServiceImpl extends ServiceImpl<BizQuestionMapper, BizQu
         return false;
     }
 
+    /**
+     * 【新增 - 安全修复】删除试题及其关联数据（级联删除）
+     * 防止删除后产生悬垂引用，确保数据完整性
+     *
+     * @param questionId 试题ID
+     * @return 是否删除成功
+     * @throws RuntimeException 如果试题被试卷使用则抛出异常
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteQuestionWithCascade(Long questionId) {
+        log.info("开始级联删除题目: questionId={}", questionId);
+
+        // 1. 检查题目是否存在
+        BizQuestion question = this.getById(questionId);
+        if (question == null) {
+            log.warn("题目不存在: questionId={}", questionId);
+            throw new RuntimeException("题目不存在，无法删除");
+        }
+
+        // 2. 【关键检查】验证题目是否被试卷使用
+        long paperCount = paperQuestionService.lambdaQuery()
+                .eq(com.ice.exebackend.entity.BizPaperQuestion::getQuestionId, questionId)
+                .count();
+
+        if (paperCount > 0) {
+            log.warn("题目被{}份试卷使用，无法删除: questionId={}", paperCount, questionId);
+            throw new RuntimeException("该题目已被 " + paperCount + " 份试卷使用，不能删除");
+        }
+
+        // 3. 删除知识点关联关系
+        int kpDeleted = questionKnowledgePointMapper.delete(
+                new QueryWrapper<BizQuestionKnowledgePoint>()
+                        .eq("question_id", questionId)
+        );
+        log.info("删除知识点关联: questionId={}, count={}", questionId, kpDeleted);
+
+        // 4. 删除错题记录（这些题目已经不存在了，错题记录也应删除）
+        boolean wrongRecordsDeleted = wrongRecordService.remove(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.ice.exebackend.entity.BizWrongRecord>()
+                        .eq(com.ice.exebackend.entity.BizWrongRecord::getQuestionId, questionId)
+        );
+        log.info("删除错题记录: questionId={}, success={}", questionId, wrongRecordsDeleted);
+
+        // 5. 最后删除题目本身
+        boolean success = this.removeById(questionId);
+
+        if (success) {
+            log.info("成功级联删除题目及所有关联数据: questionId={}", questionId);
+        } else {
+            log.error("删除题目失败: questionId={}", questionId);
+        }
+
+        return success;
+    }
 
 }

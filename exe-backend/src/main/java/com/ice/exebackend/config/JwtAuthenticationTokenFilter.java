@@ -55,17 +55,19 @@ public class JwtAuthenticationTokenFilter extends OncePerRequestFilter {
                     UserDetails userDetails;
 
                     /**
-                     * 【修改第2处 - 增强版】
+                     * 【修改第2处 - 安全加固版】
                      * 核心判断逻辑：根据请求的URL路径，决定调用哪个认证服务。
-                     * 学生端API路径模式：
-                     * 1. /api/v1/student/...
-                     * 2. /api/v1/questions/practice...
-                     * 3. 包含 /student/ 的路径
+                     * 学生端API路径模式（使用严格正则匹配）：
+                     * 1. /api/v1/student/* - 学生专用API
+                     * 2. /api/v1/questions/practice/* - 练习题API
+                     *
+                     * 安全加固：使用正则表达式精确匹配，防止路径遍历攻击
                      */
                     String requestURI = request.getRequestURI();
-                    boolean isStudentApi = requestURI.startsWith("/api/v1/student/") ||
-                                          requestURI.startsWith("/api/v1/questions/practice") ||
-                                          requestURI.contains("/student/");
+
+                    // 使用严格的正则表达式匹配，防止绕过
+                    boolean isStudentApi = requestURI.matches("^/api/v1/student/.*$") ||
+                                          requestURI.matches("^/api/v1/questions/practice(/.*)?$");
 
                     if (isStudentApi) {
                         // 如果是学生端的API请求，则使用学生认证服务

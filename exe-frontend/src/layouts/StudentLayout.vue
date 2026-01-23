@@ -30,7 +30,7 @@
           />
         </el-tooltip>
 
-        <el-dropdown @command="handleCommand">
+        <el-dropdown @command="handleCommand" trigger="click">
       <span class="avatar-dropdown">
         <UserAvatar
             :src="studentAuth.student?.avatar"
@@ -210,6 +210,7 @@ const handleMoreMenuClick = (path: string) => {
   router.push(path);
   showMoreMenu.value = false;
 };
+
 const handleCommand = (command: string) => {
   if (command === 'logout') {
     studentAuth.logout();
@@ -219,14 +220,23 @@ const handleCommand = (command: string) => {
 };
 
 const layoutStyle = computed(() => {
-  const bgUrl = studentAuth.student?.backgroundUrl;
-  if (bgUrl) {
-    return {
-      backgroundImage: `url(${bgUrl})`,
-      backgroundSize: 'cover',
-      backgroundAttachment: 'fixed',
-      backgroundPosition: 'center'
-    };
+  const bgValue = studentAuth.student?.backgroundUrl;
+  if (bgValue) {
+    // 判断是渐变色还是图片URL
+    if (bgValue.startsWith('linear-gradient') || bgValue.startsWith('radial-gradient')) {
+      // 渐变背景，直接使用
+      return {
+        background: bgValue
+      };
+    } else {
+      // 图片URL，用url()包裹
+      return {
+        backgroundImage: `url(${bgValue})`,
+        backgroundSize: 'cover',
+        backgroundAttachment: 'fixed',
+        backgroundPosition: 'center'
+      };
+    }
   }
   return {};
 });

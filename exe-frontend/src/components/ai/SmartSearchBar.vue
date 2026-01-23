@@ -10,7 +10,7 @@
       @focus="showSuggestions = true"
     >
       <template #prefix>
-        <el-icon class="search-icon"><MagicStick /></el-icon>
+        <el-icon class="search-icon"><MagicStickStick /></el-icon>
       </template>
       <template #append>
         <el-button @click="handleSearch" :loading="searching">

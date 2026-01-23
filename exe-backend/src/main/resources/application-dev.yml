@@ -3,7 +3,7 @@ spring:
     type: redis
   datasource:
     # 开发环境连本地库
-    url: jdbc:mysql://localhost:3306/exam_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/exam_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&useServerPrepStmts=true&rewriteBatchedStatements=true
     username: root
     password: llf5201314  # 开发环境可以直接写，方便调试
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -22,23 +22,40 @@ spring:
       idle-timeout: 600000
       # 连接最大存活时间（毫秒）- 连接在池中的最大生命周期
       max-lifetime: 1800000
-      # 连接测试查询（用于验证连接有效性）
-      connection-test-query: SELECT 1
+      # HikariCP推荐不设置connection-test-query，使用JDBC4的isValid()
+      # connection-test-query: SELECT 1
       # 自动提交
       auto-commit: true
       # 连接初始化 SQL
       connection-init-sql: SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci
       # 泄漏检测阈值（毫秒）- 超过此时间未归还的连接将被记录
       leak-detection-threshold: 60000
+      # 验证超时时间（毫秒）
+      validation-timeout: 5000
+      # 启用JMX监控（开发环境也启用，方便排查问题）
+      register-mbeans: true
   data:
     redis:
       host: localhost
       port: 6379
+      # 开发环境Redis通常无密码
+      # password:
+      # 连接超时时间（毫秒）
+      timeout: 5000
+      # 数据库索引（默认0）
+      database: 0
       lettuce:
         pool:
-          max-active: 100
-          max-idle: 100
-          min-idle: 0
+          # 最大连接数（开发环境适中）
+          max-active: 50
+          # 最大空闲连接
+          max-idle: 20
+          # 最小空闲连接
+          min-idle: 5
+          # 连接池最大阻塞等待时间（毫秒，-1表示无限制）
+          max-wait: 3000
+        # 关闭超时时间（毫秒）
+        shutdown-timeout: 100
 
 jwt:
   # 开发环境使用的简单密钥

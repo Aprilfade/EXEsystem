@@ -7,6 +7,7 @@ import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.*;
 import com.ice.exebackend.entity.BizQuestion;
 import com.ice.exebackend.service.BizQuestionService;
+import com.ice.exebackend.utils.BatchOperationValidator;  // 新增
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.text.similarity.LevenshteinDistance;
 import org.slf4j.Logger;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 // 必须导入这两个，且不要导入 lombok.Log
 import com.ice.exebackend.annotation.Log;
+import com.ice.exebackend.annotation.AuditLog;  // 【新增】审计日志注解
 import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.AiServiceV3; // 【修改】导入 AiServiceV3
 import com.ice.exebackend.dto.AiGeneratedQuestionDTO; // 导入 DTO
@@ -167,13 +169,21 @@ public class BizQuestionController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('sys:question:delete')") // ✅ 添加细粒度权限
     @Log(title = "题库管理", businessType = BusinessType.DELETE) // 删除
+    @AuditLog(module = "题目管理", operationType = AuditLog.OperationType.DELETE, description = "删除题目")  // 【新增】审计日志
     public Result deleteQuestion(@PathVariable Long id) {
-        boolean success = questionService.removeById(id);
-        if (success) {
-            // 4. 操作成功后，清除缓存
-            redisTemplate.delete(DASHBOARD_CACHE_KEY);
+        try {
+            boolean success = questionService.deleteQuestionWithCascade(id);
+            if (success) {
+                // 4. 操作成功后，清除缓存
+                redisTemplate.delete(DASHBOARD_CACHE_KEY);
+                return Result.suc();
+            }
+            return Result.fail("删除失败");
+        } catch (RuntimeException e) {
+            // 捕获级联删除抛出的业务异常（如题目被试卷使用）
+            logger.warn("删除题目失败: {}", e.getMessage());
+            return Result.fail(e.getMessage());
         }
-        return success ? Result.suc() : Result.fail();
     }
 
     @PostMapping("/import")
@@ -192,7 +202,14 @@ public class BizQuestionController {
     @PutMapping("/batch-update")
     @PreAuthorize("hasAuthority('sys:question:update')") // ✅ 修改为细粒度权限
     @Log(title = "题库管理", businessType = BusinessType.UPDATE) // 批量修改
+    @AuditLog(module = "题目管理", operationType = AuditLog.OperationType.UPDATE, description = "批量更新题目")  // 【新增】审计日志
     public Result batchUpdateQuestions(@RequestBody QuestionBatchUpdateDTO dto) {
+        // 【安全检查】批量操作数量限制
+        String validationError = BatchOperationValidator.validateBatchUpdate(dto.getQuestionIds());
+        if (validationError != null) {
+            return Result.fail(validationError);
+        }
+
         boolean success = questionService.batchUpdateQuestions(dto);
         if (success) {
             // 4. 操作成功后，清除缓存
@@ -299,31 +316,63 @@ public class BizQuestionController {
     @PostMapping("/batch")
     @PreAuthorize("hasAuthority('sys:question:list')")
     public Result getQuestionsByIds(@RequestBody List<Long> ids) {
-        if (ids == null || ids.isEmpty()) {
-            return Result.fail("题目ID列表不能为空");
+        // 【安全检查】批量操作数量限制
+        String validationError = BatchOperationValidator.validateBatchQuery(ids);
+        if (validationError != null) {
+            return Result.fail(validationError);
         }
-        if (ids.size() > 1000) {
-            return Result.fail("单次查询题目数量不能超过1000");
-        }
+
         List<BizQuestion> questions = questionService.listByIds(ids);
         return Result.suc(questions);
     }
 
     /**
-     * 【新增】批量删除试题
+     * 【新增】批量删除试题 - 使用级联删除
      */
     @DeleteMapping("/batch")
     @Log(title = "题库管理", businessType = BusinessType.DELETE)
+    @AuditLog(module = "题目管理", operationType = AuditLog.OperationType.DELETE, description = "批量删除题目")  // 【新增】审计日志
     public Result batchDeleteQuestions(@RequestBody List<Long> ids) {
-        if (ids == null || ids.isEmpty()) {
-            return Result.fail("请选择要删除的试题");
+        // 【安全检查】批量操作数量限制
+        String validationError = BatchOperationValidator.validateBatchDelete(ids);
+        if (validationError != null) {
+            return Result.fail(validationError);
         }
-        boolean success = questionService.removeByIds(ids);
-        if (success) {
-            // 清除缓存
+
+        int successCount = 0;
+        int failCount = 0;
+        StringBuilder errorMsg = new StringBuilder();
+
+        // 逐个删除，确保级联处理和错误反馈
+        for (Long id : ids) {
+            try {
+                boolean success = questionService.deleteQuestionWithCascade(id);
+                if (success) {
+                    successCount++;
+                } else {
+                    failCount++;
+                }
+            } catch (RuntimeException e) {
+                failCount++;
+                if (errorMsg.length() > 0) {
+                    errorMsg.append("; ");
+                }
+                errorMsg.append("题目ID ").append(id).append(": ").append(e.getMessage());
+            }
+        }
+
+        // 清除缓存
+        if (successCount > 0) {
             redisTemplate.delete(DASHBOARD_CACHE_KEY);
         }
-        return success ? Result.suc("批量删除成功") : Result.fail("删除失败");
+
+        if (failCount == 0) {
+            return Result.suc("批量删除成功，共删除 " + successCount + " 道题目");
+        } else if (successCount == 0) {
+            return Result.fail("批量删除失败: " + errorMsg.toString());
+        } else {
+            return Result.fail("部分删除成功(" + successCount + "道)，部分失败(" + failCount + "道): " + errorMsg.toString());
+        }
     }
 
     /**

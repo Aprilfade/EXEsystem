@@ -2,6 +2,7 @@ package com.ice.exebackend.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.annotation.Log;
+import com.ice.exebackend.annotation.AuditLog;  // 【新增】审计日志注解
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.entity.BizGradingApproval;
 import com.ice.exebackend.entity.SysUser;
@@ -94,6 +95,7 @@ public class BizGradingApprovalController {
      */
     @PutMapping("/{id}/approve")
     @Log(title = "审批管理", businessType = BusinessType.UPDATE)
+    @AuditLog(module = "批改审批", operationType = AuditLog.OperationType.APPROVE, description = "审批通过批改申请")  // 【新增】审计日志
     public Result approve(@PathVariable Long id,
                          @RequestBody Map<String, String> body,
                          Authentication authentication) {
@@ -117,6 +119,7 @@ public class BizGradingApprovalController {
      */
     @PutMapping("/{id}/reject")
     @Log(title = "审批管理", businessType = BusinessType.UPDATE)
+    @AuditLog(module = "批改审批", operationType = AuditLog.OperationType.APPROVE, description = "驳回批改申请")  // 【新增】审计日志
     public Result reject(@PathVariable Long id,
                         @RequestBody Map<String, String> body,
                         Authentication authentication) {

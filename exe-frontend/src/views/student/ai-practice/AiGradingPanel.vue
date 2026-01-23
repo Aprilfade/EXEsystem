@@ -13,7 +13,7 @@
           :disabled="!canGrade"
           @click="handleRequestGrading"
         >
-          <el-icon v-if="!grading"><MagicStick /></el-icon>
+          <el-icon v-if="!grading"><MagicStickStick /></el-icon>
           {{ grading ? '批改中...' : gradingResult ? '重新批改' : '请AI批改' }}
         </el-button>
       </div>

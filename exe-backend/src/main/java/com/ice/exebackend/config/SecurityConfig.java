@@ -90,6 +90,8 @@ public class SecurityConfig {
                                 "/api/v1/student/auth/login",
                                 "/api/v1/files/**",
                                 "/api/v1/portal/**", // 【新增】Portal导航页API，允许所有人访问
+                                "/api/v1/health", // 【新增】自定义健康检查端点（基础）
+                                "/api/v1/health/**", // 【新增】自定义健康检查端点（详细）
                                 "/ws/**",
                                 "/error", // 【修复】放行错误页面
                                 // Swagger API 文档白名单

@@ -359,22 +359,23 @@ const initTrendChart = () => {
   trendChartInstance = echarts.init(trendChart.value);
 
   // 计算累计积分（从最早到最新）
-  const records = [...historyList.value].reverse();
+  const records = [...historyList.value].reverse(); // 从旧到新排序
   const dates = records.map((r: any) => formatTime(r.createTime).substring(5, 11));
 
-  let currentPoints = myPoints.value;
-  // 从当前积分反推历史积分
-  const points = records.map((r: any, index: number) => {
-    if (index === 0) {
-      currentPoints = myPoints.value - records.slice(index).reduce((sum: number, item: any) => sum + item.scoreChange, 0);
-    } else {
-      currentPoints += records[index - 1].scoreChange;
-    }
-    return currentPoints;
+  // 计算历史积分点
+  // 1. 先计算最早的积分 = 当前积分 - 所有历史变动的总和
+  const totalChange = records.reduce((sum: number, item: any) => sum + item.scoreChange, 0);
+  let startPoints = myPoints.value - totalChange;
+
+  // 2. 生成每场对战后的积分
+  const points: number[] = [startPoints]; // 起始积分
+  records.forEach((r: any) => {
+    startPoints += r.scoreChange;
+    points.push(startPoints);
   });
-  // 添加最终的当前积分
-  points.push(myPoints.value);
-  dates.push('当前');
+
+  // 添加日期标签（包含起始点）
+  const allDates = ['起点', ...dates];
 
   const option = {
     tooltip: {
@@ -392,7 +393,7 @@ const initTrendChart = () => {
     },
     xAxis: {
       type: 'category',
-      data: dates,
+      data: allDates,
       axisLabel: {
         rotate: 45,
         fontSize: 10
@@ -415,12 +416,28 @@ const initTrendChart = () => {
             { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
             { offset: 1, color: 'rgba(64, 158, 255, 0.05)' }
           ])
+        },
+        markPoint: {
+          data: [
+            { type: 'max', name: '最高' },
+            { type: 'min', name: '最低' }
+          ]
+        },
+        markLine: {
+          data: [
+            { type: 'average', name: '平均' }
+          ]
         }
       }
     ]
   };
 
   trendChartInstance.setOption(option);
+
+  // 确保图表大小正确
+  setTimeout(() => {
+    trendChartInstance?.resize();
+  }, 100);
 };
 
 const formatTime = (timeStr: string) => {

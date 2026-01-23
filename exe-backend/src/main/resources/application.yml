@@ -25,6 +25,14 @@ mybatis-plus:
 file:
   upload-dir: ./uploads/
 
+# 【新增 - 安全加固】CORS 配置
+app:
+  cors:
+    # 明确指定允许的源（白名单模式）
+    # 开发环境：Vue开发服务器 + Nginx代理
+    # 生产环境：根据实际部署域名调整
+    allowed-origins: http://localhost:5173,http://localhost:80,http://localhost:8080,http://127.0.0.1:5173,http://127.0.0.1:80
+
 # Springdoc OpenAPI (Swagger) 配置
 springdoc:
   # API 文档配置

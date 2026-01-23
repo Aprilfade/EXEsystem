@@ -1,5 +1,6 @@
 package com.ice.exebackend.controller;
 
+import com.ice.exebackend.annotation.AuditLog;  // 【新增】审计日志注解
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.UserInfoDTO;
 import com.ice.exebackend.entity.SysRole;
@@ -9,6 +10,7 @@ import com.ice.exebackend.mapper.SysRoleMapper;
 import com.ice.exebackend.service.SysLoginLogService;
 import com.ice.exebackend.service.SysUserService;
 import com.ice.exebackend.utils.JwtUtil;
+import com.ice.exebackend.utils.LoginRateLimiter;  // 新增
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -53,6 +55,10 @@ public class AuthController {
     @Autowired
     private SysLoginLogService loginLogService;
 
+    // 【新增 - 安全加固】登录限流器
+    @Autowired
+    private LoginRateLimiter loginRateLimiter;
+
     @Autowired
     private HttpServletRequest request;
 
@@ -94,34 +100,62 @@ public class AuthController {
 
 
     /**
-     * 登录接口优化
-     * 保留 try-catch 仅为了记录失败日志，最后 re-throw 异常
+     * 登录接口 - 增强版（含限流防护）
+     * 功能：
+     * 1. 检查账户是否被锁定
+     * 2. 执行认证
+     * 3. 记录登录成功/失败
+     * 4. 失败次数超限时锁定账户
      */
-    @Operation(summary = "管理员登录", description = "管理员用户名密码登录，返回JWT Token")
+    @Operation(summary = "管理员登录", description = "管理员用户名密码登录，返回JWT Token（含暴力破解防护）")
     @PostMapping("/login")
+    @AuditLog(module = "系统认证", operationType = AuditLog.OperationType.LOGIN, description = "管理员登录")  // 【新增】审计日志
     public Result login(@RequestBody Map<String, String> loginRequest) {
         String username = loginRequest.get("username");
 
+        // 【安全检查1】检查账户是否被锁定
+        if (loginRateLimiter.isLocked(username)) {
+            long remainingSeconds = loginRateLimiter.getLockRemainingSeconds(username);
+            long remainingMinutes = (remainingSeconds + 59) / 60; // 向上取整
+
+            logger.warn("账户已被锁定，尝试登录失败: username={}, remainingSeconds={}", username, remainingSeconds);
+            loginLogService.recordLoginLog(username, "LOGIN_LOCKED", getIpAddress(), getUserAgent());
+
+            return Result.fail(String.format("账户已被锁定，请 %d 分钟后重试", remainingMinutes));
+        }
+
         try {
+            // 【步骤2】执行认证
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(username, loginRequest.get("password"))
             );
+
             UserDetails userDetails = (UserDetails) authentication.getPrincipal();
             String token = jwtUtil.generateToken(userDetails);
 
+            // 【步骤3】认证成功，清除失败记录
+            loginRateLimiter.clearFailures(username);
+
             logger.info("用户 '{}' 登录成功!", userDetails.getUsername());
-            // 记录成功日志
             loginLogService.recordLoginLog(username, "LOGIN_SUCCESS", getIpAddress(), getUserAgent());
 
             return Result.suc(Map.of("token", token));
 
         } catch (AuthenticationException e) {
-            logger.error("用户 '{}' 认证失败: {}", username, e.getMessage());
-            // 1. 记录失败日志 (这是我们保留 try-catch 的唯一原因)
+            // 【步骤4】认证失败，记录失败次数
+            loginRateLimiter.recordFailure(username);
+
+            int remaining = loginRateLimiter.getRemainingAttempts(username);
+
+            logger.error("用户 '{}' 认证失败: {}, 剩余尝试次数: {}", username, e.getMessage(), remaining);
             loginLogService.recordLoginLog(username, "LOGIN_FAILURE", getIpAddress(), getUserAgent());
 
-            // 2. 【关键】重新抛出异常，交给 GlobalExceptionHandler 统一处理返回 Result.fail(...)
-            throw e;
+            // 构造失败提示信息
+            if (remaining > 0) {
+                return Result.fail(String.format("用户名或密码错误，还剩 %d 次尝试机会", remaining));
+            } else {
+                return Result.fail("登录失败次数过多，账户已被锁定30分钟");
+            }
         }
     }
 

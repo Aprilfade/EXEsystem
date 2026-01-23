@@ -19,7 +19,7 @@
                   style="--el-switch-on-color: #13ce66;"
                 />
                 <el-button type="primary" :loading="loading" @click="handleGenerate">
-                  <el-icon><MagicStick /></el-icon> 开始生成
+                  <el-icon><MagicStickStick /></el-icon> 开始生成
                 </el-button>
               </div>
             </div>

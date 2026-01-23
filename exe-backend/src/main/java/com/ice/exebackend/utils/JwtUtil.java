@@ -1,9 +1,14 @@
 package com.ice.exebackend.utils;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -15,6 +20,8 @@ import java.util.function.Function;
 
 @Component
 public class JwtUtil {
+
+    private static final Logger logger = LoggerFactory.getLogger(JwtUtil.class);
 
     @Value("${jwt.secret}")
     private String secret;
@@ -85,8 +92,51 @@ public class JwtUtil {
                 .compact();
     }
 
+    /**
+     * 验证Token的有效性
+     * @param token JWT Token
+     * @param userDetails 用户详情
+     * @return 是否有效
+     */
     public Boolean validateToken(String token, UserDetails userDetails) {
-        final String username = getUsernameFromToken(token);
-        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+        try {
+            // 1. 检查参数有效性
+            if (token == null || token.trim().isEmpty()) {
+                logger.debug("Token为空或null");
+                return false;
+            }
+
+            if (userDetails == null) {
+                logger.debug("UserDetails为null");
+                return false;
+            }
+
+            // 2. 获取用户名并验证
+            final String username = getUsernameFromToken(token);
+
+            if (username == null || username.trim().isEmpty()) {
+                logger.debug("Token中的用户名为空");
+                return false;
+            }
+
+            // 3. 验证用户名匹配和Token未过期
+            return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
+
+        } catch (ExpiredJwtException e) {
+            logger.debug("JWT已过期: {}", e.getMessage());
+            return false;
+        } catch (MalformedJwtException e) {
+            logger.debug("JWT格式错误: {}", e.getMessage());
+            return false;
+        } catch (SignatureException e) {
+            logger.debug("JWT签名验证失败: {}", e.getMessage());
+            return false;
+        } catch (IllegalArgumentException e) {
+            logger.debug("JWT参数非法: {}", e.getMessage());
+            return false;
+        } catch (Exception e) {
+            logger.error("JWT验证异常", e);
+            return false;
+        }
     }
 }

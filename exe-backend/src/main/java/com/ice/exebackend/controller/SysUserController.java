@@ -1,6 +1,7 @@
 package com.ice.exebackend.controller;
 
 import com.ice.exebackend.annotation.Log;
+import com.ice.exebackend.annotation.AuditLog;  // 【新增】审计日志注解
 import com.ice.exebackend.common.Result; // 导入您定义的Result类
 import com.ice.exebackend.dto.UserInfoDTO;
 import com.ice.exebackend.entity.SysUser;
@@ -76,6 +77,7 @@ public class SysUserController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('sys:user:delete')")
     @Log(title = "成员管理", businessType = BusinessType.DELETE) // 删除用户
+    @AuditLog(module = "用户管理", operationType = AuditLog.OperationType.DELETE, description = "删除用户")  // 【新增】审计日志
     public Result deleteUser(@PathVariable Long id) {
         boolean success = sysUserService.deleteUserById(id);
         return success ? Result.suc() : Result.fail();

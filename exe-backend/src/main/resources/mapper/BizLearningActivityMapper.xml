@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ice.exebackend.mapper.BizLearningActivityMapper">
+
+    <!-- 获取学习时长统计 -->
+    <select id="getStudyTimeStats" resultType="java.util.Map">
+        SELECT
+            IFNULL(SUM(duration_seconds) / 60, 0) AS totalMinutes,
+            IFNULL(SUM(CASE WHEN DATE(create_time) = CURDATE() THEN duration_seconds END) / 60, 0) AS todayMinutes,
+            IFNULL(SUM(CASE WHEN YEARWEEK(create_time, 1) = YEARWEEK(CURDATE(), 1) THEN duration_seconds END) / 60, 0) AS weekMinutes,
+            IFNULL(SUM(CASE WHEN DATE_FORMAT(create_time, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m') THEN duration_seconds END) / 60, 0) AS monthMinutes,
+            IFNULL(SUM(duration_seconds) / 60 / NULLIF(DATEDIFF(CURDATE(), MIN(DATE(create_time))) + 1, 0), 0) AS avgDailyMinutes
+        FROM biz_learning_activity
+        WHERE student_id = #{studentId}
+    </select>
+
+    <!-- 获取每日学习时长 -->
+    <select id="getDailyStudyTime" resultType="java.util.Map">
+        SELECT
+            DATE(create_time) AS date,
+            IFNULL(SUM(duration_seconds) / 60, 0) AS minutes
+        FROM biz_learning_activity
+        WHERE student_id = #{studentId}
+            AND create_time >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
+        GROUP BY DATE(create_time)
+        ORDER BY date ASC
+    </select>
+
+    <!-- 按活动类型统计 -->
+    <select id="getActivityTypeStats" resultType="java.util.Map">
+        SELECT
+            activity_type AS activityType,
+            IFNULL(SUM(duration_seconds) / 60, 0) AS minutes,
+            ROUND(SUM(duration_seconds) * 100.0 / NULLIF((SELECT SUM(duration_seconds) FROM biz_learning_activity WHERE student_id = #{studentId} AND create_time >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)), 0), 2) AS percentage
+        FROM biz_learning_activity
+        WHERE student_id = #{studentId}
+            AND create_time >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
+        GROUP BY activity_type
+        ORDER BY minutes DESC
+    </select>
+
+    <!-- 按科目统计学习时长 -->
+    <select id="getSubjectStudyTime" resultType="java.util.Map">
+        SELECT
+            s.id AS subjectId,
+            s.name AS subjectName,
+            IFNULL(SUM(la.duration_seconds) / 60, 0) AS minutes,
+            ROUND(SUM(la.duration_seconds) * 100.0 / NULLIF((SELECT SUM(duration_seconds) FROM biz_learning_activity WHERE student_id = #{studentId} AND create_time >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)), 0), 2) AS percentage
+        FROM biz_learning_activity la
+        INNER JOIN biz_subject s ON la.subject_id = s.id
+        WHERE la.student_id = #{studentId}
+            AND la.create_time >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
+            AND la.subject_id IS NOT NULL
+        GROUP BY s.id, s.name
+        ORDER BY minutes DESC
+    </select>
+
+    <!-- 获取学习排名（使用窗口函数） -->
+    <select id="getStudyRanking" resultType="java.util.Map">
+        WITH student_totals AS (
+            SELECT student_id, SUM(duration_seconds) AS total_seconds
+            FROM biz_learning_activity
+            WHERE create_time >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            GROUP BY student_id
+        ),
+        ranked_students AS (
+            SELECT student_id, total_seconds, ROW_NUMBER() OVER (ORDER BY total_seconds DESC) AS `rank`
+            FROM student_totals
+        )
+        SELECT
+            IFNULL(rs.`rank`, 0) AS `rank`,
+            (SELECT COUNT(DISTINCT student_id) FROM student_totals) AS totalStudents,
+            ROUND((1 - (rs.`rank` - 1.0) / NULLIF((SELECT COUNT(*) FROM student_totals), 0)) * 100, 2) AS percentile
+        FROM ranked_students rs
+        WHERE rs.student_id = #{studentId}
+    </select>
+
+</mapper>

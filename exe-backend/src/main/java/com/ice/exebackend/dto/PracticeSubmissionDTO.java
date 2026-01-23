@@ -11,9 +11,12 @@ public class PracticeSubmissionDTO {
     private Map<Long, String> answers;
 
     private Integer violationCount; // 【新增】
+    private Integer duration; // 【新增】学习时长（秒）
 
     public Integer getViolationCount() { return violationCount; }
     public void setViolationCount(Integer violationCount) { this.violationCount = violationCount; }
+    public Integer getDuration() { return duration; }
+    public void setDuration(Integer duration) { this.duration = duration; }
     public Map<Long, String> getAnswers() {
         return answers;
     }

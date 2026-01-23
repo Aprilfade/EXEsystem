@@ -3,7 +3,7 @@
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <el-icon><Magic /></el-icon>
+          <el-icon><MagicStick /></el-icon>
           <span>AI 智能生成试卷</span>
         </div>
       </template>
@@ -69,7 +69,7 @@
 
         <el-form-item>
           <el-button type="primary" @click="generatePaper" :loading="generating">
-            <el-icon><Magic /></el-icon>
+            <el-icon><MagicStick /></el-icon>
             开始生成
           </el-button>
         </el-form-item>
@@ -135,7 +135,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { Magic, Loading, Plus, Delete } from '@element-plus/icons-vue';
+import { MagicStick, Loading, Plus, Delete } from '@element-plus/icons-vue';
 import { fetchAllSubjects } from '@/api/subject';
 import { fetchAllKnowledgePoints } from '@/api/knowledgePoint';
 

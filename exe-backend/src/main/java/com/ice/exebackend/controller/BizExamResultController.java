@@ -3,6 +3,7 @@ package com.ice.exebackend.controller;
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ice.exebackend.annotation.Log;
+import com.ice.exebackend.annotation.AuditLog;  // 【新增】审计日志注解
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.dto.ExamResultDetailDTO;
 import com.ice.exebackend.dto.GradingHistoryExportDTO;
@@ -19,6 +20,7 @@ import com.ice.exebackend.service.BizGradingHistoryService;
 import com.ice.exebackend.service.BizGradingApprovalService;
 import com.ice.exebackend.service.SysUserService;
 import com.ice.exebackend.service.SysUserNotificationService;
+import com.ice.exebackend.utils.BatchOperationValidator;  // 新增
 import com.ice.exebackend.handler.NotificationWebSocketHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -352,11 +354,18 @@ public class BizExamResultController {
      */
     @DeleteMapping("/batch")
     @Log(title = "成绩管理", businessType = BusinessType.DELETE)
+    @AuditLog(module = "成绩管理", operationType = AuditLog.OperationType.DELETE, description = "批量删除成绩")  // 【新增】审计日志
     public Result batchDelete(@RequestBody List<Object> idsObj) {
         // 将 Integer/Long 转换为 Long
         List<Long> ids = idsObj.stream()
                 .map(obj -> obj instanceof Integer ? ((Integer) obj).longValue() : (Long) obj)
                 .collect(Collectors.toList());
+
+        // 【安全检查】批量操作数量限制
+        String validationError = BatchOperationValidator.validateBatchDelete(ids);
+        if (validationError != null) {
+            return Result.fail(validationError);
+        }
 
         boolean success = examResultService.batchDelete(ids);
         return success ? Result.suc() : Result.fail();
@@ -367,19 +376,22 @@ public class BizExamResultController {
      */
     @PutMapping("/batch/publish")
     @Log(title = "成绩管理", businessType = BusinessType.UPDATE)
+    @AuditLog(module = "成绩管理", operationType = AuditLog.OperationType.PUBLISH, description = "批量发布成绩")  // 【新增】审计日志
     public Result batchPublish(@RequestBody Map<String, Object> body) {
         @SuppressWarnings("unchecked")
         List<Object> idsObj = (List<Object>) body.get("ids");
         Boolean published = (Boolean) body.get("published");
 
-        if (idsObj == null || idsObj.isEmpty()) {
-            return Result.fail("请选择要操作的记录");
-        }
-
         // 将 Integer/Long 转换为 Long
         List<Long> ids = idsObj.stream()
                 .map(obj -> obj instanceof Integer ? ((Integer) obj).longValue() : (Long) obj)
                 .collect(Collectors.toList());
+
+        // 【安全检查】批量操作数量限制
+        String validationError = BatchOperationValidator.validateBatchUpdate(ids);
+        if (validationError != null) {
+            return Result.fail(validationError);
+        }
 
         boolean success = examResultService.batchPublish(ids, published);
         return success ? Result.suc() : Result.fail();

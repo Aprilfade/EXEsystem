@@ -4,7 +4,7 @@
     <div class="recommendation-header">
       <div class="header-left">
         <h3>
-          <el-icon><MagicStick /></el-icon>
+          <el-icon><MagicStickStick /></el-icon>
           智能推荐
         </h3>
         <el-tag v-if="strategyVersion" size="small" type="info">

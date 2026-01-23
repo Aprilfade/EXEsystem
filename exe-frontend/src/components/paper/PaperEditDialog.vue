@@ -89,11 +89,11 @@
         <div v-if="form.paperType === 1">
       <div class="smart-entry-bar" style="margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; background: #f0f9eb; padding: 10px; border-radius: 4px; border: 1px solid #e1f3d8;">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <el-icon color="#67C23A"><MagicStick /></el-icon>
+          <el-icon color="#67C23A"><MagicStickStick /></el-icon>
           <span style="font-size: 14px; color: #606266;">想快速创建试卷？试试智能生成功能。</span>
         </div>
         <el-button type="success" size="small" @click="openSmartDialog">
-          <el-icon style="margin-right: 4px"><MagicStick /></el-icon> 一键智能组卷
+          <el-icon style="margin-right: 4px"><MagicStickStick /></el-icon> 一键智能组卷
         </el-button>
       </div>
       <paper-question-manager
@@ -117,11 +117,11 @@
       <div v-if="form.paperType === 1">
         <div class="smart-entry-bar" style="margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; background: #f0f9eb; padding: 10px; border-radius: 4px; border: 1px solid #e1f3d8;">
           <div style="display: flex; align-items: center; gap: 8px;">
-            <el-icon color="#67C23A"><MagicStick /></el-icon>
+            <el-icon color="#67C23A"><MagicStickStick /></el-icon>
             <span style="font-size: 14px; color: #606266;">想快速创建试卷？试试智能生成功能。</span>
           </div>
           <el-button type="success" size="small" @click="openSmartDialog">
-            <el-icon style="margin-right: 4px"><MagicStick /></el-icon> 一键智能组卷
+            <el-icon style="margin-right: 4px"><MagicStickStick /></el-icon> 一键智能组卷
           </el-button>
         </div>
         <paper-question-manager

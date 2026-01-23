@@ -3,6 +3,7 @@ package com.ice.exebackend.controller;
 import com.ice.exebackend.common.Result;
 import com.ice.exebackend.entity.BizStudent;
 import com.ice.exebackend.service.AiChatService;
+import com.ice.exebackend.service.BizLearningActivityService;
 import com.ice.exebackend.service.BizStudentService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,9 @@ public class AiChatController {
 
     @Autowired
     private BizStudentService bizStudentService;
+
+    @Autowired
+    private BizLearningActivityService learningActivityService;
 
     /**
      * 获取当前登录学生ID
@@ -79,11 +83,27 @@ public class AiChatController {
         }
 
         try {
+            // 记录开始时间
+            long startTime = System.currentTimeMillis();
+
             AiChatService.ChatResponse response = aiChatService.chat(
                     userId,
                     apiKey,
                     provider != null ? provider : "deepseek",
                     request
+            );
+
+            // 计算AI对话时长（秒）
+            int duration = (int) ((System.currentTimeMillis() - startTime) / 1000);
+
+            // 记录学习活动
+            learningActivityService.recordActivity(
+                userId,
+                "AI_CHAT",
+                Math.max(duration, 60), // 最少记录1分钟
+                null, // AI对话跨科目，暂不关联
+                null,
+                "AI学习助手对话 - " + request.getChatType()
             );
 
             return Result.suc(response);
