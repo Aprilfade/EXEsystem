@@ -9,9 +9,14 @@
 [![Redis](https://img.shields.io/badge/Redis-7.2%2B-red.svg)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-supported-blue.svg)](https://www.docker.com/)
 
+[![GitHub stars](https://img.shields.io/github/stars/your-username/EXEsystem?style=social)](https://github.com/your-username/EXEsystem/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/your-username/EXEsystem?style=social)](https://github.com/your-username/EXEsystem/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/your-username/EXEsystem)](https://github.com/your-username/EXEsystem/issues)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 **功能完整 | AI赋能 | 游戏化学习 | 企业级架构**
 
-[在线演示](#) | [快速开始](#快速开始) | [部署文档](docs/deployment/DOCKER_QUICKSTART.md) | [API文档](docs/api/API_DOCUMENTATION.md) | [📚 文档中心](docs/README.md)
+[在线演示](https://demo.exesystem.com) | [快速开始](#快速开始) | [部署文档](document/docs/deployment/DOCKER_QUICKSTART.md) | [API文档](http://localhost:8080/swagger-ui.html) | [📚 文档中心](document/DOCS_GUIDE.md)
 
 </div>
 
@@ -20,6 +25,8 @@
 ## 📖 目录
 
 - [项目简介](#项目简介)
+- [项目展示](#项目展示)
+- [最近更新](#最近更新)
 - [核心特性](#核心特性)
 - [技术架构](#技术架构)
 - [快速开始](#快速开始)
@@ -30,6 +37,7 @@
 - [常见问题](#常见问题)
 - [版本历史](#版本历史)
 - [贡献指南](#贡献指南)
+- [许可证](#许可证)
 
 ---
 
@@ -46,9 +54,39 @@
 
 ### 当前版本
 
-**v3.0** - 2026年1月11日
+**v3.05** - 2026年1月24日
 
-### ✨ v3.0 更新亮点
+> 📢 **项目状态**：已达到功能完善阶段，暂停新功能开发，专注于开源化和文档完善。
+
+---
+
+## 📸 项目展示
+
+<div align="center">
+
+### 主要功能界面
+
+| 学生端首页 | 课程学习中心 |
+|:---:|:---:|
+| ![学生端首页](docs/screenshots/student-portal.png) | ![课程学习](docs/screenshots/course-learning.png) |
+
+| AI智能助手 | 知识对战 |
+|:---:|:---:|
+| ![AI助手](docs/screenshots/ai-tutor.png) | ![知识对战](docs/screenshots/battle-arena.png) |
+
+| 管理端工作台 | 智能题目生成 |
+|:---:|:---:|
+| ![管理端](docs/screenshots/admin-dashboard.png) | ![题目生成](docs/screenshots/ai-question-gen.png) |
+
+> 💡 **提示**：截图文件位于 `docs/screenshots/` 目录。如果图片未显示，请先运行系统生成截图或查看[在线演示](https://demo.exesystem.com)。
+
+</div>
+
+---
+
+## 📜 最近更新
+
+### ✨ v3.0 重大更新亮点
 
 1. **🔐 安全性增强**
    - 修复JWT异常处理，防止token验证错误日志污染
@@ -547,13 +585,40 @@ docker-compose logs backend
 
 ## 贡献指南
 
-欢迎贡献！
+我们欢迎并感谢所有形式的贡献！🎉
 
-1. Fork项目
-2. 创建分支: `git checkout -b feature/AmazingFeature`
-3. 提交更改: `git commit -m 'Add feature'`
-4. 推送分支: `git push origin feature/AmazingFeature`
-5. 提交PR
+### 快速开始贡献
+
+1. **Fork 项目**并克隆到本地
+2. **创建分支**：`git checkout -b feature/AmazingFeature`
+3. **提交更改**：`git commit -m 'feat: Add some AmazingFeature'`
+4. **推送分支**：`git push origin feature/AmazingFeature`
+5. **提交 Pull Request**
+
+### 📚 详细贡献指南
+
+详细的开发环境设置、代码规范、提交规范等，请参阅：
+
+- 📖 [**完整贡献指南 (CONTRIBUTING.md)**](CONTRIBUTING.md)
+- 📋 [行为准则 (CODE_OF_CONDUCT.md)](CODE_OF_CONDUCT.md)
+- 📝 [变更日志 (CHANGELOG.md)](CHANGELOG.md)
+
+### 提交规范
+
+使用 [Conventional Commits](https://www.conventionalcommits.org/) 格式：
+
+```bash
+feat(ai): 添加新的AI功能
+fix(auth): 修复登录bug
+docs(readme): 更新文档
+```
+
+### 寻找贡献点
+
+- 🐛 查看 [Issues](https://github.com/your-username/EXEsystem/issues) 中的 bug 报告
+- 💡 查找标记为 `good first issue` 的问题
+- 📚 改进文档和示例
+- ✨ 提出新功能建议
 
 ---
 
@@ -565,8 +630,17 @@ MIT License - 详见 [LICENSE](LICENSE)
 
 ## 联系方式
 
-- 项目主页: https://github.com/your-repo/EXEsystem
-- 问题反馈: https://github.com/your-repo/EXEsystem/issues
+- 📦 项目主页: https://github.com/your-username/EXEsystem
+- 🐛 问题反馈: https://github.com/your-username/EXEsystem/issues
+- 💬 讨论交流: https://github.com/your-username/EXEsystem/discussions
+- 📧 邮件联系: [your-email@example.com]
+
+### 相关链接
+
+- 📚 [文档中心](document/DOCS_GUIDE.md)
+- 🚀 [部署指南](document/docs/deployment/DOCKER_QUICKSTART.md)
+- 🤝 [贡献指南](CONTRIBUTING.md)
+- 📝 [更新日志](CHANGELOG.md)
 
 ---
 

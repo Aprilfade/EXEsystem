@@ -1,0 +1,138 @@
+# ============================================
+# Docker Compose 配置文件 - EXEsystem 完整部署
+# 版本：v2.51
+# 服务：MySQL 8.0、Redis、后端、前端
+# ============================================
+
+services:
+  # ===== MySQL 数据库服务 =====
+  mysql:
+    image: mysql:8.0
+    container_name: exe-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: exesystem2024
+      MYSQL_DATABASE: exe_system
+      MYSQL_USER: exeuser
+      MYSQL_PASSWORD: exepass2024
+      TZ: Asia/Shanghai
+    ports:
+      - "3307:3306"  # 使用 3307 避免与本地 MySQL 冲突
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./document/sql/exam_system.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+      - --max_connections=1000
+      - --max_allowed_packet=256M
+    networks:
+      - exe-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pexesystem2024"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===== Redis 缓存服务 =====
+  redis:
+    image: redis:7.2-alpine
+    container_name: exe-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass exeredis2024
+    volumes:
+      - redis-data:/data
+    networks:
+      - exe-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "exeredis2024", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ===== 后端服务 =====
+  backend:
+    build:
+      context: ./exe-backend
+      dockerfile: Dockerfile
+    container_name: exe-backend
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      # Spring 配置
+      SPRING_PROFILES_ACTIVE: prod
+      TZ: Asia/Shanghai
+
+      # 数据库配置（匹配 application-prod.yml 中的环境变量名）
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: exe_system
+      DB_USERNAME: exeuser
+      DB_PASSWORD: exepass2024
+
+      # Redis 配置（匹配 application-prod.yml 中的环境变量名）
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: exeredis2024
+
+      # JWT 配置（生产环境必须）
+      JWT_SECRET: ZXhlc3lzdGVtMjAyNFN1cGVyU2VjcmV0S2V5Rm9ySldUQXV0aGVudGljYXRpb25QbGVhc2VDaGFuZ2VJblByb2R1Y3Rpb24xMjM0NQ==
+
+      # 文件上传路径
+      FILE_UPLOAD_DIR: /app/uploads
+
+      # JVM 参数
+      JAVA_OPTS: -Xms1024m -Xmx2048m -XX:+UseG1GC
+    volumes:
+      - backend-uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - exe-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ===== 前端服务 =====
+  frontend:
+    build:
+      context: ./exe-frontend
+      dockerfile: Dockerfile
+    container_name: exe-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - exe-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+# ===== 网络配置 =====
+networks:
+  exe-network:
+    driver: bridge
+
+# ===== 数据卷配置 =====
+volumes:
+  mysql-data:
+    driver: local
+  redis-data:
+    driver: local
+  backend-uploads:
+    driver: local
