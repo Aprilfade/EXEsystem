@@ -9,9 +9,9 @@
 [![Redis](https://img.shields.io/badge/Redis-7.2%2B-red.svg)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-supported-blue.svg)](https://www.docker.com/)
 
-[![GitHub stars](https://img.shields.io/github/stars/your-username/EXEsystem?style=social)](https://github.com/your-username/EXEsystem/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/your-username/EXEsystem?style=social)](https://github.com/your-username/EXEsystem/network/members)
-[![GitHub issues](https://img.shields.io/github/issues/your-username/EXEsystem)](https://github.com/your-username/EXEsystem/issues)
+[![GitHub stars](https://img.shields.io/github/stars/Aprilfade/EXEsystem?style=social)](https://github.com/Aprilfade/EXEsystem/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/Aprilfade/EXEsystem?style=social)](https://github.com/Aprilfade/EXEsystem/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/Aprilfade/EXEsystem)](https://github.com/Aprilfade/EXEsystem/issues)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 **功能完整 | AI赋能 | 游戏化学习 | 企业级架构**
@@ -615,7 +615,7 @@ docs(readme): 更新文档
 
 ### 寻找贡献点
 
-- 🐛 查看 [Issues](https://github.com/your-username/EXEsystem/issues) 中的 bug 报告
+- 🐛 查看 [Issues](https://github.com/Aprilfade/EXEsystem/issues) 中的 bug 报告
 - 💡 查找标记为 `good first issue` 的问题
 - 📚 改进文档和示例
 - ✨ 提出新功能建议
@@ -646,10 +646,10 @@ docs(readme): 更新文档
 
 ## 联系方式
 
-- 📦 项目主页: https://github.com/your-username/EXEsystem
-- 🐛 问题反馈: https://github.com/your-username/EXEsystem/issues
-- 💬 讨论交流: https://github.com/your-username/EXEsystem/discussions
-- 📧 邮件联系: [your-email@example.com]
+- 📦 项目主页: https://github.com/Aprilfade/EXEsystem
+- 🐛 问题反馈: https://github.com/Aprilfade/EXEsystem/issues
+- 💬 讨论交流: https://github.com/Aprilfade/EXEsystem/discussions
+- 📧 邮件联系: [luolingfei999@qq.com]
 
 ### 相关链接
 
