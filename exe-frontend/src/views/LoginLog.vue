@@ -220,6 +220,7 @@ import {
   SuccessFilled, CircleCloseFilled, TrendCharts,
   User, Location, Clock, Monitor, SwitchButton
 } from '@element-plus/icons-vue';
+import * as XLSX from 'xlsx';
 
 const logList = ref<LoginLog[]>([]);
 const total = ref(0);
@@ -290,8 +291,73 @@ const handleDetail = (row: LoginLog) => {
 };
 
 const handleExport = () => {
-  ElMessage.info('导出功能开发中...');
-  // TODO: 实现导出功能
+  try {
+    if (logList.value.length === 0) {
+      ElMessage.warning('暂无数据可导出');
+      return;
+    }
+
+    // 创建工作簿
+    const workbook = XLSX.utils.book_new();
+
+    // 统计信息
+    const summaryData = [
+      ['登录日志统计报告'],
+      [''],
+      ['导出时间', new Date().toLocaleString('zh-CN')],
+      ['总记录数', total.value],
+      ['成功登录', stats.value.successCount],
+      ['失败登录', stats.value.failureCount],
+      ['成功率', `${successRate.value}%`],
+      [''],
+      ['详细数据']
+    ];
+
+    // 详细数据表头
+    const headers = ['序号', '用户名', '事件类型', 'IP地址', '登录时间', '浏览器', '操作系统'];
+
+    // 详细数据
+    const detailData = logList.value.map((log, index) => [
+      index + 1,
+      log.username,
+      getTypeText(log.logType),
+      log.ipAddress,
+      formatTime(log.logTime),
+      getBrowserInfo(log.userAgent),
+      getOSInfo(log.userAgent)
+    ]);
+
+    // 合并统计和详细数据
+    const allData = [...summaryData, headers, ...detailData];
+
+    // 创建工作表
+    const worksheet = XLSX.utils.aoa_to_sheet(allData);
+
+    // 设置列宽
+    worksheet['!cols'] = [
+      { wch: 8 },   // 序号
+      { wch: 15 },  // 用户名
+      { wch: 12 },  // 事件类型
+      { wch: 18 },  // IP地址
+      { wch: 20 },  // 登录时间
+      { wch: 15 },  // 浏览器
+      { wch: 15 }   // 操作系统
+    ];
+
+    // 添加工作表到工作簿
+    XLSX.utils.book_append_sheet(workbook, worksheet, '登录日志');
+
+    // 生成文件名
+    const fileName = `登录日志_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`;
+
+    // 导出
+    XLSX.writeFile(workbook, fileName);
+
+    ElMessage.success('导出成功');
+  } catch (error) {
+    console.error('导出失败:', error);
+    ElMessage.error('导出失败，请稍后重试');
+  }
 };
 
 const getTagType = (logType: string) => {

@@ -46,11 +46,11 @@ public class SwaggerConfig {
                                 "- 游戏化学习（积分、成就、段位）\n" +
                                 "- 班级作业管理\n" +
                                 "- 权限管理（RBAC）")
-                        .version("v2.51")
+                        .version("v3.06")
                         .contact(new Contact()
-                                .name("ICE")
-                                .email("your-email@example.com")
-                                .url("https://github.com/your-repo/EXEsystem"))
+                                .name("EXEsystem Team")
+                                .email("luolingfei999@qq.com")
+                                .url("https://github.com/Aprilfade/EXEsystem"))
                         .license(new License()
                                 .name("MIT License")
                                 .url("https://opensource.org/licenses/MIT")))
@@ -58,7 +58,7 @@ public class SwaggerConfig {
                 // 外部文档链接
                 .externalDocs(new ExternalDocumentation()
                         .description("EXEsystem 项目文档")
-                        .url("https://github.com/your-repo/EXEsystem/blob/master/README.md"))
+                        .url("https://github.com/Aprilfade/EXEsystem/blob/master/README.md"))
 
                 // 配置 JWT 认证
                 .addSecurityItem(new SecurityRequirement().addList("Bearer Token"))

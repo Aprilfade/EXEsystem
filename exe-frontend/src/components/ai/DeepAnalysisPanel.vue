@@ -218,7 +218,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   Loading, TrendCharts, Warning, Reading, Guide, DocumentCopy,
   Check, Edit, Trophy, Refresh, Collection
@@ -227,6 +227,7 @@ import { useStudentAuthStore } from '@/stores/studentAuth';
 import request from '@/utils/request';
 import { marked } from 'marked';
 import { useResponsive } from '@/composables/useResponsive';
+import { createWrongRecord } from '@/api/wrongRecord';
 
 interface DeepAnalysisResult {
   fullAnalysis: string;
@@ -387,9 +388,112 @@ const copyAnalysis = () => {
 /**
  * 保存分析结果
  */
-const handleSaveAnalysis = () => {
-  // TODO: 实现保存功能
-  ElMessage.success('分析已收藏');
+const handleSaveAnalysis = async () => {
+  if (!analysisResult.value || !props.questionData) {
+    ElMessage.warning('没有可保存的分析结果');
+    return;
+  }
+
+  try {
+    // 提示用户选择保存方式
+    await ElMessageBox.confirm(
+      '将分析结果保存到错题本，方便后续复习？',
+      '保存确认',
+      {
+        confirmButtonText: '保存到错题本',
+        cancelButtonText: '仅本地收藏',
+        distinguishCancelAndClose: true,
+        type: 'info'
+      }
+    ).then(async () => {
+      // 保存到后端错题本
+      if (props.questionData?.questionId) {
+        await createWrongRecord({
+          questionId: props.questionData.questionId,
+          studentIds: [studentAuth.user?.id || 0],
+          wrongReason: generateWrongReasonSummary(),
+          paperId: undefined
+        });
+
+        ElMessage.success('已保存到错题本');
+      } else {
+        ElMessage.warning('题目ID缺失，仅保存到本地');
+        saveToLocal();
+      }
+
+      // 同时保存到本地
+      saveToLocal();
+    }).catch((action) => {
+      if (action === 'cancel') {
+        // 仅保存到本地
+        saveToLocal();
+        ElMessage.success('已收藏到本地');
+      }
+    });
+  } catch (error: any) {
+    console.error('保存失败:', error);
+    // 如果后端保存失败，尝试本地保存
+    saveToLocal();
+    ElMessage.warning('后端保存失败，已保存到本地');
+  }
+};
+
+/**
+ * 生成错误原因摘要
+ */
+const generateWrongReasonSummary = (): string => {
+  if (!analysisResult.value) return '';
+
+  const parts: string[] = [];
+
+  if (analysisResult.value.errorType) {
+    parts.push(`错误类型: ${analysisResult.value.errorType}`);
+  }
+
+  if (analysisResult.value.knowledgePoints && analysisResult.value.knowledgePoints.length > 0) {
+    parts.push(`涉及知识点: ${analysisResult.value.knowledgePoints.join('、')}`);
+  }
+
+  // 添加简化的分析内容（前200字）
+  if (analysisResult.value.fullAnalysis) {
+    const plainText = analysisResult.value.fullAnalysis.replace(/[#*_\[\]]/g, '');
+    const summary = plainText.substring(0, 200);
+    parts.push(`分析摘要: ${summary}${plainText.length > 200 ? '...' : ''}`);
+  }
+
+  return parts.join('\n\n');
+};
+
+/**
+ * 保存到本地存储
+ */
+const saveToLocal = () => {
+  try {
+    const savedAnalyses = JSON.parse(localStorage.getItem('deep_analyses') || '[]');
+
+    const analysisRecord = {
+      id: Date.now(),
+      timestamp: new Date().toISOString(),
+      questionContent: props.questionData?.questionContent || '',
+      studentAnswer: props.questionData?.studentAnswer || '',
+      correctAnswer: props.questionData?.correctAnswer || '',
+      analysisResult: analysisResult.value,
+      studentProfile: studentProfile.value
+    };
+
+    // 添加到数组开头，最新的在前面
+    savedAnalyses.unshift(analysisRecord);
+
+    // 只保留最近50条记录
+    if (savedAnalyses.length > 50) {
+      savedAnalyses.splice(50);
+    }
+
+    localStorage.setItem('deep_analyses', JSON.stringify(savedAnalyses));
+  } catch (error) {
+    console.error('本地保存失败:', error);
+    throw error;
+  }
 };
 
 /**

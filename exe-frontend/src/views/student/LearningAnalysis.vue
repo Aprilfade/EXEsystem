@@ -338,6 +338,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { useRouter } from 'vue-router';
 import * as echarts from 'echarts';
 import type { EChartsType } from 'echarts';
 import {
@@ -345,6 +346,9 @@ import {
   QuestionFilled, Reading, Edit, Clock, Trophy, DocumentCopy, Star, Document
 } from '@element-plus/icons-vue';
 import request from '@/utils/request';
+import { getLearningAnalytics } from '@/api/learningAnalytics';
+import type { WeakPoint } from '@/api/learningAnalytics';
+import { useStudentAuthStore } from '@/stores/studentAuth';
 
 // ==================== 类型定义 ====================
 interface Suggestion {
@@ -363,6 +367,10 @@ interface KnowledgePoint {
 }
 
 // ==================== 状态管理 ====================
+// Router
+const router = useRouter();
+const studentAuth = useStudentAuthStore();
+
 // 时间范围
 const timeRange = ref('30days');
 const loading = ref(false);
@@ -480,29 +488,95 @@ const getMasteryColor = (rate: number): string => {
 const loadData = async () => {
   loading.value = true;
   try {
-    // 模拟数据加载（1.5秒延迟）
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // 根据时间范围计算天数
+    const daysMap: Record<string, number> = {
+      '7days': 7,
+      '30days': 30,
+      '3months': 90,
+      'semester': 180
+    };
+    const days = daysMap[timeRange.value] || 30;
 
-    // TODO: 调用后端API获取真实数据
-    // const response = await request.get('/api/student/learning-analysis', {
-    //   params: { timeRange: timeRange.value }
-    // });
-    // topStats.value = response.data.stats;
-    // aiSuggestions.value = response.data.suggestions;
-    // weakKnowledgePoints.value = response.data.weakPoints;
+    // 调用后端API获取真实数据
+    const response = await getLearningAnalytics(days);
+
+    if (response.code === 200) {
+      const data = response.data;
+
+      // 更新顶部统计数据
+      if (data.studyTimeTrend && data.studyTimeTrend.length > 0) {
+        const totalMinutes = data.studyTimeTrend.reduce((sum, point) => sum + point.studyMinutes, 0);
+        const totalHours = (totalMinutes / 60).toFixed(1);
+        const totalQuestions = data.studyTimeTrend.reduce((sum, point) => sum + point.questionCount, 0);
+        const avgAccuracy = data.knowledgeMastery.length > 0
+          ? (data.knowledgeMastery.reduce((sum, kp) => sum + kp.masteryRate, 0) / data.knowledgeMastery.length).toFixed(1)
+          : '0';
+
+        topStats.value[0].value = `${totalHours}小时`;
+        topStats.value[1].value = `${totalQuestions}题`;
+        topStats.value[2].value = `${avgAccuracy}%`;
+        topStats.value[3].value = `${data.weakPoints.length}个`;
+      }
+
+      // 更新薄弱知识点列表
+      weakKnowledgePoints.value = data.weakPoints.map((wp: WeakPoint) => ({
+        name: wp.knowledgePointName,
+        subject: wp.subjectName,
+        masteryRate: Math.round(wp.scoreRate),
+        wrongCount: wp.wrongCount,
+        practiceCount: wp.recommendedPracticeCount
+      }));
+
+      // 保存原始数据用于图表
+      studyTimeData.value = data.studyTimeTrend;
+      knowledgeMasteryData.value = data.knowledgeMastery;
+
+      // 初始化AI建议
+      if (data.learningAdvice) {
+        parseAiAdvice(data.learningAdvice);
+      }
+    }
 
     // 初始化图表
     await nextTick();
     initCharts();
 
     ElMessage.success('数据加载成功');
-  } catch (error) {
+  } catch (error: any) {
     console.error('数据加载失败:', error);
-    ElMessage.error('数据加载失败，请稍后重试');
+    ElMessage.error(error.message || '数据加载失败，请稍后重试');
   } finally {
     loading.value = false;
   }
 };
+
+/**
+ * 解析AI建议文本
+ */
+const parseAiAdvice = (advice: string) => {
+  // 简单解析建议文本，实际可能需要更复杂的逻辑
+  const suggestions: Suggestion[] = [];
+  const lines = advice.split('\n').filter(line => line.trim());
+
+  lines.forEach((line, index) => {
+    if (line.length > 10) {
+      suggestions.push({
+        category: index < 3 ? '学习建议' : '练习推荐',
+        type: index === 0 ? 'warning' : 'info',
+        priority: index < 2 ? '高' : '中',
+        content: line
+      });
+    }
+  });
+
+  if (suggestions.length > 0) {
+    aiSuggestions.value = suggestions;
+  }
+};
+
+// 保存原始数据
+const studyTimeData = ref<any[]>([]);
+const knowledgeMasteryData = ref<any[]>([]);
 
 /**
  * 处理时间范围变化
@@ -538,23 +612,120 @@ const getTimeRangeLabel = (): string => {
  * 生成AI建议
  */
 const generateAiSuggestions = async () => {
+  if (!studentAuth.aiKey) {
+    ElMessage.warning('请先配置AI Key');
+    return;
+  }
+
   generatingAi.value = true;
   try {
-    // 模拟AI生成过程
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // 准备分析数据
+    const analysisData = {
+      timeRange: timeRange.value,
+      weakPoints: weakKnowledgePoints.value.map(wp => ({
+        name: wp.name,
+        subject: wp.subject,
+        masteryRate: wp.masteryRate,
+        wrongCount: wp.wrongCount
+      })),
+      studyStats: {
+        totalTime: topStats.value[0].value,
+        totalQuestions: topStats.value[1].value,
+        avgAccuracy: topStats.value[2].value
+      }
+    };
 
-    // TODO: 调用AI API生成建议
-    // const response = await request.post('/api/student/ai-suggestions', {
-    //   timeRange: timeRange.value
-    // });
-    // aiSuggestions.value = response.data;
+    // 调用AI API生成建议
+    const response = await request({
+      url: '/api/v1/student/ai-learning-advice',
+      method: 'post',
+      data: analysisData,
+      headers: {
+        'X-Ai-Api-Key': studentAuth.aiKey,
+        'X-Ai-Provider': studentAuth.aiProvider || 'deepseek'
+      }
+    });
 
-    ElMessage.success('AI建议已生成');
-  } catch (error) {
+    if (response.code === 200 && response.data) {
+      // 解析AI返回的建议
+      if (typeof response.data === 'string') {
+        parseAiAdvice(response.data);
+      } else if (Array.isArray(response.data)) {
+        aiSuggestions.value = response.data;
+      }
+
+      ElMessage.success('AI建议已生成');
+    } else {
+      throw new Error(response.msg || '生成失败');
+    }
+  } catch (error: any) {
     console.error('生成AI建议失败:', error);
-    ElMessage.error('生成失败，请稍后重试');
+    ElMessage.error(error.message || '生成失败，请稍后重试');
+
+    // 如果AI生成失败，提供基础建议
+    provideBasicSuggestions();
   } finally {
     generatingAi.value = false;
+  }
+};
+
+/**
+ * 提供基础建议（当AI不可用时）
+ */
+const provideBasicSuggestions = () => {
+  const suggestions: Suggestion[] = [];
+
+  // 基于薄弱知识点生成建议
+  if (weakKnowledgePoints.value.length > 0) {
+    const weakest = weakKnowledgePoints.value[0];
+    suggestions.push({
+      category: '重点关注',
+      type: 'warning',
+      priority: '高',
+      content: `建议重点复习「${weakest.subject}」中的「${weakest.name}」知识点，当前掌握度仅${weakest.masteryRate}%`
+    });
+  }
+
+  // 基于总体统计生成建议
+  const avgAccuracy = parseFloat(topStats.value[2].value.replace('%', ''));
+  if (avgAccuracy < 70) {
+    suggestions.push({
+      category: '学习建议',
+      type: 'danger',
+      priority: '高',
+      content: `当前平均正确率为${avgAccuracy}%，建议放慢学习进度，重点关注基础知识的理解和掌握`
+    });
+  } else if (avgAccuracy >= 85) {
+    suggestions.push({
+      category: '学习建议',
+      type: 'success',
+      priority: '中',
+      content: `当前平均正确率为${avgAccuracy}%，表现优秀！可以尝试挑战更高难度的题目`
+    });
+  }
+
+  // 基于学习时长生成建议
+  const totalHours = parseFloat(topStats.value[0].value.replace('小时', ''));
+  const daysMap: Record<string, number> = {
+    '7days': 7,
+    '30days': 30,
+    '3months': 90,
+    'semester': 180
+  };
+  const days = daysMap[timeRange.value] || 30;
+  const avgHoursPerDay = totalHours / days;
+
+  if (avgHoursPerDay < 0.5) {
+    suggestions.push({
+      category: '时间管理',
+      type: 'info',
+      priority: '中',
+      content: `近期平均每日学习时长不足0.5小时，建议增加学习时间，保持每天至少1小时的有效学习`
+    });
+  }
+
+  if (suggestions.length > 0) {
+    aiSuggestions.value = suggestions;
   }
 };
 
@@ -1164,8 +1335,27 @@ const debouncedResize = debounce(resizeCharts, 300);
  * 生成针对性练习
  */
 const generatePractice = () => {
+  // 获取薄弱知识点列表
+  const weakPoints = weakKnowledgePoints.value
+    .filter(point => point.masteryRate < 70)
+    .map(point => point.name);
+
+  if (weakPoints.length === 0) {
+    ElMessage.warning('暂无薄弱知识点，您的掌握度已经很好了！');
+    return;
+  }
+
   ElMessage.info('正在为您生成针对性练习...');
-  // TODO: 调用后端API生成练习
+
+  // 跳转到AI练习生成页面，并传递薄弱知识点参数
+  router.push({
+    name: 'StudentAiPractice',
+    query: {
+      knowledgePoints: weakPoints.join(','),
+      difficulty: 'adaptive', // 自适应难度
+      source: 'learning-analysis'
+    }
+  });
 };
 
 /**
@@ -1173,7 +1363,16 @@ const generatePractice = () => {
  */
 const reviewKnowledgePoint = (point: KnowledgePoint) => {
   ElMessage.success(`开始复习：${point.name}`);
-  // TODO: 跳转到复习页面
+
+  // 跳转到智能复习页面，并传递知识点参数
+  router.push({
+    name: 'StudentSmartReview',
+    query: {
+      knowledgePoint: point.name,
+      subject: point.subject,
+      masteryRate: point.masteryRate.toString()
+    }
+  });
 };
 
 /**
@@ -1181,7 +1380,16 @@ const reviewKnowledgePoint = (point: KnowledgePoint) => {
  */
 const practiceKnowledgePoint = (point: KnowledgePoint) => {
   ElMessage.success(`开始练习：${point.name}`);
-  // TODO: 跳转到练习页面
+
+  // 跳转到练习页面，并传递知识点参数
+  router.push({
+    name: 'StudentPractice',
+    query: {
+      knowledgePoint: point.name,
+      subject: point.subject,
+      mode: 'targeted' // 针对性练习模式
+    }
+  });
 };
 
 // ==================== 生命周期 ====================

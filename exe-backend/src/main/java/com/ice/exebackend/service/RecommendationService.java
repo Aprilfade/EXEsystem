@@ -5,8 +5,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ice.exebackend.entity.BizQuestion;
 import com.ice.exebackend.entity.BizExamResult;
+import com.ice.exebackend.entity.BizPaper;
+import com.ice.exebackend.entity.BizCourse;
 import com.ice.exebackend.mapper.BizQuestionMapper;
 import com.ice.exebackend.mapper.BizExamResultMapper;
+import com.ice.exebackend.mapper.BizPaperMapper;
+import com.ice.exebackend.mapper.BizCourseMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -34,6 +38,12 @@ public class RecommendationService {
 
     @Autowired
     private BizExamResultMapper examResultMapper;
+
+    @Autowired
+    private BizPaperMapper paperMapper;
+
+    @Autowired
+    private BizCourseMapper courseMapper;
 
     /**
      * 用户行为数据
@@ -493,19 +503,202 @@ public class RecommendationService {
 
         List<CourseRecommendation> recommendations = new ArrayList<>();
 
-        // TODO: 实现基于内容的课程推荐
-        // 1. 分析用户薄弱科目
-        // 2. 推荐对应科目的课程
+        try {
+            // 1. 分析用户薄弱科目
+            Map<Long, SubjectPerformance> subjectPerformances = analyzeUserWeakSubjects(userId);
 
-        // 模拟数据
-        for (int i = 0; i < Math.min(limit, 3); i++) {
-            CourseRecommendation rec = new CourseRecommendation();
-            rec.setCourseId((long) (300 + i));
-            rec.setName("推荐课程 #" + (300 + i));
-            rec.setDescription("这是一个优质课程");
-            rec.setScore(8.5);
-            rec.setReason("根据你的薄弱环节推荐");
-            recommendations.add(rec);
+            if (subjectPerformances.isEmpty()) {
+                log.warn("用户 {} 没有考试记录，返回热门课程", userId);
+                return getPopularCourses(limit);
+            }
+
+            // 2. 按分数从低到高排序，找出薄弱科目
+            List<Map.Entry<Long, SubjectPerformance>> sortedSubjects = subjectPerformances.entrySet()
+                    .stream()
+                    .sorted(Comparator.comparingDouble(e -> e.getValue().averageScore))
+                    .limit(3) // 取前3个薄弱科目
+                    .collect(Collectors.toList());
+
+            // 3. 推荐对应科目的课程
+            for (Map.Entry<Long, SubjectPerformance> entry : sortedSubjects) {
+                Long subjectId = entry.getKey();
+                SubjectPerformance performance = entry.getValue();
+
+                // 查询该科目的课程
+                LambdaQueryWrapper<BizCourse> wrapper = new LambdaQueryWrapper<>();
+                wrapper.eq(BizCourse::getSubjectId, subjectId);
+                wrapper.orderByDesc(BizCourse::getCreateTime);
+                wrapper.last("LIMIT " + Math.max(1, limit / sortedSubjects.size()));
+
+                List<BizCourse> courses = courseMapper.selectList(wrapper);
+
+                for (BizCourse course : courses) {
+                    CourseRecommendation rec = new CourseRecommendation();
+                    rec.setCourseId(course.getId());
+                    rec.setName(course.getName());
+                    rec.setDescription(course.getDescription());
+                    rec.setCoverUrl(course.getCoverUrl());
+
+                    // 计算推荐分数（基于该科目的薄弱程度）
+                    double score = calculateCourseScore(performance);
+                    rec.setScore(score);
+
+                    // 生成推荐理由
+                    String reason = generateCourseReason(performance);
+                    rec.setReason(reason);
+
+                    recommendations.add(rec);
+                }
+            }
+
+            // 如果推荐的课程不足，补充热门课程
+            if (recommendations.size() < limit) {
+                List<CourseRecommendation> popularCourses = getPopularCourses(limit - recommendations.size());
+                recommendations.addAll(popularCourses);
+            }
+
+            // 按推荐分数排序
+            recommendations.sort((a, b) -> Double.compare(b.getScore(), a.getScore()));
+
+            // 限制返回数量
+            if (recommendations.size() > limit) {
+                recommendations = recommendations.subList(0, limit);
+            }
+
+            log.info("为用户 {} 生成了 {} 个课程推荐", userId, recommendations.size());
+
+        } catch (Exception e) {
+            log.error("推荐课程失败", e);
+            // 出错时返回热门课程
+            return getPopularCourses(limit);
+        }
+
+        return recommendations;
+    }
+
+    /**
+     * 分析用户在各科目的表现
+     */
+    private Map<Long, SubjectPerformance> analyzeUserWeakSubjects(Long userId) {
+        // 获取用户最近的考试成绩
+        LambdaQueryWrapper<BizExamResult> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BizExamResult::getStudentId, userId);
+        wrapper.ge(BizExamResult::getCreateTime, LocalDateTime.now().minusMonths(3)); // 最近3个月
+        wrapper.orderByDesc(BizExamResult::getCreateTime);
+
+        List<BizExamResult> examResults = examResultMapper.selectList(wrapper);
+
+        if (examResults.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        // 按科目分组统计
+        Map<Long, List<Double>> subjectScores = new HashMap<>();
+        Map<Long, Integer> subjectExamCounts = new HashMap<>();
+
+        for (BizExamResult result : examResults) {
+            // 获取试卷的科目ID
+            BizPaper paper = paperMapper.selectById(result.getPaperId());
+            if (paper != null && paper.getSubjectId() != null) {
+                Long subjectId = paper.getSubjectId();
+
+                // 计算得分率
+                double scoreRate = 0.0;
+                if (result.getTotalScore() != null && result.getTotalScore() > 0) {
+                    scoreRate = (result.getScore() * 100.0) / result.getTotalScore();
+                }
+
+                subjectScores.computeIfAbsent(subjectId, k -> new ArrayList<>()).add(scoreRate);
+                subjectExamCounts.put(subjectId, subjectExamCounts.getOrDefault(subjectId, 0) + 1);
+            }
+        }
+
+        // 计算每个科目的平均分和表现
+        Map<Long, SubjectPerformance> performances = new HashMap<>();
+        for (Map.Entry<Long, List<Double>> entry : subjectScores.entrySet()) {
+            Long subjectId = entry.getKey();
+            List<Double> scores = entry.getValue();
+
+            double averageScore = scores.stream()
+                    .mapToDouble(Double::doubleValue)
+                    .average()
+                    .orElse(0.0);
+
+            SubjectPerformance performance = new SubjectPerformance();
+            performance.subjectId = subjectId;
+            performance.averageScore = averageScore;
+            performance.examCount = subjectExamCounts.get(subjectId);
+
+            performances.put(subjectId, performance);
+        }
+
+        return performances;
+    }
+
+    /**
+     * 科目表现数据
+     */
+    private static class SubjectPerformance {
+        Long subjectId;
+        double averageScore; // 平均得分率
+        int examCount; // 考试次数
+    }
+
+    /**
+     * 计算课程推荐分数
+     */
+    private double calculateCourseScore(SubjectPerformance performance) {
+        // 分数越低，推荐分数越高
+        double baseScore = 100 - performance.averageScore;
+
+        // 考试次数越多，置信度越高，推荐分数也越高
+        double confidenceFactor = Math.min(1.0, performance.examCount / 5.0);
+
+        return baseScore * (0.7 + 0.3 * confidenceFactor);
+    }
+
+    /**
+     * 生成课程推荐理由
+     */
+    private String generateCourseReason(SubjectPerformance performance) {
+        String level;
+        if (performance.averageScore < 60) {
+            level = "需要重点提升";
+        } else if (performance.averageScore < 75) {
+            level = "有较大提升空间";
+        } else {
+            level = "可以进一步巩固";
+        }
+
+        return String.format("该科目平均得分率%.1f%%，%s", performance.averageScore, level);
+    }
+
+    /**
+     * 获取热门课程
+     */
+    private List<CourseRecommendation> getPopularCourses(int limit) {
+        List<CourseRecommendation> recommendations = new ArrayList<>();
+
+        try {
+            // 查询最新的课程作为热门课程
+            LambdaQueryWrapper<BizCourse> wrapper = new LambdaQueryWrapper<>();
+            wrapper.orderByDesc(BizCourse::getCreateTime);
+            wrapper.last("LIMIT " + limit);
+
+            List<BizCourse> courses = courseMapper.selectList(wrapper);
+
+            for (BizCourse course : courses) {
+                CourseRecommendation rec = new CourseRecommendation();
+                rec.setCourseId(course.getId());
+                rec.setName(course.getName());
+                rec.setDescription(course.getDescription());
+                rec.setCoverUrl(course.getCoverUrl());
+                rec.setScore(7.0);
+                rec.setReason("热门课程推荐");
+                recommendations.add(rec);
+            }
+        } catch (Exception e) {
+            log.error("查询热门课程失败", e);
         }
 
         return recommendations;

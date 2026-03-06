@@ -592,6 +592,7 @@ import { fetchKnowledgeGraph } from '@/api/knowledgePoint';
 import { analyzeQuestionStream } from '@/api/ai';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import QRCode from 'qrcode';
 
 // ==================== 类型定义 ====================
 interface KnowledgeNode {
@@ -1854,18 +1855,36 @@ const exportLearningPathPDF = async () => {
   }
 };
 
-const shareLearningPath = () => {
+const shareLearningPath = async () => {
   // 生成分享链接
-  shareLink.value = `https://example.com/share/${Date.now()}`;
+  shareLink.value = `${window.location.origin}/student/knowledge-graph/shared/${Date.now()}`;
   showShareDialog.value = true;
 
-  // TODO: 生成二维码
-  nextTick(() => {
-    if (qrcodeRef.value) {
-      // 使用二维码库生成
-      qrcodeRef.value.innerHTML = '<p>二维码占位</p>';
+  // 生成二维码
+  await nextTick();
+  if (qrcodeRef.value) {
+    try {
+      // 清空之前的内容
+      qrcodeRef.value.innerHTML = '';
+
+      // 生成二维码Canvas
+      const canvas = document.createElement('canvas');
+      await QRCode.toCanvas(canvas, shareLink.value, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#667eea',  // 二维码颜色
+          light: '#ffffff'  // 背景颜色
+        }
+      });
+
+      qrcodeRef.value.appendChild(canvas);
+      ElMessage.success('分享链接已生成');
+    } catch (error) {
+      console.error('生成二维码失败:', error);
+      ElMessage.error('生成二维码失败');
     }
-  });
+  }
 };
 
 const copyShareLink = () => {

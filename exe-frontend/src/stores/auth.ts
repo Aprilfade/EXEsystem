@@ -75,7 +75,8 @@ export const useAuthStore = defineStore('auth', {
                 this.user = null;
                 this.permissions = [];
                 localStorage.removeItem('token');
-                window.location.href = '/login';
+                // 退出后跳转到 portal 页面
+                window.location.href = '/portal';
             }
         },
         // 【核心修复】修正 hasPermission 方法的逻辑

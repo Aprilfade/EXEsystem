@@ -209,12 +209,26 @@ export function useAchievements() {
         return store.gradingResults.size >= condition.target
 
       case 'subject_master':
-        // TODO: 实现学科精通检测
-        return false
+        // 学科精通检测
+        if (!condition.metadata?.subject || !condition.metadata?.minQuestions) {
+          return false
+        }
+
+        const subjectStats = store.subjectStatistics.get(condition.metadata.subject)
+        if (!subjectStats) return false
+
+        // 检查题目数量是否达标
+        if (subjectStats.totalQuestions < condition.metadata.minQuestions) {
+          return false
+        }
+
+        // 检查正确率是否达标
+        return subjectStats.accuracy >= condition.target
 
       case 'daily_practice':
-        // TODO: 实现连续练习天数检测
-        return false
+        // 连续练习天数检测
+        const consecutiveDays = store.getConsecutivePracticeDays()
+        return consecutiveDays >= condition.target
 
       default:
         return false
@@ -321,8 +335,71 @@ export function useAchievements() {
    * 播放音效
    */
   const playSound = (soundName: string) => {
-    // TODO: 实现音效播放
-    console.log('Playing sound:', soundName)
+    // 检查用户是否禁用了音效
+    const soundEnabled = localStorage.getItem('sound_enabled') !== 'false'
+    if (!soundEnabled) return
+
+    try {
+      // 使用Web Audio API创建音效
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      // 根据音效类型设置不同的频率和波形
+      switch (soundName) {
+        case 'achievement_unlock':
+          // 成就解锁音效：上升音调
+          oscillator.type = 'sine'
+          oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime) // C5
+          oscillator.frequency.exponentialRampToValueAtTime(783.99, audioContext.currentTime + 0.1) // G5
+          oscillator.frequency.exponentialRampToValueAtTime(1046.50, audioContext.currentTime + 0.2) // C6
+          gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+          oscillator.start(audioContext.currentTime)
+          oscillator.stop(audioContext.currentTime + 0.3)
+          break
+
+        case 'correct_answer':
+          // 答对音效：清脆的叮
+          oscillator.type = 'sine'
+          oscillator.frequency.value = 800
+          gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15)
+          oscillator.start()
+          oscillator.stop(audioContext.currentTime + 0.15)
+          break
+
+        case 'wrong_answer':
+          // 答错音效：低沉的提示
+          oscillator.type = 'sine'
+          oscillator.frequency.value = 200
+          gainNode.gain.setValueAtTime(0.2, audioContext.currentTime)
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2)
+          oscillator.start()
+          oscillator.stop(audioContext.currentTime + 0.2)
+          break
+
+        case 'level_up':
+          // 升级音效：连续上升音
+          oscillator.type = 'square'
+          oscillator.frequency.setValueAtTime(440, audioContext.currentTime)
+          oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.15)
+          oscillator.frequency.exponentialRampToValueAtTime(1320, audioContext.currentTime + 0.3)
+          gainNode.gain.setValueAtTime(0.2, audioContext.currentTime)
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4)
+          oscillator.start()
+          oscillator.stop(audioContext.currentTime + 0.4)
+          break
+
+        default:
+          console.log('Playing sound:', soundName)
+      }
+    } catch (error) {
+      console.warn('Failed to play sound:', error)
+    }
   }
 
   /**
@@ -393,6 +470,9 @@ export function useAchievements() {
 
     // Helpers
     getRarityColor,
-    getRarityLabel
+    getRarityLabel,
+
+    // Sound
+    playSound
   }
 }

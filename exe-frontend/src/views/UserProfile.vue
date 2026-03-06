@@ -255,6 +255,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useDarkMode } from '@/composables/useDarkMode';
 import { updateMyProfile } from '@/api/user';
 import type { UserInfo } from '@/api/user';
+import { getDashboardStats } from '@/api/dashboard';
 
 const authStore = useAuthStore();
 const { isDark, toggleDarkMode } = useDarkMode();
@@ -343,17 +344,30 @@ const initData = () => {
     avatar: userInfo.value.avatar || ''
   });
 
-  // TODO: 从后端加载统计数据
+  // 从后端加载统计数据
   loadStats();
 };
 
 // 加载统计数据
 const loadStats = async () => {
-  // TODO: 调用后端接口获取统计数据
-  stats.value[0].value = 25; // 示例数据
-  stats.value[1].value = 156;
-  stats.value[2].value = 328;
-  stats.value[3].value = 42;
+  try {
+    const res = await getDashboardStats();
+    if (res.code === 200) {
+      const data = res.data;
+      // 更新统计数据
+      stats.value[0].value = data.paperCount || 0; // 创建试卷
+      stats.value[1].value = data.questionCount || 0; // 创建题目
+      stats.value[2].value = data.studentCount || 0; // 管理学生
+      stats.value[3].value = data.subjectCount || 0; // 数据分析（使用科目数量作为示例）
+    }
+  } catch (error) {
+    console.error('加载统计数据失败:', error);
+    // 如果加载失败，显示默认值
+    stats.value[0].value = 0;
+    stats.value[1].value = 0;
+    stats.value[2].value = 0;
+    stats.value[3].value = 0;
+  }
 };
 
 // 头像上传
@@ -412,15 +426,21 @@ const submitSecurityForm = async () => {
     if (valid) {
       try {
         saving.value = true;
-        // TODO: 调用修改密码接口
+        // 调用修改密码接口
         await updateMyProfile({
           oldPassword: securityForm.oldPassword,
           password: securityForm.newPassword
         });
-        ElMessage.success('密码修改成功');
+        ElMessage.success('密码修改成功，请重新登录');
+        // 修改密码成功后，清空表单并建议用户重新登录
         resetSecurityForm();
-      } catch (error) {
+        // 可以选择自动退出登录
+        setTimeout(() => {
+          authStore.logout();
+        }, 2000);
+      } catch (error: any) {
         console.error('修改密码失败:', error);
+        ElMessage.error(error.message || '修改密码失败，请检查当前密码是否正确');
       } finally {
         saving.value = false;
       }
@@ -437,9 +457,37 @@ const resetSecurityForm = () => {
 };
 
 // 保存偏好设置
-const savePreferences = () => {
-  // TODO: 保存偏好设置到后端
-  ElMessage.success('偏好设置已保存');
+const savePreferences = async () => {
+  try {
+    // 保存到localStorage
+    localStorage.setItem('user_preferences', JSON.stringify(preferences));
+
+    // 可选：保存到后端
+    try {
+      await updateMyProfile({
+        preferences: JSON.stringify(preferences)
+      });
+    } catch (error) {
+      console.warn('保存偏好设置到后端失败，已保存到本地:', error);
+    }
+
+    ElMessage.success('偏好设置已保存');
+  } catch (error) {
+    console.error('保存偏好设置失败:', error);
+    ElMessage.error('保存失败，请稍后重试');
+  }
+};
+
+// 加载偏好设置
+const loadPreferences = () => {
+  try {
+    const savedPrefs = localStorage.getItem('user_preferences');
+    if (savedPrefs) {
+      Object.assign(preferences, JSON.parse(savedPrefs));
+    }
+  } catch (error) {
+    console.error('加载偏好设置失败:', error);
+  }
 };
 
 // 格式化日期
@@ -450,6 +498,7 @@ const formatDate = (dateStr: string) => {
 
 onMounted(() => {
   initData();
+  loadPreferences();
 });
 </script>
 

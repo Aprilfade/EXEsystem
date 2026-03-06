@@ -934,11 +934,21 @@ const submitSecurityForm = async () => {
     if (valid) {
       saving.value = true;
       try {
-        // TODO: 调用修改密码API
-        ElMessage.success('密码修改成功');
+        // 调用修改密码API
+        await updateStudentProfile({
+          oldPassword: securityForm.oldPassword,
+          password: securityForm.newPassword
+        });
+        ElMessage.success('密码修改成功，请重新登录');
         securityFormRef.value?.resetFields();
-      } catch (error) {
-        ElMessage.error('密码修改失败');
+
+        // 修改密码成功后，自动退出登录
+        setTimeout(() => {
+          authStore.logout();
+        }, 2000);
+      } catch (error: any) {
+        console.error('密码修改失败:', error);
+        ElMessage.error(error.message || '密码修改失败，请检查当前密码是否正确');
       } finally {
         saving.value = false;
       }

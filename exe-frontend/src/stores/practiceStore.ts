@@ -37,6 +37,16 @@ interface PracticeState {
   // 统计数据
   statistics: PracticeStatistics | null
 
+  // 学科统计
+  subjectStatistics: Map<string, {
+    totalQuestions: number
+    correctQuestions: number
+    accuracy: number
+  }>
+
+  // 练习历史记录（日期格式：YYYY-MM-DD）
+  practiceHistory: Set<string>
+
   // UI状态
   isPracticing: boolean
   isPaused: boolean
@@ -67,6 +77,9 @@ export const usePracticeStore = defineStore('practice', {
     aiExplanations: new Map(),
 
     statistics: null,
+
+    subjectStatistics: new Map(),
+    practiceHistory: new Set(),
 
     isPracticing: false,
     isPaused: false,
@@ -211,6 +224,11 @@ export const usePracticeStore = defineStore('practice', {
       this.isPracticing = true
       this.showResults = false
 
+      // 记录今天的练习日期
+      const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+      this.practiceHistory.add(today)
+      this.savePracticeHistory()
+
       // 保存到localStorage
       this.saveSession()
     },
@@ -236,6 +254,23 @@ export const usePracticeStore = defineStore('practice', {
 
       // 保存答案
       this.userAnswers.set(questionId, userAnswer)
+
+      // 更新学科统计
+      if (question.subject) {
+        const stats = this.subjectStatistics.get(question.subject) || {
+          totalQuestions: 0,
+          correctQuestions: 0,
+          accuracy: 0
+        }
+
+        stats.totalQuestions++
+        if (isCorrect) {
+          stats.correctQuestions++
+        }
+        stats.accuracy = Math.round((stats.correctQuestions / stats.totalQuestions) * 100)
+
+        this.subjectStatistics.set(question.subject, stats)
+      }
 
       // 更新统计
       if (isCorrect) {
@@ -266,6 +301,7 @@ export const usePracticeStore = defineStore('practice', {
 
       // 保存会话
       this.saveSession()
+      this.saveSubjectStatistics()
     },
 
     /**
@@ -573,6 +609,84 @@ export const usePracticeStore = defineStore('practice', {
         level: this.userLevel
       }
       localStorage.setItem('achievements', JSON.stringify(data))
+    },
+
+    /**
+     * 保存学科统计
+     */
+    saveSubjectStatistics() {
+      const data = Object.fromEntries(this.subjectStatistics)
+      localStorage.setItem('subject_statistics', JSON.stringify(data))
+    },
+
+    /**
+     * 加载学科统计
+     */
+    loadSubjectStatistics() {
+      const data = localStorage.getItem('subject_statistics')
+      if (!data) return
+
+      try {
+        const parsed = JSON.parse(data)
+        this.subjectStatistics = new Map(Object.entries(parsed))
+      } catch (e) {
+        console.error('Failed to load subject statistics:', e)
+      }
+    },
+
+    /**
+     * 保存练习历史记录
+     */
+    savePracticeHistory() {
+      const data = Array.from(this.practiceHistory)
+      localStorage.setItem('practice_history_dates', JSON.stringify(data))
+    },
+
+    /**
+     * 加载练习历史记录
+     */
+    loadPracticeHistory() {
+      const data = localStorage.getItem('practice_history_dates')
+      if (!data) return
+
+      try {
+        const parsed = JSON.parse(data)
+        this.practiceHistory = new Set(parsed)
+      } catch (e) {
+        console.error('Failed to load practice history:', e)
+      }
+    },
+
+    /**
+     * 获取连续练习天数
+     */
+    getConsecutivePracticeDays(): number {
+      if (this.practiceHistory.size === 0) return 0
+
+      // 将日期排序
+      const dates = Array.from(this.practiceHistory).sort().reverse()
+      const today = new Date().toISOString().split('T')[0]
+
+      // 如果今天没有练习，返回0
+      if (dates[0] !== today) {
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        if (dates[0] !== yesterday) return 0
+      }
+
+      let consecutiveDays = 1
+      for (let i = 1; i < dates.length; i++) {
+        const prevDate = new Date(dates[i - 1])
+        const currentDate = new Date(dates[i])
+        const diffDays = Math.floor((prevDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24))
+
+        if (diffDays === 1) {
+          consecutiveDays++
+        } else {
+          break
+        }
+      }
+
+      return consecutiveDays
     },
 
     /**

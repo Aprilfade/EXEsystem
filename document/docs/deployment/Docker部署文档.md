@@ -603,7 +603,7 @@ services:
 
 ### 社区支持
 
-- GitHub Issues: [https://github.com/your-repo/EXEsystem/issues](https://github.com/your-repo/EXEsystem/issues)
+- GitHub Issues: [https://github.com/Aprilfade/EXEsystem/issues](https://github.com/Aprilfade/EXEsystem/issues)
 - 技术文档: `Swagger_API文档集成说明.md`
 
 ### 常用文档

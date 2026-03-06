@@ -138,6 +138,7 @@ import { ElMessage } from 'element-plus';
 import { MagicStick, Loading, Plus, Delete } from '@element-plus/icons-vue';
 import { fetchAllSubjects } from '@/api/subject';
 import { fetchAllKnowledgePoints } from '@/api/knowledgePoint';
+import { createPaper } from '@/api/paper';
 
 // 表单数据
 const formData = reactive({
@@ -297,8 +298,57 @@ const generatePaper = async () => {
 };
 
 const savePaper = async () => {
-  ElMessage.info('保存功能开发中...');
-  // TODO: 调用保存试卷 API
+  try {
+    if (!generatedPaper.value || !generatedPaper.value.paperName) {
+      ElMessage.warning('没有可保存的试卷');
+      return;
+    }
+
+    const apiKey = localStorage.getItem('student_ai_key') || '';
+    const provider = localStorage.getItem('student_ai_provider') || 'DEEPSEEK';
+    const token = localStorage.getItem('token') || localStorage.getItem('studentToken');
+
+    const url = `${import.meta.env.VITE_API_BASE_URL || ''}/api/v1/papers/ai-save`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Ai-Api-Key': apiKey,
+        'X-Ai-Provider': provider,
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        name: generatedPaper.value.paperName,
+        subjectId: formData.subjectId,
+        subjectName: formData.subjectName,
+        description: `AI生成试卷 - ${formData.knowledgePointIds.map(id =>
+          knowledgePoints.value.find(kp => kp.id === id)?.name
+        ).filter(Boolean).join('、')}`,
+        totalScore: generatedPaper.value.totalScore || formData.totalScore,
+        questions: generatedPaper.value.questions || [],
+        paperType: 2, // 2表示AI生成试卷
+        status: 0 // 0表示草稿状态
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.code === 200) {
+      ElMessage.success('试卷保存成功！');
+      // 清空表单，允许生成新试卷
+      resetForm();
+    } else {
+      throw new Error(result.message || '保存失败');
+    }
+  } catch (error: any) {
+    console.error('保存失败:', error);
+    ElMessage.error('保存失败: ' + (error.message || '请稍后重试'));
+  }
 };
 
 const resetForm = () => {

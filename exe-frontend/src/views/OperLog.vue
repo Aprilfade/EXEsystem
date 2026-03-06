@@ -275,6 +275,7 @@ import {
   SuccessFilled, CircleCloseFilled, TrendCharts, Notebook,
   User, Location, Clock
 } from '@element-plus/icons-vue';
+import * as XLSX from 'xlsx';
 
 const authStore = useAuthStore();
 const isSuperAdmin = computed(() => authStore.isSuperAdmin);
@@ -358,8 +359,75 @@ const handleDetail = (row: OperLog) => {
 };
 
 const handleExport = () => {
-  ElMessage.info('导出功能开发中...');
-  // TODO: 实现导出功能
+  try {
+    if (logList.value.length === 0) {
+      ElMessage.warning('暂无数据可导出');
+      return;
+    }
+
+    // 创建工作簿
+    const workbook = XLSX.utils.book_new();
+
+    // 统计信息
+    const summaryData = [
+      ['操作日志统计报告'],
+      [''],
+      ['导出时间', new Date().toLocaleString('zh-CN')],
+      ['总记录数', total.value],
+      ['成功操作', stats.value.successCount],
+      ['失败操作', stats.value.errorCount],
+      ['成功率', `${successRate.value}%`],
+      [''],
+      ['详细数据']
+    ];
+
+    // 详细数据表头
+    const headers = ['序号', '系统模块', '业务类型', '请求方式', '操作人员', '主机地址', '操作状态', '操作时间'];
+
+    // 详细数据
+    const detailData = logList.value.map((log, index) => [
+      index + 1,
+      log.title,
+      businessTypeMap[log.businessType] || '其他',
+      log.requestMethod,
+      log.operName,
+      log.operIp,
+      log.status === 0 ? '成功' : '失败',
+      formatTime(log.operTime)
+    ]);
+
+    // 合并统计和详细数据
+    const allData = [...summaryData, headers, ...detailData];
+
+    // 创建工作表
+    const worksheet = XLSX.utils.aoa_to_sheet(allData);
+
+    // 设置列宽
+    worksheet['!cols'] = [
+      { wch: 8 },   // 序号
+      { wch: 20 },  // 系统模块
+      { wch: 12 },  // 业务类型
+      { wch: 12 },  // 请求方式
+      { wch: 15 },  // 操作人员
+      { wch: 18 },  // 主机地址
+      { wch: 10 },  // 操作状态
+      { wch: 20 }   // 操作时间
+    ];
+
+    // 添加工作表到工作簿
+    XLSX.utils.book_append_sheet(workbook, worksheet, '操作日志');
+
+    // 生成文件名
+    const fileName = `操作日志_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`;
+
+    // 导出
+    XLSX.writeFile(workbook, fileName);
+
+    ElMessage.success('导出成功');
+  } catch (error) {
+    console.error('导出失败:', error);
+    ElMessage.error('导出失败，请稍后重试');
+  }
 };
 
 const handleClean = () => {

@@ -674,7 +674,7 @@ ws.onmessage = (event) => {
 ## 技术支持
 
 - **在线文档**: http://localhost:8080/swagger-ui.html
-- **问题反馈**: https://github.com/your-repo/EXEsystem/issues
+- **问题反馈**: https://github.com/Aprilfade/EXEsystem/issues
 
 ---
 

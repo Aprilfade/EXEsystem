@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ice.exebackend.utils.AiHttpClient;
 import com.ice.exebackend.mapper.BizQuestionMapper;
+import com.ice.exebackend.mapper.BizCourseMapper;
 import com.ice.exebackend.entity.BizQuestion;
+import com.ice.exebackend.entity.BizCourse;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,9 @@ public class NaturalLanguageSearchService {
 
     @Autowired
     private BizQuestionMapper questionMapper;
+
+    @Autowired
+    private BizCourseMapper courseMapper;
 
     /**
      * 用户意图枚举
@@ -356,10 +361,66 @@ public class NaturalLanguageSearchService {
     private List<CourseResult> searchCourses(String concept) {
         List<CourseResult> results = new ArrayList<>();
 
-        // TODO: 实现课程搜索
         log.info("搜索课程: {}", concept);
 
+        try {
+            if (concept == null || concept.trim().isEmpty()) {
+                return results;
+            }
+
+            // 根据课程名称或描述搜索
+            LambdaQueryWrapper<BizCourse> wrapper = new LambdaQueryWrapper<>();
+            wrapper.like(BizCourse::getName, concept)
+                    .or()
+                    .like(BizCourse::getDescription, concept);
+            wrapper.orderByDesc(BizCourse::getCreateTime);
+            wrapper.last("LIMIT 10");
+
+            List<BizCourse> courses = courseMapper.selectList(wrapper);
+
+            for (BizCourse course : courses) {
+                CourseResult result = new CourseResult();
+                result.setId(course.getId());
+                result.setName(course.getName());
+
+                // 计算相关度（简化实现）
+                double relevance = calculateRelevance(concept, course);
+                result.setRelevance(relevance);
+
+                results.add(result);
+            }
+
+            // 按相关度排序
+            results.sort((a, b) -> Double.compare(b.getRelevance(), a.getRelevance()));
+
+            log.info("搜索到 {} 门课程", results.size());
+
+        } catch (Exception e) {
+            log.error("搜索课程失败", e);
+        }
+
         return results;
+    }
+
+    /**
+     * 计算课程与搜索关键词的相关度
+     */
+    private double calculateRelevance(String keyword, BizCourse course) {
+        double relevance = 0.0;
+        String lowerKeyword = keyword.toLowerCase();
+
+        // 名称匹配（权重最高）
+        if (course.getName() != null && course.getName().toLowerCase().contains(lowerKeyword)) {
+            relevance += 0.8;
+        }
+
+        // 描述匹配
+        if (course.getDescription() != null && course.getDescription().toLowerCase().contains(lowerKeyword)) {
+            relevance += 0.2;
+        }
+
+        // 确保相关度在0-1之间
+        return Math.min(1.0, relevance);
     }
 
     /**

@@ -58,8 +58,8 @@
 
 如果您有任何疑问或需要报告违反行为准则的行为，请通过以下方式联系我们：
 
-- 📧 Email: [项目维护者邮箱]
-- 💬 GitHub Issues: https://github.com/your-repo/EXEsystem/issues
+- 📧 Email: luolingfei999@qq.com
+- 💬 GitHub Issues: https://github.com/Aprilfade/EXEsystem/issues
 
 ---
 

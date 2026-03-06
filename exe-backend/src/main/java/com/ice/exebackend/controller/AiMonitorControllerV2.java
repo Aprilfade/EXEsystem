@@ -10,12 +10,17 @@ import com.ice.exebackend.service.AiRateLimiter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -257,13 +262,96 @@ public class AiMonitorControllerV2 {
 
     /**
      * 导出日志（CSV格式）
-     * TODO: 实现CSV导出功能
      */
     @Operation(summary = "导出AI调用日志", description = "导出AI调用日志为CSV文件")
     @GetMapping("/export")
-    public Result exportLogs(@RequestParam(required = false) String startTime,
-                             @RequestParam(required = false) String endTime) {
-        // TODO: 实现导出功能
-        return Result.fail("导出功能开发中");
+    public ResponseEntity<byte[]> exportLogs(@RequestParam(required = false) String startTime,
+                                             @RequestParam(required = false) String endTime) {
+        if (aiCallLogMapper == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        try {
+            // 构建查询条件
+            QueryWrapper<BizAiCallLog> wrapper = new QueryWrapper<>();
+
+            if (startTime != null && !startTime.isEmpty()) {
+                wrapper.ge("create_time", LocalDateTime.parse(startTime, DateTimeFormatter.ISO_DATE_TIME));
+            }
+            if (endTime != null && !endTime.isEmpty()) {
+                wrapper.le("create_time", LocalDateTime.parse(endTime, DateTimeFormatter.ISO_DATE_TIME));
+            }
+
+            wrapper.orderByDesc("create_time");
+
+            // 查询所有符合条件的日志
+            List<BizAiCallLog> logs = aiCallLogMapper.selectList(wrapper);
+
+            // 构建CSV内容
+            StringBuilder csv = new StringBuilder();
+
+            // CSV头部
+            csv.append("ID,用户ID,用户类型,功能类型,AI提供商,是否成功,响应时间(ms),是否缓存,重试次数,Token使用量,预估成本,错误信息,创建时间\n");
+
+            // CSV数据行
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            for (BizAiCallLog log : logs) {
+                csv.append(log.getId()).append(",")
+                   .append(log.getUserId() != null ? log.getUserId() : "").append(",")
+                   .append(log.getUserType() != null ? escapeCSV(log.getUserType()) : "").append(",")
+                   .append(log.getFunctionType() != null ? escapeCSV(log.getFunctionType()) : "").append(",")
+                   .append(log.getProvider() != null ? escapeCSV(log.getProvider()) : "").append(",")
+                   .append(log.getSuccess() != null ? (log.getSuccess() ? "成功" : "失败") : "").append(",")
+                   .append(log.getResponseTime() != null ? log.getResponseTime() : "").append(",")
+                   .append(log.getCached() != null ? (log.getCached() ? "是" : "否") : "").append(",")
+                   .append(log.getRetryCount() != null ? log.getRetryCount() : "0").append(",")
+                   .append(log.getTokensUsed() != null ? log.getTokensUsed() : "").append(",")
+                   .append(log.getEstimatedCost() != null ? log.getEstimatedCost() : "").append(",")
+                   .append(log.getErrorMessage() != null ? escapeCSV(log.getErrorMessage()) : "").append(",")
+                   .append(log.getCreateTime() != null ? log.getCreateTime().format(formatter) : "")
+                   .append("\n");
+            }
+
+            // 转换为字节数组
+            byte[] bytes = csv.toString().getBytes(StandardCharsets.UTF_8);
+
+            // 添加UTF-8 BOM以支持Excel正确显示中文
+            byte[] bom = new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+            byte[] result = new byte[bom.length + bytes.length];
+            System.arraycopy(bom, 0, result, 0, bom.length);
+            System.arraycopy(bytes, 0, result, bom.length, bytes.length);
+
+            // 设置响应头
+            String fileName = "ai_call_logs_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".csv";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("text/csv"));
+            headers.setContentDispositionFormData("attachment", fileName);
+            headers.setCacheControl("no-cache");
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(result);
+
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * CSV字段转义（处理逗号、引号、换行符）
+     */
+    private String escapeCSV(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        // 如果包含逗号、引号或换行符，需要用引号包裹
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
+            // 将引号替换为两个引号
+            value = value.replace("\"", "\"\"");
+            return "\"" + value + "\"";
+        }
+
+        return value;
     }
 }

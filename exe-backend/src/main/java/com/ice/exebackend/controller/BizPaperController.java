@@ -9,10 +9,12 @@ import com.ice.exebackend.dto.PaperKnowledgePointDTO;
 import com.ice.exebackend.dto.PaperPageParams; // 【新增导入】
 import com.ice.exebackend.dto.SmartPaperReq;
 import com.ice.exebackend.entity.BizPaper;
+import com.ice.exebackend.entity.SysUser;
 import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.service.BizPaperService;
 import com.ice.exebackend.service.PdfService; // 【1. 新增导入】
 import com.ice.exebackend.service.AiServiceV3; // AI服务
+import com.ice.exebackend.service.SysUserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -24,6 +26,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -52,6 +55,10 @@ public class BizPaperController {
     // 注入 AiServiceV3
     @Autowired
     private AiServiceV3 aiServiceV3;
+
+    // 注入 SysUserService
+    @Autowired
+    private SysUserService sysUserService;
 
     // 3. 定义缓存键常量
     private static final String DASHBOARD_CACHE_KEY = "dashboard:stats:all";
@@ -301,9 +308,22 @@ public class BizPaperController {
      * 获取当前登录用户ID
      */
     private Long getCurrentUserId() {
-        // TODO: 从 SecurityContext 中获取当前用户ID
-        // 临时返回1，实际应从认证信息中获取
-        return 1L;
+        try {
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            SysUser user = sysUserService.lambdaQuery()
+                    .eq(SysUser::getUsername, username)
+                    .one();
+
+            if (user != null) {
+                return user.getId();
+            } else {
+                logger.warn("当前用户不存在: {}", username);
+                return null;
+            }
+        } catch (Exception e) {
+            logger.error("获取当前用户ID失败", e);
+            return null;
+        }
     }
 
 }

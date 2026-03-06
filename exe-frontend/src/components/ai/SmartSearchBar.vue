@@ -140,6 +140,57 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 题目详情对话框 -->
+    <el-dialog
+      v-model="showQuestionDetail"
+      title="题目详情"
+      width="700px"
+      append-to-body
+    >
+      <div v-if="currentQuestion" v-loading="loadingQuestion">
+        <div class="question-detail-header">
+          <el-tag :type="getQuestionTypeTag(currentQuestion.questionType)">
+            {{ getQuestionTypeText(currentQuestion.questionType) }}
+          </el-tag>
+          <el-tag type="info" v-if="currentQuestion.grade">
+            {{ currentQuestion.grade }}
+          </el-tag>
+        </div>
+
+        <div class="question-detail-content">
+          <h4>题目内容</h4>
+          <p>{{ currentQuestion.content }}</p>
+          <img v-if="currentQuestion.imageUrl" :src="currentQuestion.imageUrl" alt="题目图片" class="question-image" />
+        </div>
+
+        <div v-if="currentQuestion.options && Array.isArray(currentQuestion.options) && currentQuestion.options.length > 0" class="question-detail-options">
+          <h4>选项</h4>
+          <div v-for="opt in currentQuestion.options" :key="opt.key" class="option-item">
+            <span class="option-key">{{ opt.key }}.</span>
+            <span class="option-value">{{ opt.value }}</span>
+          </div>
+        </div>
+
+        <div class="question-detail-answer">
+          <h4>答案</h4>
+          <div class="answer-text">{{ currentQuestion.answer }}</div>
+          <img v-if="currentQuestion.answerImageUrl" :src="currentQuestion.answerImageUrl" alt="答案图片" class="answer-image" />
+        </div>
+
+        <div v-if="currentQuestion.description" class="question-detail-description">
+          <h4>解析</h4>
+          <p>{{ currentQuestion.description }}</p>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="showQuestionDetail = false">关闭</el-button>
+        <el-button type="primary" @click="startPracticeFromDetail">
+          开始练习
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -150,6 +201,8 @@ import { ElMessage } from 'element-plus';
 import { MagicStick, CopyDocument, ChatDotRound } from '@element-plus/icons-vue';
 import request from '@/utils/request';
 import { useStudentAuthStore } from '@/stores/studentAuth';
+import { fetchQuestionById } from '@/api/question';
+import type { Question } from '@/api/question';
 
 const router = useRouter();
 const studentStore = useStudentAuthStore();
@@ -164,6 +217,11 @@ const searchResult = ref<any>({});
 // 追问相关
 const showFollowUp = ref(false);
 const followUpQuestion = ref('');
+
+// 题目详情相关
+const showQuestionDetail = ref(false);
+const currentQuestion = ref<Question | null>(null);
+const loadingQuestion = ref(false);
 
 // 意图名称映射
 const intentNames: Record<string, string> = {
@@ -276,17 +334,85 @@ const submitFollowUp = () => {
 /**
  * 查看题目
  */
-const viewQuestion = (id: number) => {
-  // TODO: 显示题目详情对话框
-  ElMessage.info('查看题目 #' + id);
+const viewQuestion = async (id: number) => {
+  loadingQuestion.value = true;
+  showQuestionDetail.value = true;
+  currentQuestion.value = null;
+
+  try {
+    const res = await fetchQuestionById(id);
+    if (res.code === 200) {
+      // 解析选项（如果是字符串）
+      if (res.data.options && typeof res.data.options === 'string') {
+        try {
+          res.data.options = JSON.parse(res.data.options);
+        } catch (e) {
+          console.error('解析题目选项失败:', e);
+        }
+      }
+      currentQuestion.value = res.data;
+    } else {
+      ElMessage.error(res.msg || '获取题目详情失败');
+      showQuestionDetail.value = false;
+    }
+  } catch (error: any) {
+    console.error('获取题目详情失败:', error);
+    ElMessage.error(error.message || '获取题目详情失败');
+    showQuestionDetail.value = false;
+  } finally {
+    loadingQuestion.value = false;
+  }
 };
 
 /**
  * 开始练习
  */
 const startPractice = (id: number) => {
-  // TODO: 跳转到练习页面
-  ElMessage.info('开始练习题目 #' + id);
+  router.push({
+    name: 'StudentPractice',
+    query: {
+      questionId: id,
+      mode: 'single'
+    }
+  });
+};
+
+/**
+ * 从详情对话框开始练习
+ */
+const startPracticeFromDetail = () => {
+  if (currentQuestion.value) {
+    showQuestionDetail.value = false;
+    startPractice(currentQuestion.value.id);
+  }
+};
+
+/**
+ * 获取题型标签类型
+ */
+const getQuestionTypeTag = (type: number): string => {
+  const tagMap: Record<number, string> = {
+    1: 'success',
+    2: 'warning',
+    3: 'info',
+    4: 'primary',
+    5: 'danger'
+  };
+  return tagMap[type] || 'info';
+};
+
+/**
+ * 获取题型文本
+ */
+const getQuestionTypeText = (type: number): string => {
+  const textMap: Record<number, string> = {
+    1: '单选题',
+    2: '多选题',
+    3: '填空题',
+    4: '判断题',
+    5: '主观题'
+  };
+  return textMap[type] || '未知';
 };
 
 /**
@@ -445,6 +571,81 @@ document.addEventListener('click', (e) => {
   opacity: 0;
 }
 
+/* 题目详情样式 */
+.question-detail-header {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.question-detail-content,
+.question-detail-options,
+.question-detail-answer,
+.question-detail-description {
+  margin-bottom: 20px;
+}
+
+.question-detail-content h4,
+.question-detail-options h4,
+.question-detail-answer h4,
+.question-detail-description h4 {
+  margin: 0 0 12px 0;
+  color: #303133;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.question-detail-content p,
+.question-detail-description p {
+  line-height: 1.8;
+  color: #606266;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.question-image,
+.answer-image {
+  max-width: 100%;
+  margin-top: 10px;
+  border-radius: 4px;
+  border: 1px solid #dcdfe6;
+}
+
+.option-item {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+
+.option-item:hover {
+  background: #e6f0ff;
+}
+
+.option-key {
+  font-weight: 600;
+  color: #409eff;
+  min-width: 24px;
+}
+
+.option-value {
+  flex: 1;
+  color: #606266;
+  line-height: 1.6;
+}
+
+.answer-text {
+  padding: 12px;
+  background: #f0f9ff;
+  border-left: 4px solid #67c23a;
+  border-radius: 4px;
+  color: #303133;
+  font-weight: 500;
+}
+
 /* 移动端适配 */
 @media (max-width: 768px) {
   .smart-search-input :deep(.el-input__inner) {
@@ -477,6 +678,15 @@ document.addEventListener('click', (e) => {
 
   .answer-actions .el-button {
     width: 100%;
+  }
+
+  .question-detail-header {
+    flex-wrap: wrap;
+  }
+
+  .option-item {
+    flex-direction: column;
+    gap: 4px;
   }
 }
 </style>

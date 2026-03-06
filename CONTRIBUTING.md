@@ -33,7 +33,7 @@
 
 ### 🐛 报告 Bug
 
-如果您发现了 Bug，请通过 [GitHub Issues](https://github.com/your-repo/EXEsystem/issues) 提交报告，并包含：
+如果您发现了 Bug，请通过 [GitHub Issues](https://github.com/Aprilfade/EXEsystem/issues) 提交报告，并包含：
 
 1. **问题描述**：清晰描述问题是什么
 2. **复现步骤**：详细的步骤说明
@@ -74,7 +74,7 @@
 
 ### 💡 功能建议
 
-我们欢迎新功能的建议！请通过 [GitHub Issues](https://github.com/your-repo/EXEsystem/issues) 提交，并包含：
+我们欢迎新功能的建议！请通过 [GitHub Issues](https://github.com/Aprilfade/EXEsystem/issues) 提交，并包含：
 
 1. **功能描述**：详细描述建议的功能
 2. **使用场景**：什么场景下需要这个功能
@@ -501,12 +501,12 @@ FAQ
 ### 获取帮助
 
 - 📖 查看 [完整文档](document/DOCS_GUIDE.md)
-- 💬 提交 [GitHub Issue](https://github.com/your-repo/EXEsystem/issues)
+- 💬 提交 [GitHub Issue](https://github.com/Aprilfade/EXEsystem/issues)
 - 📧 联系维护者
 
 ### 贡献者认可
 
-所有贡献者将被列入 [贡献者列表](https://github.com/your-repo/EXEsystem/graphs/contributors)。
+所有贡献者将被列入 [贡献者列表](https://github.com/Aprilfade/EXEsystem/graphs/contributors)。
 
 ---
 

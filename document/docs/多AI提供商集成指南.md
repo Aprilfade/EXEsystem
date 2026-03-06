@@ -441,7 +441,7 @@ client.chat(messages).then(response => {
 
 1. 查看[API文档](http://localhost:8080/swagger-ui.html)
 2. 检查[故障排查](#故障排查)章节
-3. 提交[Issue](https://github.com/your-repo/issues)
+3. 提交[Issue](https://github.com/Aprilfade/EXEsystem/issues)
 
 ---
 
