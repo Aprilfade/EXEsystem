@@ -283,8 +283,8 @@ docker-compose ps
 
 | 主要文档 | 说明 |
 |---------|------|
-| [AI智能推荐系统-完整文档](document/docs/ai/AI智能推荐系统-优秀毕业设计完整文档.md) | 完整的AI推荐系统设计 |
-| [学生端AI助手优化](document/docs/ai/学生端AI助手优化总结-优秀毕业设计版.md) | AI学习助手功能 |
+| [AI智能推荐系统-完整技术文档](document/docs/ai/AI智能推荐系统-完整技术文档.md) | 完整的AI推荐系统设计 |
+| [学生端AI助手优化](document/docs/ai/学生端AI助手优化总结-企业级版本.md) | AI学习助手功能 |
 | [流式响应功能说明](document/docs/ai/流式响应功能说明.md) | 流式响应技术实现 |
 | [DeepSeek集成指南](document/docs/DeepSeek集成指南.md) | AI API集成文档 |
 
@@ -407,7 +407,7 @@ docker-compose ps
 3. [紧急修复指南](document/docs/fixes/紧急修复指南-更新版.md)
 
 #### 场景3：AI功能开发
-1. [AI智能推荐系统](document/docs/ai/AI智能推荐系统-优秀毕业设计完整文档.md)
+1. [AI智能推荐系统](document/docs/ai/AI智能推荐系统-完整技术文档.md)
 2. [DeepSeek集成指南](document/docs/DeepSeek集成指南.md)
 3. [流式响应功能](document/docs/ai/流式响应功能说明.md)
 

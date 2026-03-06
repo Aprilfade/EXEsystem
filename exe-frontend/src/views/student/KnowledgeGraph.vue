@@ -590,6 +590,8 @@ import {
 } from '@element-plus/icons-vue';
 import { fetchKnowledgeGraph } from '@/api/knowledgePoint';
 import { analyzeQuestionStream } from '@/api/ai';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 // ==================== 类型定义 ====================
 interface KnowledgeNode {
@@ -662,6 +664,10 @@ const treeRef = ref();
 const treeContainer = ref<HTMLElement>();
 const expandedKeys = ref<string[]>([]);
 
+// 节点展开/收起状态
+const expandedNodesSet = ref(new Set<string>());
+const collapsedNodesSet = ref(new Set<string>());
+
 // 统计信息
 const totalKnowledgePoints = computed(() => {
   let count = 0;
@@ -721,6 +727,15 @@ const currentPathInfo = ref<LearningPathInfo>({
 });
 const learningPathActive = ref(1);
 const generatingPath = ref(false);
+
+// 学习路径跟踪
+const pathTracking = ref({
+  isActive: false,
+  currentStepIndex: 0,
+  startTime: null as number | null,
+  completedSteps: [] as string[],
+  totalTimeSpent: 0
+});
 
 // 图谱设置
 const showSettingsDialog = ref(false);
@@ -1250,8 +1265,77 @@ const bindGraphEvents = () => {
 
 const toggleNodeExpand = (nodeData: any) => {
   // 实现节点展开/收起逻辑
-  ElMessage.info(`切换节点: ${nodeData.name}`);
-  // TODO: 实现具体逻辑
+  const nodeId = nodeData.id || nodeData.name;
+
+  if (expandedNodesSet.value.has(nodeId)) {
+    // 如果已展开,则收起
+    expandedNodesSet.value.delete(nodeId);
+    collapsedNodesSet.value.add(nodeId);
+    ElMessage.info(`收起节点: ${nodeData.name}`);
+  } else {
+    // 如果未展开,则展开
+    expandedNodesSet.value.add(nodeId);
+    collapsedNodesSet.value.delete(nodeId);
+    ElMessage.info(`展开节点: ${nodeData.name}`);
+  }
+
+  // 更新图谱显示
+  updateGraphWithExpandState();
+};
+
+/**
+ * 根据展开/收起状态更新图谱
+ */
+const updateGraphWithExpandState = () => {
+  if (!graphChart) return;
+
+  // 重新构建图数据,根据展开/收起状态过滤节点
+  const { nodes, links, categories } = buildGraphData();
+
+  // 过滤掉被收起节点的子节点
+  const filteredNodes = nodes.filter((node: any) => {
+    return !isNodeCollapsed(node.id);
+  });
+
+  const filteredLinks = links.filter((link: any) => {
+    return !isNodeCollapsed(link.source) && !isNodeCollapsed(link.target);
+  });
+
+  // 更新图表
+  graphChart.setOption({
+    series: [{
+      data: filteredNodes,
+      links: filteredLinks
+    }]
+  });
+};
+
+/**
+ * 检查节点是否被收起
+ */
+const isNodeCollapsed = (nodeId: string): boolean => {
+  // 递归检查父节点是否被收起
+  const node = findNodeById(nodeId);
+  if (!node) return false;
+
+  // 查找父节点
+  const findParent = (nodes: KnowledgeNode[], targetId: string, parent?: KnowledgeNode): KnowledgeNode | null => {
+    for (const n of nodes) {
+      if (n.id === targetId && parent) return parent;
+      if (n.children) {
+        const found = findParent(n.children, targetId, n);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const parent = findParent(knowledgeTree.value, nodeId);
+  if (parent && collapsedNodesSet.value.has(parent.id)) {
+    return true;
+  }
+
+  return false;
 };
 
 const findNodeById = (id: string): KnowledgeNode | null => {
@@ -1404,13 +1488,49 @@ const viewNodeDetail = () => {
 };
 
 const expandNode = () => {
-  ElMessage.info('展开子节点');
-  // TODO: 实现逻辑
+  if (!selectedNode.value) {
+    ElMessage.warning('请先选择一个节点');
+    return;
+  }
+
+  // 递归展开所有子节点
+  const expandRecursively = (node: KnowledgeNode) => {
+    expandedNodesSet.value.add(node.id);
+    collapsedNodesSet.value.delete(node.id);
+
+    if (node.children) {
+      node.children.forEach(child => {
+        expandRecursively(child);
+      });
+    }
+  };
+
+  expandRecursively(selectedNode.value);
+  updateGraphWithExpandState();
+  ElMessage.success(`已展开 ${selectedNode.value.name} 及其所有子节点`);
 };
 
 const collapseNode = () => {
-  ElMessage.info('收起子节点');
-  // TODO: 实现逻辑
+  if (!selectedNode.value) {
+    ElMessage.warning('请先选择一个节点');
+    return;
+  }
+
+  // 递归收起所有子节点
+  const collapseRecursively = (node: KnowledgeNode) => {
+    collapsedNodesSet.value.add(node.id);
+    expandedNodesSet.value.delete(node.id);
+
+    if (node.children) {
+      node.children.forEach(child => {
+        collapseRecursively(child);
+      });
+    }
+  };
+
+  collapseRecursively(selectedNode.value);
+  updateGraphWithExpandState();
+  ElMessage.success(`已收起 ${selectedNode.value.name} 及其所有子节点`);
 };
 
 // ==================== 学习路径 ====================
@@ -1494,15 +1614,244 @@ const getDifficultyType = (difficulty: string) => {
 };
 
 const startLearningPath = () => {
-  ElMessage.success('开始按照推荐路径学习');
-  // TODO: 实现学习路径跟踪
+  if (learningPath.value.length === 0) {
+    ElMessage.warning('请先生成学习路径');
+    return;
+  }
+
+  // 初始化学习路径跟踪
+  pathTracking.value = {
+    isActive: true,
+    currentStepIndex: 0,
+    startTime: Date.now(),
+    completedSteps: [],
+    totalTimeSpent: 0
+  };
+
+  // 标记第一步为当前步骤
+  learningPath.value.forEach((step, index) => {
+    step.current = index === 0;
+    step.completed = false;
+  });
+
+  learningPathActive.value = 0;
+
+  // 保存进度到localStorage
+  saveLearningPathProgress();
+
+  ElMessage.success('开始按照推荐路径学习，祝学习愉快！');
+};
+
+/**
+ * 保存学习路径进度
+ */
+const saveLearningPathProgress = () => {
+  try {
+    const progressData = {
+      pathTracking: pathTracking.value,
+      learningPath: learningPath.value,
+      selectedPathIndex: selectedPathIndex.value,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(STORAGE_KEYS.LEARNING_PROGRESS, JSON.stringify(progressData));
+  } catch (error) {
+    console.error('保存学习进度失败:', error);
+  }
+};
+
+/**
+ * 加载学习路径进度
+ */
+const loadLearningPathProgress = () => {
+  try {
+    const savedProgress = localStorage.getItem(STORAGE_KEYS.LEARNING_PROGRESS);
+    if (savedProgress) {
+      const progressData = JSON.parse(savedProgress);
+
+      // 检查数据是否在7天内
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      if (progressData.timestamp > sevenDaysAgo) {
+        pathTracking.value = progressData.pathTracking;
+
+        // 恢复学习路径
+        if (progressData.learningPath) {
+          learningPath.value = progressData.learningPath;
+          selectedPathIndex.value = progressData.selectedPathIndex || 0;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('加载学习进度失败:', error);
+  }
+};
+
+/**
+ * 完成当前学习步骤
+ */
+const completeCurrentStep = () => {
+  if (!pathTracking.value.isActive || pathTracking.value.currentStepIndex >= learningPath.value.length) {
+    return;
+  }
+
+  const currentStep = learningPath.value[pathTracking.value.currentStepIndex];
+  currentStep.completed = true;
+  currentStep.current = false;
+  pathTracking.value.completedSteps.push(currentStep.name);
+
+  // 移动到下一步
+  pathTracking.value.currentStepIndex++;
+
+  if (pathTracking.value.currentStepIndex < learningPath.value.length) {
+    learningPath.value[pathTracking.value.currentStepIndex].current = true;
+    learningPathActive.value = pathTracking.value.currentStepIndex;
+    ElMessage.success(`完成：${currentStep.name}，继续下一步！`);
+  } else {
+    // 所有步骤完成
+    pathTracking.value.isActive = false;
+    pathTracking.value.totalTimeSpent = Date.now() - (pathTracking.value.startTime || Date.now());
+    learningPathActive.value = learningPath.value.length;
+    ElMessage.success('🎉 恭喜！已完成所有学习步骤！');
+  }
+
+  // 更新进度百分比
+  currentPathInfo.value.progress = Math.round(
+    (pathTracking.value.currentStepIndex / learningPath.value.length) * 100
+  );
+
+  saveLearningPathProgress();
+};
+
+/**
+ * 重置学习路径
+ */
+const resetLearningPath = () => {
+  pathTracking.value = {
+    isActive: false,
+    currentStepIndex: 0,
+    startTime: null,
+    completedSteps: [],
+    totalTimeSpent: 0
+  };
+
+  learningPath.value.forEach(step => {
+    step.completed = false;
+    step.current = false;
+  });
+
+  learningPathActive.value = 0;
+  currentPathInfo.value.progress = 0;
+
+  localStorage.removeItem(STORAGE_KEYS.LEARNING_PROGRESS);
+  ElMessage.info('学习路径已重置');
 };
 
 const exportLearningPathPDF = async () => {
+  if (learningPath.value.length === 0) {
+    ElMessage.warning('请先生成学习路径');
+    return;
+  }
+
   ElMessage.info('正在生成PDF报告...');
-  // TODO: 实现PDF导出
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  ElMessage.success('PDF报告已生成');
+
+  try {
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    let yPosition = 20;
+
+    // 添加标题
+    pdf.setFontSize(20);
+    pdf.text('学习路径报告', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 15;
+
+    // 添加路径信息
+    pdf.setFontSize(12);
+    pdf.text(`难度: ${currentPathInfo.value.difficulty}`, 20, yPosition);
+    yPosition += 8;
+    pdf.text(`预计时长: ${currentPathInfo.value.estimatedTime}`, 20, yPosition);
+    yPosition += 8;
+    pdf.text(`当前进度: ${currentPathInfo.value.progress}%`, 20, yPosition);
+    yPosition += 8;
+
+    if (pathTracking.value.isActive) {
+      pdf.text(`已完成步骤: ${pathTracking.value.completedSteps.length}/${learningPath.value.length}`, 20, yPosition);
+      yPosition += 8;
+
+      if (pathTracking.value.startTime) {
+        const elapsed = Date.now() - pathTracking.value.startTime;
+        const hours = Math.floor(elapsed / (1000 * 60 * 60));
+        const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
+        pdf.text(`已用时间: ${hours}小时${minutes}分钟`, 20, yPosition);
+        yPosition += 8;
+      }
+    }
+
+    yPosition += 5;
+    pdf.setLineWidth(0.5);
+    pdf.line(20, yPosition, pageWidth - 20, yPosition);
+    yPosition += 10;
+
+    // 添加学习步骤
+    pdf.setFontSize(14);
+    pdf.text('学习步骤:', 20, yPosition);
+    yPosition += 10;
+
+    pdf.setFontSize(11);
+    learningPath.value.forEach((step, index) => {
+      // 检查是否需要换页
+      if (yPosition > pageHeight - 30) {
+        pdf.addPage();
+        yPosition = 20;
+      }
+
+      // 步骤标题
+      const status = step.completed ? '✓' : step.current ? '→' : '○';
+      pdf.setFont('helvetica', step.completed ? 'bold' : 'normal');
+      pdf.text(`${status} 步骤 ${index + 1}: ${step.name}`, 20, yPosition);
+      yPosition += 7;
+
+      // 步骤描述
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      const descLines = pdf.splitTextToSize(step.description || '', pageWidth - 50);
+      descLines.forEach((line: string) => {
+        if (yPosition > pageHeight - 30) {
+          pdf.addPage();
+          yPosition = 20;
+        }
+        pdf.text(line, 30, yPosition);
+        yPosition += 6;
+      });
+
+      yPosition += 5;
+      pdf.setFontSize(11);
+    });
+
+    // 添加页脚
+    const totalPages = (pdf as any).internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i);
+      pdf.setFontSize(10);
+      pdf.text(
+        `第 ${i} 页，共 ${totalPages} 页`,
+        pageWidth / 2,
+        pageHeight - 10,
+        { align: 'center' }
+      );
+      pdf.text(
+        `生成时间: ${new Date().toLocaleString('zh-CN')}`,
+        20,
+        pageHeight - 10
+      );
+    }
+
+    // 保存PDF
+    pdf.save(`learning-path-${Date.now()}.pdf`);
+    ElMessage.success('PDF报告已生成并下载');
+  } catch (error) {
+    console.error('生成PDF失败:', error);
+    ElMessage.error('生成PDF失败，请重试');
+  }
 };
 
 const shareLearningPath = () => {
@@ -1633,8 +1982,98 @@ const convertToXMind = (nodes: KnowledgeNode[]) => {
 };
 
 const exportAsPDF = async () => {
-  ElMessage.info('PDF导出功能需要安装额外的库');
-  // TODO: 使用 jsPDF 或其他库实现
+  if (!graphRef.value) {
+    ElMessage.error('图谱未初始化');
+    return;
+  }
+
+  try {
+    ElMessage.info('正在生成PDF，请稍候...');
+
+    // 使用html2canvas捕获图表
+    const canvas = await html2canvas(graphRef.value, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      logging: false,
+      useCORS: true
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('l', 'mm', 'a4'); // 横向A4
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    // 计算图片尺寸以适应页面
+    const imgWidth = pageWidth - 20; // 留10mm边距
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    let yPosition = 10;
+
+    // 添加标题
+    pdf.setFontSize(18);
+    pdf.text('知识图谱', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 10;
+
+    // 添加图表
+    if (imgHeight > pageHeight - 30) {
+      // 如果图片太高，缩放以适应页面
+      const scale = (pageHeight - 30) / imgHeight;
+      const scaledWidth = imgWidth * scale;
+      const scaledHeight = imgHeight * scale;
+      pdf.addImage(imgData, 'PNG', (pageWidth - scaledWidth) / 2, yPosition, scaledWidth, scaledHeight);
+      yPosition += scaledHeight + 10;
+    } else {
+      pdf.addImage(imgData, 'PNG', 10, yPosition, imgWidth, imgHeight);
+      yPosition += imgHeight + 10;
+    }
+
+    // 如果需要包含统计信息
+    if (exportOptions.value.includes('stats') && yPosition < pageHeight - 40) {
+      pdf.addPage();
+      yPosition = 20;
+
+      pdf.setFontSize(16);
+      pdf.text('学习统计', 20, yPosition);
+      yPosition += 10;
+
+      pdf.setFontSize(12);
+      pdf.text(`科目: ${selectedSubject.value}`, 20, yPosition);
+      yPosition += 8;
+      pdf.text(`总知识点: ${totalKnowledgePoints.value}`, 20, yPosition);
+      yPosition += 8;
+      pdf.text(`已掌握: ${masteredPoints.value}`, 20, yPosition);
+      yPosition += 8;
+      pdf.text(`学习中: ${learningPoints.value}`, 20, yPosition);
+      yPosition += 8;
+      pdf.text(`未学习: ${unlearnedPoints.value}`, 20, yPosition);
+      yPosition += 8;
+      pdf.text(`总体掌握度: ${overallMasteryRate.value}%`, 20, yPosition);
+    }
+
+    // 添加页脚
+    const totalPages = (pdf as any).internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i);
+      pdf.setFontSize(10);
+      pdf.text(
+        `生成时间: ${new Date().toLocaleString('zh-CN')}`,
+        20,
+        pdf.internal.pageSize.getHeight() - 10
+      );
+      pdf.text(
+        `第 ${i} 页，共 ${totalPages} 页`,
+        pdf.internal.pageSize.getWidth() - 50,
+        pdf.internal.pageSize.getHeight() - 10
+      );
+    }
+
+    // 保存PDF
+    pdf.save(`knowledge-graph-${selectedSubject.value}-${Date.now()}.pdf`);
+    ElMessage.success('PDF已生成并下载');
+  } catch (error) {
+    console.error('生成PDF失败:', error);
+    ElMessage.error('生成PDF失败，请重试');
+  }
 };
 
 const downloadFile = (url: string, filename: string) => {
@@ -1704,6 +2143,7 @@ const resetSettings = () => {
 // ==================== 生命周期 ====================
 onMounted(() => {
   loadFromStorage();
+  loadLearningPathProgress();
   loadKnowledgeGraph();
 });
 
