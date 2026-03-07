@@ -8,6 +8,8 @@ import com.ice.exebackend.entity.SysRolePermission;
 import com.ice.exebackend.mapper.SysPermissionMapper;
 import com.ice.exebackend.mapper.SysRoleMapper;
 import com.ice.exebackend.mapper.SysRolePermissionMapper;
+import com.ice.exebackend.mapper.SysUserRoleMapper;
+import com.ice.exebackend.service.PermissionCacheService;
 import com.ice.exebackend.service.SysRoleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -27,6 +29,12 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
 
     @Autowired
     private SysRolePermissionMapper rolePermissionMapper;
+
+    @Autowired
+    private SysUserRoleMapper userRoleMapper;
+
+    @Autowired
+    private PermissionCacheService permissionCacheService;
 
     @Override
     // 【核心修复】替换整个方法，使用新的高效查询
@@ -68,15 +76,26 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
         // 1. 先删除该角色所有的旧权限
         rolePermissionMapper.delete(new QueryWrapper<SysRolePermission>().eq("role_id", roleId));
 
-        // 2. 如果传入了新的权限ID列表，则批量插入
+        // 2. 【优化】如果传入了新的权限ID列表，则批量插入
         if (permissionIds != null && !permissionIds.isEmpty()) {
-            for (Long permissionId : permissionIds) {
-                SysRolePermission rolePermission = new SysRolePermission();
-                rolePermission.setRoleId(roleId);
-                rolePermission.setPermissionId(permissionId);
-                rolePermissionMapper.insert(rolePermission);
-            }
+            // 构建批量插入的数据列表
+            List<SysRolePermission> rolePermissions = permissionIds.stream()
+                    .map(permissionId -> {
+                        SysRolePermission rp = new SysRolePermission();
+                        rp.setRoleId(roleId);
+                        rp.setPermissionId(permissionId);
+                        return rp;
+                    })
+                    .collect(Collectors.toList());
+
+            // 使用批量插入方法，大幅提升性能
+            rolePermissionMapper.insertBatch(rolePermissions);
         }
+
+        // 3. 【新增】清除该角色下所有用户的权限缓存，确保权限实时生效
+        List<Long> userIds = userRoleMapper.selectUserIdsByRoleId(roleId);
+        permissionCacheService.clearUsersPermissions(userIds);
+
         return true;
     }
 }

@@ -2,11 +2,15 @@ package com.ice.exebackend.controller;
 
 import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.common.Result;
+import com.ice.exebackend.entity.SysPermission;
 import com.ice.exebackend.entity.SysRole;
 import com.ice.exebackend.enums.BusinessType;
+import com.ice.exebackend.mapper.SysPermissionMapper;
 import com.ice.exebackend.service.SysRoleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*; // 确保导入 @PathVariable 和 @RequestBody
 
 import java.util.List;
@@ -18,6 +22,9 @@ public class SysRoleController {
 
     @Autowired
     private SysRoleService sysRoleService;
+
+    @Autowired
+    private SysPermissionMapper sysPermissionMapper;
 
     /**
      * 获取所有角色列表
@@ -42,7 +49,31 @@ public class SysRoleController {
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('sys:role:perm')")
     @Log(title = "角色管理", businessType = BusinessType.GRANT) // 授权 (使用 GRANT 类型)
     public Result updateRolePermissions(@PathVariable Long id, @RequestBody List<Long> permissionIds) {
+        // 【新增】验证角色是否存在
+        SysRole role = sysRoleService.getById(id);
+        if (role == null) {
+            return Result.fail("角色不存在");
+        }
+
+        // 【新增】防止修改超级管理员角色（除非自己是超级管理员）
+        if ("SUPER_ADMIN".equals(role.getCode())) {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            boolean isSuperAdmin = auth.getAuthorities().stream()
+                    .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
+            if (!isSuperAdmin) {
+                return Result.fail("无法修改超级管理员角色权限");
+            }
+        }
+
+        // 【新增】验证权限ID是否有效
+        if (permissionIds != null && !permissionIds.isEmpty()) {
+            List<SysPermission> permissions = sysPermissionMapper.selectBatchIds(permissionIds);
+            if (permissions.size() != permissionIds.size()) {
+                return Result.fail("存在无效的权限ID");
+            }
+        }
+
         boolean success = sysRoleService.updateRolePermissions(id, permissionIds);
-        return success ? Result.suc() : Result.fail("更新失败");
+        return success ? Result.suc("权限更新成功") : Result.fail("更新失败");
     }
 }

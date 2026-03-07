@@ -11,6 +11,7 @@ import com.ice.exebackend.entity.SysUserRole;
 import com.ice.exebackend.mapper.SysRoleMapper;
 import com.ice.exebackend.mapper.SysUserMapper;
 import com.ice.exebackend.mapper.SysUserRoleMapper;
+import com.ice.exebackend.service.PermissionCacheService;
 import com.ice.exebackend.service.SysUserService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,10 +31,16 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     private final PasswordEncoder passwordEncoder;
 
     @Autowired
+    private SysUserMapper userMapper;
+
+    @Autowired
     private SysUserRoleMapper sysUserRoleMapper;
 
     @Autowired
-    private SysRoleMapper sysRoleMapper; // 确保 SysRoleMapper 也被注入
+    private SysRoleMapper sysRoleMapper;
+
+    @Autowired
+    private PermissionCacheService permissionCacheService; // 注入权限缓存服务
 
     @Autowired
     public SysUserServiceImpl(@Lazy PasswordEncoder passwordEncoder) {
@@ -120,6 +127,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
                 sysUserRoleMapper.insert(userRole);
             }
         }
+
+        // 【新增】用户角色修改后，清除该用户的权限缓存，确保权限实时生效
+        permissionCacheService.clearUserPermissions(userId);
     }
 
 

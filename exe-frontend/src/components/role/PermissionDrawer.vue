@@ -7,6 +7,22 @@
       @close="handleClose"
   >
     <div v-loading="loading" class="drawer-content">
+      <!-- 搜索框 -->
+      <el-input
+          v-model="filterText"
+          placeholder="搜索权限名称或代码"
+          clearable
+          prefix-icon="Search"
+          style="margin-bottom: 16px"
+      />
+
+      <!-- 快捷操作按钮 -->
+      <div class="tree-actions" style="margin-bottom: 12px">
+        <el-button size="small" @click="checkAll">全选</el-button>
+        <el-button size="small" @click="uncheckAll">全不选</el-button>
+      </div>
+
+      <!-- 权限树 -->
       <el-tree
           v-if="!loading && permissionTree.length > 0"
           ref="treeRef"
@@ -16,7 +32,15 @@
           node-key="id"
           :default-checked-keys="checkedIds"
           :default-expand-all="true"
-      />
+          :filter-node-method="filterNode"
+      >
+        <template #default="{ data }">
+          <span class="custom-tree-node">
+            <span>{{ data.name }}</span>
+            <span class="permission-code">{{ data.code }}</span>
+          </span>
+        </template>
+      </el-tree>
       <el-empty v-else-if="!loading" description="暂无可分配的权限" />
     </div>
     <template #footer>
@@ -36,7 +60,7 @@
 
 <script setup lang="ts">
 import {onMounted, ref, watch, computed} from 'vue';
-import { ElTree } from 'element-plus';
+import { ElTree, ElMessage } from 'element-plus';
 import type { Role } from '@/api/role.ts';
 import { getRolePermissions, updateRolePermissions } from '@/api/role';
 import type { Permission } from '@/api/auth';
@@ -54,6 +78,7 @@ const loading = ref(true);
 const permissionTree = ref<any[]>([]);
 const checkedIds = ref<number[]>([]);
 const treeRef = ref<InstanceType<typeof ElTree>>();
+const filterText = ref(''); // 搜索文本
 
 // 计算属性：检查用户是否有更新权限
 const hasUpdatePermission = computed(() => {
@@ -98,6 +123,40 @@ const buildTree = (permissions: Permission[]): any[] => {
   return tree;
 };
 
+// 搜索过滤方法
+const filterNode = (value: string, data: any) => {
+  if (!value) return true;
+  return data.name.includes(value) || data.code.includes(value);
+};
+
+// 监听搜索文本变化，触发树过滤
+watch(filterText, (val) => {
+  treeRef.value?.filter(val);
+});
+
+// 全选
+const checkAll = () => {
+  const allIds = getAllNodeIds(permissionTree.value);
+  treeRef.value?.setCheckedKeys(allIds);
+};
+
+// 全不选
+const uncheckAll = () => {
+  treeRef.value?.setCheckedKeys([]);
+};
+
+// 递归获取所有节点ID
+const getAllNodeIds = (nodes: any[]): number[] => {
+  let ids: number[] = [];
+  nodes.forEach(node => {
+    ids.push(node.id);
+    if (node.children && node.children.length > 0) {
+      ids = ids.concat(getAllNodeIds(node.children));
+    }
+  });
+  return ids;
+};
+
 const handleClose = () => {
   emit('update:visible', false);
 };
@@ -105,20 +164,32 @@ const handleClose = () => {
 const confirmUpdate = async () => {
   // 检查用户是否有权限更新
   if (!hasUpdatePermission.value) {
-    console.error("用户没有更新权限!");
+    ElMessage.warning('您没有更新权限');
     return;
   }
 
   if (!props.role || !treeRef.value) {
-    console.error("角色或树形组件引用不存在!");
+    ElMessage.error('数据异常，请刷新页面重试');
     return;
   }
   const selectedIds = treeRef.value.getCheckedKeys(false) as number[];
   const halfSelectedIds = treeRef.value.getHalfCheckedKeys() as number[];
   const allIds = [...selectedIds, ...halfSelectedIds];
 
-  await updateRolePermissions(props.role.id, allIds);
-  emit('success');
+  // 【关键修复】添加try-catch和用户反馈
+  try {
+    const res = await updateRolePermissions(props.role.id, allIds);
+    if (res.code === 200) {
+      ElMessage.success('权限更新成功');
+      emit('success');
+      handleClose();
+    } else {
+      ElMessage.error(res.message || '权限更新失败');
+    }
+  } catch (error: any) {
+    ElMessage.error('权限更新异常: ' + (error.message || '请稍后重试'));
+    console.error('权限更新失败:', error);
+  }
 };
 
 // 添加 onMounted 钩子确保组件初始化时加载数据
@@ -144,5 +215,25 @@ watch(() => props.visible, (isVisible) => {
   padding: 16px;
   height: 100%;
   overflow-y: auto;
+}
+
+.custom-tree-node {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding-right: 16px;
+}
+
+.permission-code {
+  color: #909399;
+  font-size: 12px;
+  margin-left: 8px;
+  font-family: 'Courier New', monospace;
+}
+
+.tree-actions {
+  display: flex;
+  gap: 8px;
 }
 </style>

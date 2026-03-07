@@ -9,6 +9,7 @@ import com.ice.exebackend.mapper.BizClassMapper;
 import com.ice.exebackend.mapper.BizClassStudentMapper;
 import com.ice.exebackend.mapper.BizHomeworkMapper;
 import com.ice.exebackend.service.BizClassService;
+import com.ice.exebackend.utils.DataScopeUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,18 @@ public class BizClassServiceImpl extends ServiceImpl<BizClassMapper, BizClass> i
     @Autowired
     private BizHomeworkMapper homeworkMapper;
 
+    /**
+     * 【重写】获取班级列表，应用数据权限过滤
+     * 教师只能看到自己负责的班级，管理员可以看到所有班级
+     */
+    @Override
+    public List<BizClass> list() {
+        QueryWrapper<BizClass> wrapper = new QueryWrapper<>();
+        // 应用数据权限过滤
+        DataScopeUtils.applyDataScope(wrapper);
+        return baseMapper.selectList(wrapper);
+    }
+
     @Override
     @Transactional
     public BizClass createClass(BizClass bizClass) {
@@ -42,7 +55,12 @@ public class BizClassServiceImpl extends ServiceImpl<BizClassMapper, BizClass> i
 
     @Override
     public boolean updateClass(Long id, BizClass bizClass) {
-        BizClass existing = this.getById(id);
+        // 应用数据权限过滤：只能更新自己的班级
+        QueryWrapper<BizClass> wrapper = new QueryWrapper<>();
+        wrapper.eq("id", id);
+        DataScopeUtils.applyDataScope(wrapper);
+
+        BizClass existing = baseMapper.selectOne(wrapper);
         if (existing == null) {
             return false;
         }
@@ -56,6 +74,16 @@ public class BizClassServiceImpl extends ServiceImpl<BizClassMapper, BizClass> i
     @Override
     @Transactional
     public String deleteClass(Long id) {
+        // 应用数据权限过滤：只能删除自己的班级
+        QueryWrapper<BizClass> classWrapper = new QueryWrapper<>();
+        classWrapper.eq("id", id);
+        DataScopeUtils.applyDataScope(classWrapper);
+
+        BizClass existingClass = baseMapper.selectOne(classWrapper);
+        if (existingClass == null) {
+            return "班级不存在或无权限删除";
+        }
+
         // 检查是否有学生
         long studentCount = classStudentMapper.selectCount(
                 new QueryWrapper<BizClassStudent>().eq("class_id", id)

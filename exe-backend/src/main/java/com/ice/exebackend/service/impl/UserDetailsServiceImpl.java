@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.ice.exebackend.entity.SysUser;
 import com.ice.exebackend.mapper.SysPermissionMapper;
 import com.ice.exebackend.mapper.SysRoleMapper; // 确保导入 SysRoleMapper
+import com.ice.exebackend.service.PermissionCacheService;
 import com.ice.exebackend.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -33,6 +34,9 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     private SysPermissionMapper sysPermissionMapper;
 
     @Autowired
+    private PermissionCacheService permissionCacheService; // 注入权限缓存服务
+
+    @Autowired
     public UserDetailsServiceImpl(@Lazy SysUserService sysUserService) {
         this.sysUserService = sysUserService;
     }
@@ -45,8 +49,18 @@ public class UserDetailsServiceImpl implements UserDetailsService {
             throw new UsernameNotFoundException("用户名或密码错误");
         }
 
-        // 查询权限标识
-        List<String> permissionCodes = sysPermissionMapper.selectPermissionCodesByUserId(sysUser.getId());
+        // 【优化】优先从Redis缓存读取权限
+        List<String> permissionCodes = permissionCacheService.getUserPermissions(sysUser.getId());
+
+        // 【优化】缓存未命中时从数据库查询并缓存
+        if (permissionCodes == null || permissionCodes.isEmpty()) {
+            permissionCodes = sysPermissionMapper.selectPermissionCodesByUserId(sysUser.getId());
+            // 将查询结果缓存到Redis，过期时间30分钟
+            if (permissionCodes != null && !permissionCodes.isEmpty()) {
+                permissionCacheService.cacheUserPermissions(sysUser.getId(), permissionCodes);
+            }
+        }
+
         List<GrantedAuthority> permissionAuthorities = permissionCodes.stream()
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toList());

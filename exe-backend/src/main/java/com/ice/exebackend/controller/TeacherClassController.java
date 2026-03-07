@@ -1,5 +1,7 @@
 package com.ice.exebackend.controller;
 
+import com.ice.exebackend.annotation.DataScope;
+import com.ice.exebackend.annotation.DataScopeType;
 import com.ice.exebackend.annotation.Log;
 import com.ice.exebackend.enums.BusinessType;
 import com.ice.exebackend.common.Result;
@@ -43,9 +45,11 @@ public class TeacherClassController {
 
     /**
      * 1. 获取班级列表
+     * 【数据权限】教师只能查看自己负责的班级
      */
     @GetMapping
     @PreAuthorize("hasAuthority('sys:class:list')")
+    @DataScope(DataScopeType.TEACHER_CLASS) // 添加数据权限注解
     @Log(title = "班级管理", businessType = BusinessType.OTHER)
     public Result listClasses() {
         List<BizClass> classList = classService.list();
@@ -67,9 +71,11 @@ public class TeacherClassController {
 
     /**
      * 3. 编辑班级信息
+     * 【数据权限】教师只能编辑自己负责的班级
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('sys:class:edit')")
+    @DataScope(DataScopeType.TEACHER_CLASS) // 添加数据权限注解
     @Log(title = "班级管理", businessType = BusinessType.UPDATE)
     public Result updateClass(@PathVariable Long id, @RequestBody BizClass bizClass) {
         boolean success = classService.updateClass(id, bizClass);
@@ -78,9 +84,11 @@ public class TeacherClassController {
 
     /**
      * 4. 删除班级
+     * 【数据权限】教师只能删除自己负责的班级
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('sys:class:delete')")
+    @DataScope(DataScopeType.TEACHER_CLASS) // 添加数据权限注解
     @Log(title = "班级管理", businessType = BusinessType.DELETE)
     public Result deleteClass(@PathVariable Long id) {
         String result = classService.deleteClass(id);
